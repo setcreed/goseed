@@ -1,0 +1,57 @@
+package app
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"[[.Module]]/internal/apiserver/bootstrap"
+	"[[.Module]]/internal/pkg/config"
+)
+
+func Run(ctx context.Context, args []string, output io.Writer, version string) error {
+	command := "serve"
+	if len(args)>0 && !strings.HasPrefix(args[0],"-") { command = args[0]; args = args[1:] }
+	if command == "dev" {
+		if len(args)==0 || args[0]!="init" { return errors.New("expected dev init") }; args = args[1:]
+	} else if command != "serve" { return errors.New("unknown command") }
+	flags := flag.NewFlagSet(command,flag.ContinueOnError); flags.SetOutput(io.Discard)
+	filename := flags.String("config",config.DefaultPath,"configuration file")
+	address := flags.String("address","","HTTP listen address")
+	environment := flags.String("env","","runtime environment")
+	if err := flags.Parse(args); err != nil { if errors.Is(err,flag.ErrHelp) { _,err = fmt.Fprintln(output,"commands: serve [--config file] [--address host:port] [--env environment]; dev init [--config file]"); return err }; return err }
+	if flags.NArg()!=0 { return errors.New("unexpected arguments") }
+	explicit := false; flags.Visit(func(f *flag.Flag){ if f.Name=="config" { explicit = true } })
+	if command=="dev" { if *address!="" || *environment!="" { return errors.New("dev init only accepts --config") }; return Init(*filename,output) }
+	settings,err := config.Load(*filename,explicit,config.Overrides{Address:*address,Env:*environment})
+	if err != nil { return err }
+	application,err := bootstrap.New(settings,version)
+	if err != nil { return err }
+	return application.Run(ctx)
+}
+
+func Init(filename string, output io.Writer) error {
+	if environment := os.Getenv("APP_ENV"); environment!="" && environment!="development" { return errors.New("development initialization is disabled in this environment") }
+	if info,err := os.Lstat(filename); err == nil {
+		if info.Mode()&os.ModeSymlink!=0 || !info.Mode().IsRegular() { return errors.New("development config must be a regular file") }
+		settings,err := config.Load(filename,true,config.Overrides{})
+		if err != nil { return err }; if settings.Env!="development" { return errors.New("development initialization requires development config") }
+		_,err = fmt.Fprintln(output,"existing development configuration preserved"); return err
+	} else if !errors.Is(err,os.ErrNotExist) { return errors.New("cannot inspect development configuration") }
+	var key [32]byte
+	if _,err := rand.Read(key[:]); err != nil { return err }
+	if err := os.MkdirAll(filepath.Dir(filename),0750); err != nil { return errors.New("cannot create development config directory") }
+	file,err := os.OpenFile(filename,os.O_WRONLY|os.O_CREATE|os.O_EXCL,0600)
+	if err != nil { return errors.New("cannot create development configuration without overwrite") }
+	content := fmt.Sprintf("env: development\nlog:\n  format: console\njwt:\n  secret: %q\n",base64.StdEncoding.EncodeToString(key[:]))
+	_,writeError := file.WriteString(content); closeError := file.Close()
+	if writeError!=nil || closeError!=nil { _ = os.Remove(filename); return errors.New("cannot write development configuration") }
+	_,err = fmt.Fprintln(output,"development configuration created"); return err
+}

@@ -1,0 +1,97 @@
+package middleware
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"net/http"
+	"regexp"
+	"time"
+
+	"[[.Module]]/internal/pkg/config"
+	"[[.Module]]/internal/pkg/contextx"
+	"[[.Module]]/internal/pkg/errno"
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+)
+
+var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+
+func Failure(c *gin.Context, err error) {
+	e := errno.Internal
+	var business *errno.Error
+	if errors.As(err,&business) { e = business }
+	if errors.Is(err,context.DeadlineExceeded) || errors.Is(err,context.Canceled) { e = &errno.Error{Code:"deadline_exceeded",Message:"request timeout"} }
+	status := map[string]int{"invalid_argument":400,"unauthorized":401,"forbidden":403,"not_found":404,"conflict":409,"deadline_exceeded":504,"method_not_allowed":405}[e.Code]
+	if status == 0 { status = 500 }
+	if status == 401 { c.Header("WWW-Authenticate","Bearer") }
+	c.Set("error_code",e.Code)
+	c.AbortWithStatusJSON(status,gin.H{"code":e.Code,"message":e.Message,"request_id":contextx.RequestID(c.Request.Context())})
+}
+
+func RequestID() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.GetHeader("X-Request-ID")
+		if !requestIDPattern.MatchString(id) {
+			var data [16]byte
+			if _, err := rand.Read(data[:]); err != nil { Failure(c,errno.Internal); return }
+			id = hex.EncodeToString(data[:])
+		}
+		c.Header("X-Request-ID",id)
+		c.Request = c.Request.WithContext(contextx.WithRequestID(c.Request.Context(),id))
+		c.Next()
+	}
+}
+
+func Access(logger *zap.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		started := time.Now()
+		c.Next()
+		route := c.FullPath(); if route == "" { route = "unmatched" }
+		fields := []zap.Field{zap.String("request_id",contextx.RequestID(c.Request.Context())),zap.String("method",c.Request.Method),zap.String("route",route),zap.Int("status",c.Writer.Status()),zap.Duration("duration",time.Since(started))}
+		if code,ok := c.Get("error_code"); ok { if value,ok := code.(string); ok { fields = append(fields,zap.String("error_code",value)) } }
+		if c.Writer.Status() >= 500 { logger.Error("HTTP request",fields...) } else { logger.Info("HTTP request",fields...) }
+	}
+}
+
+func Recovery(logger *zap.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				logger.Error("handler panic",zap.String("request_id",contextx.RequestID(c.Request.Context())))
+				if !c.Writer.Written() { Failure(c,errno.Internal) } else { c.Abort() }
+			}
+		}()
+		c.Next()
+	}
+}
+
+func Limits(settings config.HTTP) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx,cancel := context.WithTimeout(c.Request.Context(),settings.RequestTimeout)
+		defer cancel()
+		c.Request = c.Request.WithContext(ctx)
+		c.Request.Body = http.MaxBytesReader(c.Writer,c.Request.Body,settings.MaxBodyBytes)
+		c.Next()
+	}
+}
+
+func CORS(origins []string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if origin == "" { c.Next(); return }
+		c.Writer.Header().Add("Vary","Origin")
+		allowed := false
+		for _, candidate := range origins { if origin == candidate { allowed = true; break } }
+		if !allowed { Failure(c,&errno.Error{Code:"forbidden",Message:"origin not allowed"}); return }
+		c.Header("Access-Control-Allow-Origin",origin)
+		c.Header("Access-Control-Expose-Headers","X-Request-ID")
+		if c.Request.Method == http.MethodOptions {
+			c.Header("Access-Control-Allow-Methods","GET, POST, PATCH, DELETE, OPTIONS")
+			c.Header("Access-Control-Allow-Headers","Authorization, Content-Type, X-Request-ID")
+			c.AbortWithStatus(204); return
+		}
+		c.Next()
+	}
+}

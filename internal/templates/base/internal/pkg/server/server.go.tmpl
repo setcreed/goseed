@@ -1,0 +1,62 @@
+package server
+
+import (
+	"context"
+	"crypto/tls"
+	"errors"
+	"net"
+	"net/http"
+	"sync/atomic"
+
+	"[[.Module]]/internal/pkg/config"
+	"go.uber.org/zap"
+)
+
+type Readiness struct { stopping atomic.Bool; CheckDependency func(context.Context) error }
+func (r *Readiness) Check(ctx context.Context) error {
+	if r.stopping.Load() { return errors.New("service is stopping") }
+	if r.CheckDependency != nil { return r.CheckDependency(ctx) }
+	return nil
+}
+func (r *Readiness) Stop() { r.stopping.Store(true) }
+
+type Server struct { http *http.Server; settings config.HTTP; ready *Readiness; logger *zap.Logger }
+
+func New(handler http.Handler, settings config.HTTP, ready *Readiness, logger *zap.Logger) (*Server,error) {
+	s := &http.Server{Addr:settings.Address,Handler:handler,ReadHeaderTimeout:settings.ReadHeaderTimeout,ReadTimeout:settings.ReadTimeout,WriteTimeout:settings.WriteTimeout,IdleTimeout:settings.IdleTimeout,MaxHeaderBytes:settings.MaxHeaderBytes}
+	if settings.TLSCert != "" {
+		certificate,err := tls.LoadX509KeyPair(settings.TLSCert,settings.TLSKey)
+		if err != nil { return nil,errors.New("invalid TLS certificate or private key") }
+		s.TLSConfig = &tls.Config{MinVersion:tls.VersionTLS12,Certificates:[]tls.Certificate{certificate}}
+	}
+	return &Server{http:s,settings:settings,ready:ready,logger:logger},nil
+}
+
+func (s *Server) Run(ctx context.Context) error {
+	listener,err := net.Listen("tcp",s.settings.Address)
+	if err != nil { return errors.New("cannot listen on configured HTTP address") }
+	return s.Serve(ctx,listener)
+}
+
+func (s *Server) Serve(ctx context.Context, listener net.Listener) error {
+	defer func(){ _ = listener.Close() }()
+	if s.http.TLSConfig != nil { listener = tls.NewListener(listener,s.http.TLSConfig) }
+	finished := make(chan error,1)
+	go func(){ finished <- s.http.Serve(listener) }()
+	s.logger.Info("HTTP server started",zap.String("address",listener.Addr().String()))
+	select {
+	case err := <-finished:
+		s.ready.Stop()
+		_ = s.http.Close()
+		if errors.Is(err,http.ErrServerClosed) { return nil }; return err
+	case <-ctx.Done():
+		s.ready.Stop()
+		shutdown,cancel := context.WithTimeout(context.Background(),s.settings.ShutdownTimeout)
+		defer cancel()
+		err := s.http.Shutdown(shutdown)
+		if err != nil { _ = s.http.Close() }
+		<-finished
+		if err != nil { return errors.New("HTTP shutdown exceeded its deadline") }
+		return nil
+	}
+}

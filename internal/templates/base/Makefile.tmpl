@@ -1,0 +1,32 @@
+GO ?= go
+VERSION ?= dev
+GOCACHE ?= $(CURDIR)/.tmp/go-cache
+GOMODCACHE ?= $(CURDIR)/.tmp/mod-cache
+GOLANGCI_LINT_CACHE ?= $(CURDIR)/.tmp/lint-cache
+export GOCACHE GOMODCACHE GOLANGCI_LINT_CACHE
+export GOTOOLCHAIN := go1.26.4
+export GOWORK := off
+
+.DEFAULT_GOAL := check
+.PHONY: build test race vet lint fmt-check check tools dev-init serve
+build:
+	CGO_ENABLED=0 $(GO) build -mod=readonly -trimpath -ldflags '-X main.version=$(VERSION)' -o bin/apiserver ./cmd/apiserver
+test:
+	$(GO) test -mod=readonly ./...
+race:
+	$(GO) test -mod=readonly -race ./...
+vet:
+	$(GO) vet -mod=readonly ./...
+lint:
+	@test -x .tools/bin/golangci-lint || { printf '%s\n' 'Run make tools first'; exit 1; }
+	@.tools/bin/golangci-lint version | grep -F 'version 2.14.0 ' >/dev/null
+	.tools/bin/golangci-lint run ./...
+fmt-check:
+	@files="$$(gofmt -l cmd internal)"; test -z "$$files" || { printf '%s\n' "$$files"; exit 1; }
+check: fmt-check test vet lint
+tools:
+	GOBIN=$(CURDIR)/.tools/bin $(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+dev-init:
+	$(GO) run ./cmd/apiserver dev init
+serve:
+	$(GO) run ./cmd/apiserver serve

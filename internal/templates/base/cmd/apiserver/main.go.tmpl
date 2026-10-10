@@ -1,0 +1,19 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"[[.Module]]/cmd/apiserver/app"
+)
+
+var version = "dev"
+
+func main() {
+	ctx,stop := signal.NotifyContext(context.Background(),os.Interrupt,syscall.SIGTERM)
+	defer stop()
+	if err := app.Run(ctx,os.Args[1:],os.Stdout,version); err != nil { fmt.Fprintln(os.Stderr,err); os.Exit(1) }
+}

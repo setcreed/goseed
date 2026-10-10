@@ -1,0 +1,34 @@
+package apiserver
+
+import (
+	"net/http"
+	"net/http/pprof"
+
+	"[[.Module]]/internal/pkg/config"
+	"[[.Module]]/internal/pkg/errno"
+	"[[.Module]]/internal/pkg/middleware"
+	"[[.Module]]/internal/pkg/server"
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+)
+
+func NewRouter(settings config.HTTP, ready *server.Readiness, logger *zap.Logger) http.Handler {
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.New()
+	_ = router.SetTrustedProxies(nil)
+	router.HandleMethodNotAllowed = true
+	router.Use(middleware.RequestID(),middleware.Access(logger),middleware.Recovery(logger),middleware.Limits(settings),middleware.CORS(settings.AllowedOrigins))
+	router.GET("/healthz",func(c *gin.Context){ c.JSON(200,gin.H{"status":"ok"}) })
+	router.GET("/readyz",func(c *gin.Context){ if err := ready.Check(c.Request.Context()); err != nil { c.JSON(503,gin.H{"status":"unavailable"}); return }; c.JSON(200,gin.H{"status":"ok"}) })
+	router.NoRoute(func(c *gin.Context){ middleware.Failure(c,errno.NotFound) })
+	router.NoMethod(func(c *gin.Context){ middleware.Failure(c,&errno.Error{Code:"method_not_allowed",Message:"method not allowed"}) })
+	if settings.Pprof {
+		router.GET("/debug/pprof/",gin.WrapF(pprof.Index))
+		router.GET("/debug/pprof/cmdline",gin.WrapF(pprof.Cmdline))
+		router.GET("/debug/pprof/profile",gin.WrapF(pprof.Profile))
+		router.GET("/debug/pprof/symbol",gin.WrapF(pprof.Symbol))
+		router.GET("/debug/pprof/trace",gin.WrapF(pprof.Trace))
+		router.GET("/debug/pprof/:name",func(c *gin.Context){ pprof.Handler(c.Param("name")).ServeHTTP(c.Writer,c.Request) })
+	}
+	return router
+}

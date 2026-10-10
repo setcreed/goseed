@@ -1,0 +1,29 @@
+env: production
+http:
+  address: 127.0.0.1:8080
+  read_header_timeout: 5s
+  read_timeout: 15s
+  write_timeout: 15s
+  idle_timeout: 60s
+  request_timeout: 5s
+  shutdown_timeout: 10s
+  max_body_bytes: 1048576
+  max_header_bytes: 1048576
+  allowed_origins: []
+  tls_cert: ""
+  tls_key: ""
+  pprof: false
+log:
+  level: info
+  format: json
+database:
+  path: data/app.db
+  max_open: 4
+  max_idle: 2
+  busy_timeout: 5s
+  slow_threshold: 200ms
+jwt:
+  secret: ""
+  issuer: [[.Name]]
+  audience: [[.Name]]-api
+  ttl: 15m

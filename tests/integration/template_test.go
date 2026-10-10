@@ -76,4 +76,10 @@ func TestDefaultProject(t *testing.T) {
 	run(t, directory, "go", "mod", "tidy")
 	run(t, directory, "go", "test", "-mod=readonly", "./...")
 	run(t, directory, "go", "vet", "-mod=readonly", "./...")
+	run(t, directory, "go", "test", "-mod=readonly", "-race", "./...")
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run(t, directory, filepath.Join(root, ".tools/bin/golangci-lint"), "run", "./...")
 }

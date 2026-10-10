@@ -1,0 +1,34 @@
+package bootstrap
+
+import (
+	"context"
+
+	"[[.Module]]/internal/apiserver"
+	"[[.Module]]/internal/pkg/config"
+	logx "[[.Module]]/internal/pkg/log"
+	"[[.Module]]/internal/pkg/server"
+	"github.com/samber/do/v2"
+	"go.uber.org/zap"
+)
+
+type App struct { Server *server.Server; Logger *zap.Logger }
+
+func New(settings config.Config, version string) (*App,error) {
+	logger,err := logx.New(settings.Log,version)
+	if err != nil { return nil,err }
+	injector := do.New()
+	do.ProvideValue(injector,settings)
+	do.ProvideValue(injector,logger)
+	do.ProvideValue(injector,&server.Readiness{})
+	do.Provide(injector,func(i do.Injector)(*server.Server,error){
+		configuration,err := do.Invoke[config.Config](i); if err != nil { return nil,err }
+		logging,err := do.Invoke[*zap.Logger](i); if err != nil { return nil,err }
+		ready,err := do.Invoke[*server.Readiness](i); if err != nil { return nil,err }
+		return server.New(apiserver.NewRouter(configuration.HTTP,ready,logging),configuration.HTTP,ready,logging)
+	})
+	httpServer,err := do.Invoke[*server.Server](injector)
+	if err != nil { _ = logger.Sync(); return nil,err }
+	return &App{Server:httpServer,Logger:logger},nil
+}
+
+func (a *App) Run(ctx context.Context) error { defer func(){ _ = a.Logger.Sync() }(); return a.Server.Run(ctx) }

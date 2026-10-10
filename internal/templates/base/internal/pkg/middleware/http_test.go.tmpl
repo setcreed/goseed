@@ -1,0 +1,27 @@
+package middleware
+
+import (
+	"bytes"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+)
+
+func TestRecoveryAndAccessDoNotLogSecrets(t *testing.T) {
+	gin.SetMode(gin.ReleaseMode)
+	var logs bytes.Buffer
+	logger:=zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),zapcore.AddSync(&logs),zapcore.InfoLevel))
+	router:=gin.New(); router.Use(RequestID(),Access(logger),Recovery(logger))
+	router.GET("/panic",func(*gin.Context){ panic("test-password-do-not-log") })
+	request:=httptest.NewRequest(http.MethodGet,"/panic?secret=test-password-do-not-log",nil)
+	request.Header.Set("Authorization","Bearer test-token-do-not-log")
+	request.Header.Set("X-Request-ID",strings.Repeat("x",65))
+	writer:=httptest.NewRecorder(); router.ServeHTTP(writer,request)
+	if writer.Code!=500 || len(writer.Header().Get("X-Request-ID"))!=32 { t.Fatal("recovery or request ID failed") }
+	for _,secret:=range []string{"test-password-do-not-log","test-token-do-not-log"} { if strings.Contains(logs.String(),secret)||strings.Contains(writer.Body.String(),secret) { t.Fatal("secret leaked") } }
+}

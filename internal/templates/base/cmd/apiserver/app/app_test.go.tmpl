@@ -1,0 +1,22 @@
+package app
+
+import (
+	"bytes"
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestDevelopmentInitPreservesKeysAndRejectsProduction(t *testing.T) {
+	filename:=filepath.Join(t.TempDir(),"app.yaml")
+	var output bytes.Buffer
+	if err:=Init(filename,&output); err!=nil { t.Fatal(err) }
+	first,err:=os.ReadFile(filename); if err!=nil { t.Fatal(err) }
+	info,err:=os.Stat(filename); if err!=nil || info.Mode().Perm()!=0600 { t.Fatalf("configuration permissions: %v",err) }
+	if err:=Init(filename,&output); err!=nil { t.Fatal(err) }
+	second,err:=os.ReadFile(filename); if err!=nil { t.Fatal(err) }; if !bytes.Equal(first,second) { t.Fatal("existing key changed") }
+	t.Setenv("APP_ENV","production")
+	if err:=Init(filepath.Join(t.TempDir(),"app.yaml"),&output); err==nil { t.Fatal("production init allowed") }
+	if err:=Run(context.Background(),[]string{""},&output,"test"); err==nil { t.Fatal("empty command accepted") }
+}

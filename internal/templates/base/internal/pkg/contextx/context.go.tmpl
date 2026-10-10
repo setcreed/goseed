@@ -1,0 +1,11 @@
+package contextx
+
+import "context"
+
+type key uint8
+const (requestKey key = iota; subjectKey)
+
+func WithRequestID(ctx context.Context, value string) context.Context { return context.WithValue(ctx,requestKey,value) }
+func RequestID(ctx context.Context) string { value,_ := ctx.Value(requestKey).(string); return value }
+func WithSubject(ctx context.Context, value string) context.Context { return context.WithValue(ctx,subjectKey,value) }
+func Subject(ctx context.Context) string { value,_ := ctx.Value(subjectKey).(string); return value }
