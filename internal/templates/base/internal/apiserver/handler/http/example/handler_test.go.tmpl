@@ -1,0 +1,24 @@
+package example
+
+import (
+ "bytes"
+ "net/http/httptest"
+ "testing"
+ "time"
+
+ biz "[[.Module]]/internal/apiserver/biz/example"
+ "[[.Module]]/internal/pkg/config"
+ "[[.Module]]/internal/pkg/middleware"
+ "github.com/gin-gonic/gin"
+)
+func TestStrictRequestBody(t *testing.T){
+ gin.SetMode(gin.ReleaseMode);router:=gin.New();router.Use(middleware.RequestID(),middleware.Limits(config.HTTP{RequestTimeout:time.Second,MaxBodyBytes:128}));router.POST("/",func(c *gin.Context){var input biz.CreateInput;if err:=decode(c,&input);err!=nil{middleware.Failure(c,err);return};c.Status(204)})
+ cases:=[]struct{body string;status int}{
+  {`{"name":"ok","description":"","enabled":false}`,204},
+  {`{"name":"ok","name":"again"}`,400},{`{"name":null}`,400},{`{"enabled":null}`,400},{`{"owner":"bob","name":"ok"}`,400},{`{"ID":1}`,400},{`{"Name":"ok"}`,400},
+  {`{"name":1}`,400},{`{"name":"ok"} {}`,400},{`[]`,400},{`null`,400},{`{"name":"ok"`,400},{string([]byte{'{','"','n','a','m','e','"',':','"',0xff,'"','}'}),400},
+  {`{"name":"`+string(bytes.Repeat([]byte("a"),129))+`"}`,400},
+ }
+ for _,test:=range cases{request:=httptest.NewRequest("POST","/",bytes.NewBufferString(test.body));request.Header.Set("Content-Type","application/json; charset=utf-8");response:=httptest.NewRecorder();router.ServeHTTP(response,request);if response.Code!=test.status{t.Fatalf("body %q: status %d want %d",test.body,response.Code,test.status)}}
+ request:=httptest.NewRequest("POST","/",bytes.NewBufferString(`{"name":"ok"}`));response:=httptest.NewRecorder();router.ServeHTTP(response,request);if response.Code!=400{t.Fatal("missing media type accepted")}
+}

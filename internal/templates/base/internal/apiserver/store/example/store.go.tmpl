@@ -1,0 +1,51 @@
+package example
+
+import (
+ "context"
+ "errors"
+ "time"
+
+ "[[.Module]]/internal/apiserver/model"
+ "[[.Module]]/internal/pkg/errno"
+ "gorm.io/gorm"
+)
+
+type Store struct {db *gorm.DB}
+// New accepts either the application DB or a DB bound to an explicit transaction.
+func New(db *gorm.DB)*Store{return &Store{db:db}}
+func translate(err error)error{
+ switch {
+ case err==nil:return nil
+ case errors.Is(err,context.Canceled)||errors.Is(err,context.DeadlineExceeded):return err
+ case errors.Is(err,gorm.ErrRecordNotFound):return errno.NotFound
+ case errors.Is(err,gorm.ErrDuplicatedKey):return errno.Conflict
+ default:return errno.Internal
+ }
+}
+func(s *Store)Create(ctx context.Context,item *model.Example)error{return translate(s.db.WithContext(ctx).Create(item).Error)}
+func(s *Store)Get(ctx context.Context,owner string,id uint64)(*model.Example,error){
+ var item model.Example
+ if err:=s.db.WithContext(ctx).Where("owner = ? AND id = ?",owner,id).First(&item).Error;err!=nil{return nil,translate(err)};return &item,nil
+}
+func(s *Store)List(ctx context.Context,owner string,page,size int)([]model.Example,int64,error){
+ items:=make([]model.Example,0);var total int64
+ query:=s.db.WithContext(ctx).Model(&model.Example{}).Where("owner = ?",owner)
+ if err:=query.Count(&total).Error;err!=nil{return nil,0,translate(err)}
+ if err:=query.Order("id ASC").Offset((page-1)*size).Limit(size).Find(&items).Error;err!=nil{return nil,0,translate(err)}
+ return items,total,nil
+}
+func(s *Store)Update(ctx context.Context,owner string,id uint64,changes model.ExampleChanges)(*model.Example,error){
+ columns:=map[string]any{"updated_at":time.Now().UTC()}
+ if changes.Name!=nil{columns["name"]=*changes.Name};if changes.Description!=nil{columns["description"]=*changes.Description};if changes.Enabled!=nil{columns["enabled"]=*changes.Enabled}
+ var item *model.Example
+ err:=s.db.WithContext(ctx).Transaction(func(tx *gorm.DB)error{
+  result:=tx.Model(&model.Example{}).Where("owner = ? AND id = ?",owner,id).Updates(columns)
+  if result.Error!=nil{return result.Error};if result.RowsAffected==0{return gorm.ErrRecordNotFound}
+  var err error;item,err=New(tx).Get(ctx,owner,id);return err
+ })
+ if err!=nil{return nil,translate(err)};return item,nil
+}
+func(s *Store)Delete(ctx context.Context,owner string,id uint64)error{
+ result:=s.db.WithContext(ctx).Where("owner = ? AND id = ?",owner,id).Delete(&model.Example{})
+ if result.Error!=nil{return translate(result.Error)};if result.RowsAffected==0{return errno.NotFound};return nil
+}

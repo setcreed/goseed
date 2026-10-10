@@ -16,6 +16,8 @@ SQLite 模板使用纯 Go 驱动、真实磁盘文件、每连接 PRAGMA 和脱�
 
 JWT 包固定 HS256，校验三段 Base64URL、签名、主体、issuer、audience 及完整时间声明；认证中间件将主体传入请求 Context。`apiserver dev token --subject alice --ttl 15m` 仅在开发配置下签发 Token，生产环境禁用。
 
+示例 `/v1/examples` 提供受 JWT 保护的创建、读取、分页、部分更新与删除。Handler → Biz → Store 实现输入校验、主体隔离、唯一冲突和显式零值更新。集成测试通过独立服务进程实际调用 HTTP，并验证重启后 SQLite 数据持久化及运行日志隐私。
+
 ## 构建与检查
 
 需要 Go；首次构建会下载 Go 1.26.4 工具链及固定依赖。以下命令在仓库根目录执行：

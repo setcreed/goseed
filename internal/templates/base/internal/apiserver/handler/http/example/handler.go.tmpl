@@ -1,0 +1,46 @@
+package example
+
+import (
+ "bytes"
+ "encoding/json"
+ "io"
+ "mime"
+ "strconv"
+ "unicode/utf8"
+
+ biz "[[.Module]]/internal/apiserver/biz/example"
+ "[[.Module]]/internal/apiserver/model"
+ "[[.Module]]/internal/pkg/errno"
+ "[[.Module]]/internal/pkg/middleware"
+ "github.com/gin-gonic/gin"
+)
+
+type Handler struct{biz *biz.Biz}
+func New(business *biz.Biz)*Handler{return &Handler{biz:business}}
+func(h *Handler)Register(group *gin.RouterGroup){group.POST("",h.Create);group.GET("",h.List);group.GET("/:id",h.Get);group.PATCH("/:id",h.Update);group.DELETE("/:id",h.Delete)}
+
+func decode(c *gin.Context,destination any)error{
+ contentType,_,err:=mime.ParseMediaType(c.GetHeader("Content-Type"));if err!=nil||contentType!="application/json"{return errno.Invalid("Content-Type must be application/json")}
+ data,err:=io.ReadAll(c.Request.Body);if err!=nil{if ctxErr:=c.Request.Context().Err();ctxErr!=nil{return ctxErr};return errno.Invalid("request body cannot be read or exceeds its limit")}
+ if !utf8.Valid(data){return errno.Invalid("request body requires valid UTF-8")}
+ // Inspect keys before unmarshalling: encoding/json otherwise accepts duplicate keys and null pointers.
+ decoder:=json.NewDecoder(bytes.NewReader(data));token,err:=decoder.Token();if err!=nil||token!=json.Delim('{'){return errno.Invalid("request body must be a JSON object")}
+ seen:=map[string]bool{}
+ for decoder.More(){key,err:=decoder.Token();if err!=nil{return errno.Invalid("invalid JSON body")};name,ok:=key.(string);if !ok||seen[name]{return errno.Invalid("duplicate or invalid JSON field")};if name!="name"&&name!="description"&&name!="enabled"{return errno.Invalid("unknown JSON field")};seen[name]=true
+  var value json.RawMessage;if err:=decoder.Decode(&value);err!=nil{return errno.Invalid("invalid JSON body")};if bytes.Equal(bytes.TrimSpace(value),[]byte("null")){return errno.Invalid("null fields are not supported")}
+ }
+ if _,err:=decoder.Token();err!=nil{return errno.Invalid("invalid JSON body")};if _,err:=decoder.Token();err!=io.EOF{return errno.Invalid("request body must contain exactly one JSON value")}
+ decoder=json.NewDecoder(bytes.NewReader(data));decoder.DisallowUnknownFields();if err:=decoder.Decode(destination);err!=nil{return errno.Invalid("unknown field or invalid field type")};return nil
+}
+func id(c *gin.Context)(uint64,error){raw:=c.Param("id");for _,char:=range raw{if char<'0'||char>'9'{return 0,errno.Invalid("id must be positive")}};value,err:=strconv.ParseUint(raw,10,63);if err!=nil||value==0{return 0,errno.Invalid("id must be positive")};return value,nil}
+func pagination(c *gin.Context)(int,int,error){
+ values:=c.Request.URL.Query();page,size:=1,20
+ for key,entries:=range values{if (key!="page"&&key!="page_size")||len(entries)!=1{return 0,0,errno.Invalid("invalid pagination query")}}
+ for key,target:=range map[string]*int{"page":&page,"page_size":&size}{if entries,ok:=values[key];ok{value,err:=strconv.Atoi(entries[0]);if err!=nil{return 0,0,errno.Invalid("invalid pagination query")};*target=value}}
+ return page,size,nil
+}
+func(h *Handler)Create(c *gin.Context){var input biz.CreateInput;if err:=decode(c,&input);err!=nil{middleware.Failure(c,err);return};item,err:=h.biz.Create(c.Request.Context(),input);if err!=nil{middleware.Failure(c,err);return};c.JSON(201,item)}
+func(h *Handler)Get(c *gin.Context){identifier,err:=id(c);if err!=nil{middleware.Failure(c,err);return};item,err:=h.biz.Get(c.Request.Context(),identifier);if err!=nil{middleware.Failure(c,err);return};c.JSON(200,item)}
+func(h *Handler)List(c *gin.Context){page,size,err:=pagination(c);if err!=nil{middleware.Failure(c,err);return};result,err:=h.biz.List(c.Request.Context(),page,size);if err!=nil{middleware.Failure(c,err);return};c.JSON(200,result)}
+func(h *Handler)Update(c *gin.Context){identifier,err:=id(c);if err!=nil{middleware.Failure(c,err);return};var input model.ExampleChanges;if err:=decode(c,&input);err!=nil{middleware.Failure(c,err);return};item,err:=h.biz.Update(c.Request.Context(),identifier,input);if err!=nil{middleware.Failure(c,err);return};c.JSON(200,item)}
+func(h *Handler)Delete(c *gin.Context){identifier,err:=id(c);if err!=nil{middleware.Failure(c,err);return};if err:=h.biz.Delete(c.Request.Context(),identifier);err!=nil{middleware.Failure(c,err);return};c.Status(204)}

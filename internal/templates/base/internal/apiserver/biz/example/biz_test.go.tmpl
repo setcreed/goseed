@@ -1,0 +1,27 @@
+package example
+
+import (
+ "context"
+ "errors"
+ "strings"
+ "testing"
+
+ "[[.Module]]/internal/apiserver/model"
+ "[[.Module]]/internal/pkg/contextx"
+ "[[.Module]]/internal/pkg/errno"
+)
+// Embedding the port keeps unneeded calls impossible: invalid input must return before reaching persistence.
+type recordingRepository struct{Repository;item *model.Example}
+func(r *recordingRepository)Create(_ context.Context,item *model.Example)error{r.item=item;return nil}
+func TestBusinessValidatesBeforePersistence(t *testing.T){
+ repository:=&recordingRepository{};business:=New(repository);ctx:=contextx.WithSubject(context.Background(),"alice")
+ if _,err:=business.Create(context.Background(),CreateInput{Name:"valid"});!errors.Is(err,errno.Unauthorized){t.Fatal("identity not enforced")}
+ for _,name:=range []string{""," "," surrounding",strings.Repeat("中",81),string([]byte{0xff})}{if _,err:=business.Create(ctx,CreateInput{Name:name});err==nil{t.Fatal("invalid name accepted")}}
+ if _,err:=business.Create(ctx,CreateInput{Name:"valid",Description:strings.Repeat("中",1001)});err==nil{t.Fatal("invalid description accepted")}
+ if repository.item!=nil{t.Fatal("invalid input reached persistence")}
+ item,err:=business.Create(ctx,CreateInput{Name:strings.Repeat("中",80),Description:strings.Repeat("中",1000)});if err!=nil||!item.Enabled||item.Owner!="alice"{t.Fatal("defaults and identity")}
+ disabled:=false;item,err=business.Create(ctx,CreateInput{Name:"disabled",Enabled:&disabled});if err!=nil||item.Enabled{t.Fatal("explicit false lost")}
+ if _,err:=business.Update(ctx,1,model.ExampleChanges{});err==nil{t.Fatal("empty update accepted")}
+ for _,pair:=range [][2]int{{0,20},{100001,20},{1,0},{1,101}}{if _,err:=business.List(ctx,pair[0],pair[1]);err==nil{t.Fatal("invalid pagination")}}
+ canceled,cancel:=context.WithCancel(ctx);cancel();if _,err:=business.Create(canceled,CreateInput{Name:"valid"});!errors.Is(err,context.Canceled){t.Fatal("context cancellation")}
+}

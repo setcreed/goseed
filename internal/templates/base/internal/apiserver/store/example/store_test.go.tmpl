@@ -1,0 +1,32 @@
+package example
+
+import (
+ "context"
+ "errors"
+ "path/filepath"
+ "testing"
+ "time"
+
+ "[[.Module]]/internal/apiserver/model"
+ "[[.Module]]/internal/pkg/config"
+ "[[.Module]]/internal/pkg/database"
+ "[[.Module]]/internal/pkg/errno"
+ "go.uber.org/zap"
+ "gorm.io/gorm"
+)
+func TestRepositoryOwnershipZerosAndTransaction(t *testing.T){
+ ctx:=context.Background();db,err:=database.Open(ctx,config.Database{Path:filepath.Join(t.TempDir(),"app.db"),MaxOpen:4,MaxIdle:2,BusyTimeout:50*time.Millisecond,SlowThreshold:time.Second},zap.NewNop());if err!=nil{t.Fatal(err)};defer func(){_ = db.Close()}();if err:=db.Migrate(ctx);err!=nil{t.Fatal(err)}
+ repository:=New(db.DB);item:=&model.Example{Owner:"alice",Name:"first",Description:"value",Enabled:true};if err:=repository.Create(ctx,item);err!=nil{t.Fatal(err)}
+ if item.CreatedAt.IsZero()||item.UpdatedAt.IsZero()||item.CreatedAt.Location()!=time.UTC{t.Fatal("missing UTC timestamps")}
+ if _,err:=repository.Get(ctx,"bob",item.ID);!errors.Is(err,errno.NotFound){t.Fatal("cross-owner read")}
+ flag:=false;empty:="";updated,err:=repository.Update(ctx,"alice",item.ID,model.ExampleChanges{Description:&empty,Enabled:&flag});if err!=nil||updated.Enabled||updated.Description!=""{t.Fatal("zero values lost")}
+ if _,err:=repository.Update(ctx,"bob",item.ID,model.ExampleChanges{Enabled:&flag});!errors.Is(err,errno.NotFound){t.Fatal("cross-owner update")}
+ if err:=repository.Delete(ctx,"bob",item.ID);!errors.Is(err,errno.NotFound){t.Fatal("cross-owner delete")}
+ if err:=repository.Create(ctx,&model.Example{Owner:"alice",Name:"first"});!errors.Is(err,errno.Conflict){t.Fatal("duplicate not translated")}
+ sentinel:=errors.New("rollback")
+ err=db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB)error{first,second:=New(tx),New(tx);if err:=first.Create(ctx,&model.Example{Owner:"alice",Name:"rolled-first"});err!=nil{return err};if err:=second.Create(ctx,&model.Example{Owner:"alice",Name:"rolled-second"});err!=nil{return err};return sentinel})
+ if !errors.Is(err,sentinel){t.Fatal(err)};items,total,err:=repository.List(ctx,"alice",1,20);if err!=nil||total!=1||len(items)!=1{t.Fatal("shared transaction did not roll back")}
+ canceled,cancel:=context.WithCancel(ctx);cancel();if _,err:=repository.Get(canceled,"alice",item.ID);!errors.Is(err,context.Canceled){t.Fatal("cancellation lost")}
+ deadline,stop:=context.WithTimeout(ctx,time.Millisecond);defer stop();<-deadline.Done();if err:=repository.Create(deadline,&model.Example{Owner:"alice",Name:"deadline"});!errors.Is(err,context.DeadlineExceeded){t.Fatal("deadline lost")}
+ if err:=repository.Delete(ctx,"alice",item.ID);err!=nil{t.Fatal(err)};if err:=repository.Delete(ctx,"alice",item.ID);!errors.Is(err,errno.NotFound){t.Fatal("missing delete")}
+}

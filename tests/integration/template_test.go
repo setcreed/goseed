@@ -53,22 +53,28 @@ func run(t *testing.T, directory string, arguments ...string) []byte {
 	defer cancel()
 	command := exec.CommandContext(ctx, arguments[0], arguments[1:]...)
 	command.Dir = directory
-	root, err := filepath.Abs("../..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, variable := range os.Environ() {
-		key, _, _ := strings.Cut(variable, "=")
-		if !strings.HasPrefix(key, "APP_") {
-			command.Env = append(command.Env, variable)
-		}
-	}
-	command.Env = append(command.Env, "GOTOOLCHAIN=go1.26.4", "GOWORK=off", "GOCACHE="+filepath.Join(root, ".tmp/go-cache"), "GOMODCACHE="+filepath.Join(root, ".tmp/mod-cache"))
+	command.Env = environment(t)
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("%v: %v\n%s", arguments, err, output)
 	}
 	return output
+}
+
+func environment(t *testing.T) []string {
+	t.Helper()
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var variables []string
+	for _, variable := range os.Environ() {
+		key, _, _ := strings.Cut(variable, "=")
+		if !strings.HasPrefix(key, "APP_") {
+			variables = append(variables, variable)
+		}
+	}
+	return append(variables, "GOTOOLCHAIN=go1.26.4", "GOWORK=off", "GOCACHE="+filepath.Join(root, ".tmp/go-cache"), "GOMODCACHE="+filepath.Join(root, ".tmp/mod-cache"), "GOLANGCI_LINT_CACHE="+filepath.Join(root, ".tmp/lint-cache"))
 }
 
 func TestDefaultProject(t *testing.T) {
@@ -104,4 +110,5 @@ func TestDefaultProject(t *testing.T) {
 	if output := run(t, directory, binary, "migrate", "status"); !strings.Contains(string(output), "schema version: 1") {
 		t.Fatal("applied migration status")
 	}
+	verifyHTTP(t, directory, binary)
 }

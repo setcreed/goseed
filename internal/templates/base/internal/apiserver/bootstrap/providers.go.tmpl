@@ -5,6 +5,10 @@ import (
 	"time"
 
 	"[[.Module]]/internal/apiserver"
+	examplebiz "[[.Module]]/internal/apiserver/biz/example"
+	examplehandler "[[.Module]]/internal/apiserver/handler/http/example"
+	examplestore "[[.Module]]/internal/apiserver/store/example"
+	"[[.Module]]/internal/pkg/auth"
 	"[[.Module]]/internal/pkg/config"
 	"[[.Module]]/internal/pkg/database"
 	logx "[[.Module]]/internal/pkg/log"
@@ -26,12 +30,17 @@ func New(settings config.Config, version string) (*App,error) {
 	do.ProvideValue(injector,settings)
 	do.ProvideValue(injector,logger)
 	do.ProvideValue(injector,db)
+	authentication,err:=auth.New(settings.JWT);if err!=nil{_ = db.Close(); _ = logger.Sync();return nil,err}
+	do.ProvideValue(injector,authentication)
+	do.ProvideValue(injector,examplehandler.New(examplebiz.New(examplestore.New(db.DB))))
 	do.ProvideValue(injector,&server.Readiness{CheckDependency:db.Pool.PingContext})
 	do.Provide(injector,func(i do.Injector)(*server.Server,error){
 		configuration,err := do.Invoke[config.Config](i); if err != nil { return nil,err }
 		logging,err := do.Invoke[*zap.Logger](i); if err != nil { return nil,err }
 		ready,err := do.Invoke[*server.Readiness](i); if err != nil { return nil,err }
-		return server.New(apiserver.NewRouter(configuration.HTTP,ready,logging),configuration.HTTP,ready,logging)
+		authentication,err:=do.Invoke[*auth.JWT](i);if err!=nil{return nil,err}
+		examples,err:=do.Invoke[*examplehandler.Handler](i);if err!=nil{return nil,err}
+		return server.New(apiserver.NewRouter(configuration.HTTP,ready,logging,authentication,examples),configuration.HTTP,ready,logging)
 	})
 	httpServer,err := do.Invoke[*server.Server](injector)
 	if err != nil { _ = db.Close(); _ = logger.Sync(); return nil,err }
