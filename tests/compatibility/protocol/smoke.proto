@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package goseed.compatibility;
+
+option go_package = "github.com/setcreed/goseed/tests/compatibility/protocol";
+
+service EchoService {
+  rpc Echo(EchoRequest) returns (EchoResponse);
+}
+
+message EchoRequest {
+  string message = 1;
+}
+
+message EchoResponse {
+  string message = 1;
+}

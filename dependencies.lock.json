@@ -1,0 +1,46 @@
+{
+  "go": "1.26.4",
+  "module": "github.com/setcreed/goseed",
+  "generator": {
+    "github.com/spf13/cobra": "v1.10.2"
+  },
+  "runtime": {
+    "github.com/casbin/casbin/v3": "v3.11.0",
+    "github.com/gin-gonic/gin": "v1.12.0",
+    "github.com/golang-jwt/jwt/v5": "v5.3.1",
+    "github.com/grpc-ecosystem/grpc-gateway/v2": "v2.31.0",
+    "github.com/libtnb/sqlite": "v1.2.2",
+    "github.com/pressly/goose/v3": "v3.28.0",
+    "github.com/redis/go-redis/v9": "v9.23.0",
+    "github.com/samber/do/v2": "v2.1.0",
+    "github.com/spf13/viper": "v1.21.0",
+    "go.uber.org/zap": "v1.28.0",
+    "google.golang.org/grpc": "v1.84.0",
+    "google.golang.org/protobuf": "v1.36.12",
+    "gorm.io/driver/mysql": "v1.6.0",
+    "gorm.io/driver/postgres": "v1.6.3",
+    "gorm.io/gorm": "v1.31.2"
+  },
+  "tools": {
+    "github.com/golangci/golangci-lint/v2/cmd/golangci-lint": "v2.14.0",
+    "google.golang.org/protobuf/cmd/protoc-gen-go": "v1.36.12",
+    "google.golang.org/grpc/cmd/protoc-gen-go-grpc": "v1.6.2",
+    "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway": "v2.31.0",
+    "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2": "v2.31.0"
+  },
+  "protoc": {
+    "version": "36.2",
+    "release": "https://github.com/protocolbuffers/protobuf/releases/tag/v36.2",
+    "assets": {
+      "darwin/arm64": {"name": "protoc-36.2-osx-aarch_64.zip", "sha256": "9cd98a532c5c5e0c4161314de0225de27e4c8a323917b6ea7b1b714d3ae23466"},
+      "darwin/amd64": {"name": "protoc-36.2-osx-x86_64.zip", "sha256": "228cc7add4616cc14ca5e80dee83209d44449a7aee95a914ae748fa374efb078"},
+      "linux/arm64": {"name": "protoc-36.2-linux-aarch_64.zip", "sha256": "8b8f18bd2b30346efbc698dd5a73dd7c805f3ef8380f6dfc95c768f3f1852f6a"},
+      "linux/amd64": {"name": "protoc-36.2-linux-x86_64.zip", "sha256": "121f6c7afe1d4d0e3ea6aab9432038599250134cbf4474cb1167d2c7decd4278"}
+    }
+  },
+  "api_document": "Swagger 2.0",
+  "database_images": {
+    "mysql": "mysql:8.4.11@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242",
+    "postgres": "postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336"
+  }
+}

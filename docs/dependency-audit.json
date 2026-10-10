@@ -1,0 +1,2203 @@
+{
+  "checked_date": "2026-10-10",
+  "method": "GitHub GraphQL: official repository, latest release, latest three default-branch commits, latest two updated issues and first three comment metadata. Supplemental tagged source and issue checks are linked in dependencies.md.",
+  "repositories": {
+    "cobra": {
+      "nameWithOwner": "spf13/cobra",
+      "url": "https://github.com/spf13/cobra",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "Apache-2.0"
+      },
+      "latestRelease": {
+        "tagName": "v1.10.2",
+        "publishedAt": "2025-12-04T00:07:49Z",
+        "url": "https://github.com/spf13/cobra/releases/tag/v1.10.2"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v1.10.2"
+          },
+          {
+            "name": "v1.10.1"
+          },
+          {
+            "name": "v1.10.0"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-07-11T00:43:07Z",
+                "messageHeadline": "fix: resolve macOS test link failure and update lint rules (#2429)",
+                "author": {
+                  "user": {
+                    "login": "SudhanshuMatrix"
+                  }
+                },
+                "url": "https://github.com/spf13/cobra/commit/adbc8813901bba65827259daa8e22ff94ec1f30e"
+              },
+              {
+                "committedDate": "2026-04-25T23:07:41Z",
+                "messageHeadline": "Add cobra unique args validator (#2397)",
+                "author": {
+                  "user": {
+                    "login": "takanuva15"
+                  }
+                },
+                "url": "https://github.com/spf13/cobra/commit/ad460ea8f249db69c943a365fb84f3a59042d54e"
+              },
+              {
+                "committedDate": "2026-04-24T20:41:57Z",
+                "messageHeadline": "fix: prevent completions from mutating os.Args via append side effect…",
+                "author": {
+                  "user": {
+                    "login": "veeceey"
+                  }
+                },
+                "url": "https://github.com/spf13/cobra/commit/746ef07158728502482cea9f880a6f4b21ef29a9"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 2505,
+            "title": "docs: cobra.dev broken Go snippets in \"12-Factor App with Viper\" tutorial",
+            "state": "OPEN",
+            "updatedAt": "2026-10-06T12:41:19Z",
+            "url": "https://github.com/spf13/cobra/issues/2505",
+            "author": {
+              "login": "salmanrf"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "manenim"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-10-06T11:06:32Z"
+                },
+                {
+                  "author": {
+                    "login": "salmanrf"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-10-06T12:41:19Z"
+                }
+              ]
+            }
+          },
+          {
+            "number": 2520,
+            "title": "Generated man pages put flag and description on one line",
+            "state": "OPEN",
+            "updatedAt": "2026-10-05T21:41:29Z",
+            "url": "https://github.com/spf13/cobra/issues/2520",
+            "author": {
+              "login": "seflue"
+            },
+            "comments": {
+              "nodes": []
+            }
+          }
+        ]
+      }
+    },
+    "gin": {
+      "nameWithOwner": "gin-gonic/gin",
+      "url": "https://github.com/gin-gonic/gin",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "MIT"
+      },
+      "latestRelease": {
+        "tagName": "v1.12.0",
+        "publishedAt": "2026-02-28T10:12:25Z",
+        "url": "https://github.com/gin-gonic/gin/releases/tag/v1.12.0"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v1.12.0"
+          },
+          {
+            "name": "v1.11.0"
+          },
+          {
+            "name": "v1.10.1"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-10-10T04:20:35Z",
+                "messageHeadline": "docs: include HTTP QUERY method in RouterGroup.Any (#4879)",
+                "author": {
+                  "user": {
+                    "login": "littfed"
+                  }
+                },
+                "url": "https://github.com/gin-gonic/gin/commit/0f09c3a9b4626d9fe9979cf4d0521d6ae32ab646"
+              },
+              {
+                "committedDate": "2026-10-10T04:18:54Z",
+                "messageHeadline": "fix(tree): grow skippedNodes when pooled capacity is stale (#4852)",
+                "author": {
+                  "user": {
+                    "login": "hazyhaar"
+                  }
+                },
+                "url": "https://github.com/gin-gonic/gin/commit/ea9fab99e01d55a5e4f8daacc0d11ccffaee0a15"
+              },
+              {
+                "committedDate": "2026-10-10T04:16:17Z",
+                "messageHeadline": "feat(routergroup): include HTTP QUERY method in Any (#4878)",
+                "author": {
+                  "user": {
+                    "login": "AdamMagued"
+                  }
+                },
+                "url": "https://github.com/gin-gonic/gin/commit/e8f24969d59611428b03d02424b8f4bb55a1ef91"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 4851,
+            "title": "Pooled skippedNodes keeps the capacity captured at allocation, causing panic in getValue when routes are registered late",
+            "state": "CLOSED",
+            "updatedAt": "2026-10-10T04:18:56Z",
+            "url": "https://github.com/gin-gonic/gin/issues/4851",
+            "author": {
+              "login": "hazyhaar"
+            },
+            "comments": {
+              "nodes": []
+            }
+          },
+          {
+            "number": 4877,
+            "title": "Include the HTTP QUERY method in RouterGroup.Any",
+            "state": "CLOSED",
+            "updatedAt": "2026-10-10T04:16:19Z",
+            "url": "https://github.com/gin-gonic/gin/issues/4877",
+            "author": {
+              "login": "VarusHsu"
+            },
+            "comments": {
+              "nodes": []
+            }
+          }
+        ]
+      }
+    },
+    "viper": {
+      "nameWithOwner": "spf13/viper",
+      "url": "https://github.com/spf13/viper",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "MIT"
+      },
+      "latestRelease": {
+        "tagName": "v1.21.0",
+        "publishedAt": "2025-09-08T16:58:23Z",
+        "url": "https://github.com/spf13/viper/releases/tag/v1.21.0"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v1.21.0"
+          },
+          {
+            "name": "remote/v1.21.0"
+          },
+          {
+            "name": "v1.20.1"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2025-10-15T21:20:01Z",
+                "messageHeadline": "allow octoslash on PRs",
+                "author": {
+                  "user": {
+                    "login": "sagikazarmark"
+                  }
+                },
+                "url": "https://github.com/spf13/viper/commit/528f7416c4b56a4948673984b190bf8713f0c3c4"
+              },
+              {
+                "committedDate": "2025-10-15T21:17:53Z",
+                "messageHeadline": "chore: turn up the number of stale issue ops from 30 to 500",
+                "author": {
+                  "user": {
+                    "login": "spacez320"
+                  }
+                },
+                "url": "https://github.com/spf13/viper/commit/bdc880d2f5195885636621f8d5e966246258b8a4"
+              },
+              {
+                "committedDate": "2025-10-14T12:31:00Z",
+                "messageHeadline": "ci: enable revive rules",
+                "author": {
+                  "user": {
+                    "login": "ccoVeille"
+                  }
+                },
+                "url": "https://github.com/spf13/viper/commit/937ae2d3e65f20c0bc87a7443d45aca4671b6f74"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 2146,
+            "title": "Unmarshal() does not preserve nested configuration when all fields are YAML null",
+            "state": "CLOSED",
+            "updatedAt": "2026-10-10T03:20:05Z",
+            "url": "https://github.com/spf13/viper/issues/2146",
+            "author": {
+              "login": "sk-wangwy"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "github-actions"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-10-04T04:16:51Z"
+                },
+                {
+                  "author": {
+                    "login": "github-actions"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-10-10T03:20:04Z"
+                }
+              ]
+            }
+          },
+          {
+            "number": 2140,
+            "title": "clop is a command line parsing library based on struct",
+            "state": "CLOSED",
+            "updatedAt": "2026-08-28T05:46:11Z",
+            "url": "https://github.com/spf13/viper/issues/2140",
+            "author": {
+              "login": "peterwillcn"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "github-actions"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-08-23T03:22:37Z"
+                },
+                {
+                  "author": {
+                    "login": "github-actions"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-08-28T05:46:11Z"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "zap": {
+      "nameWithOwner": "uber-go/zap",
+      "url": "https://github.com/uber-go/zap",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "MIT"
+      },
+      "latestRelease": {
+        "tagName": "v1.28.0",
+        "publishedAt": "2026-04-28T02:17:33Z",
+        "url": "https://github.com/uber-go/zap/releases/tag/v1.28.0"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v1.28.0"
+          },
+          {
+            "name": "v1.27.1"
+          },
+          {
+            "name": "exp/v0.3.0"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-09-16T19:17:34Z",
+                "messageHeadline": "fix: validate Level before opening sinks in Config.Build (#1589)",
+                "author": {
+                  "user": {
+                    "login": "kevin9327"
+                  }
+                },
+                "url": "https://github.com/uber-go/zap/commit/4892335e05f14bce8a98a69a577fcf3844a42623"
+              },
+              {
+                "committedDate": "2026-09-16T19:02:52Z",
+                "messageHeadline": "fix: accept parameters in AtomicLevel form content types (#1587)",
+                "author": {
+                  "user": {
+                    "login": "jakezwang"
+                  }
+                },
+                "url": "https://github.com/uber-go/zap/commit/3532124e52751881368f661fc4ba7a57dcd2bd42"
+              },
+              {
+                "committedDate": "2026-09-16T16:33:34Z",
+                "messageHeadline": "fix(zapslog): return the receiver from WithGroup(\"\") (#1591)",
+                "author": {
+                  "user": {
+                    "login": "kevin9327"
+                  }
+                },
+                "url": "https://github.com/uber-go/zap/commit/5ae580e125a8d47b8159e37a6e2e33a8f46c2e18"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 1593,
+            "title": "CSOAI — Zap AI governance Go logging",
+            "state": "CLOSED",
+            "updatedAt": "2026-10-02T02:55:41Z",
+            "url": "https://github.com/uber-go/zap/issues/1593",
+            "author": {
+              "login": "CSOAI-ORG"
+            },
+            "comments": {
+              "nodes": []
+            }
+          },
+          {
+            "number": 1333,
+            "title": "zapslog stabilization tracking issue",
+            "state": "OPEN",
+            "updatedAt": "2026-08-31T19:12:38Z",
+            "url": "https://github.com/uber-go/zap/issues/1333",
+            "author": {
+              "login": "abhinav"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "arukiidou"
+                  },
+                  "authorAssociation": "CONTRIBUTOR",
+                  "createdAt": "2024-02-05T22:55:39Z"
+                },
+                {
+                  "author": {
+                    "login": "abhinav"
+                  },
+                  "authorAssociation": "COLLABORATOR",
+                  "createdAt": "2024-02-06T01:08:26Z"
+                },
+                {
+                  "author": {
+                    "login": "arukiidou"
+                  },
+                  "authorAssociation": "CONTRIBUTOR",
+                  "createdAt": "2024-02-06T14:22:01Z"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "gorm": {
+      "nameWithOwner": "go-gorm/gorm",
+      "url": "https://github.com/go-gorm/gorm",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "MIT"
+      },
+      "latestRelease": {
+        "tagName": "v1.31.2",
+        "publishedAt": "2026-06-25T07:21:23Z",
+        "url": "https://github.com/go-gorm/gorm/releases/tag/v1.31.2"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v1.31.2"
+          },
+          {
+            "name": "v1.31.1"
+          },
+          {
+            "name": "v1.31.0"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-09-14T16:21:15Z",
+                "messageHeadline": "ci: bump golangci-lint to v2.13 for current Go stable compatibility (…",
+                "author": {
+                  "user": {
+                    "login": "tr1v3r"
+                  }
+                },
+                "url": "https://github.com/go-gorm/gorm/commit/b3d3bf219f0283f8e2e985bac509cb643170f729"
+              },
+              {
+                "committedDate": "2026-06-22T03:37:04Z",
+                "messageHeadline": "Fix potential rows leak on panic by deferring rows.Close() (#7798)",
+                "author": {
+                  "user": {
+                    "login": "omer-cengel"
+                  }
+                },
+                "url": "https://github.com/go-gorm/gorm/commit/1d6ce99528060be18a42be09aca8d39efcb47f28"
+              },
+              {
+                "committedDate": "2026-06-22T03:34:19Z",
+                "messageHeadline": "perf: replace fmt.Sprintf with strconv in ExplainSQL numeric formatti…",
+                "author": {
+                  "user": {
+                    "login": "alpardfm"
+                  }
+                },
+                "url": "https://github.com/go-gorm/gorm/commit/f648834d22f67c1b682d3e44ac2eb252c31b3f1a"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 7252,
+            "title": "How to close file handle on a local sqlite db?",
+            "state": "CLOSED",
+            "updatedAt": "2026-10-10T02:11:07Z",
+            "url": "https://github.com/go-gorm/gorm/issues/7252",
+            "author": {
+              "login": "kestrel-x86"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "Yurunsoft"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2025-04-17T01:38:34Z"
+                },
+                {
+                  "author": {
+                    "login": "github-actions"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-04-12T02:58:17Z"
+                }
+              ]
+            }
+          },
+          {
+            "number": 7875,
+            "title": "DefaultTransactionTimeout discards the cancel func, so each transaction's timer outlives Commit",
+            "state": "OPEN",
+            "updatedAt": "2026-10-07T01:12:31Z",
+            "url": "https://github.com/go-gorm/gorm/issues/7875",
+            "author": {
+              "login": "vdpoora"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "manenim"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-10-06T11:52:02Z"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "sqlite": {
+      "nameWithOwner": "libtnb/sqlite",
+      "url": "https://github.com/libtnb/sqlite",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "MIT"
+      },
+      "latestRelease": {
+        "tagName": "v1.2.2",
+        "publishedAt": "2026-08-04T13:23:18Z",
+        "url": "https://github.com/libtnb/sqlite/releases/tag/v1.2.2"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v1.2.2"
+          },
+          {
+            "name": "v1.2.1"
+          },
+          {
+            "name": "v1.2.0"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-09-29T19:56:59Z",
+                "messageHeadline": "chore(deps): Update module modernc.org/sqlite to v1.60.1 (#32)",
+                "author": {
+                  "user": {
+                    "login": "renovate[bot]"
+                  }
+                },
+                "url": "https://github.com/libtnb/sqlite/commit/5f0112e3502219ebbbf63f65927915eb8a7de871"
+              },
+              {
+                "committedDate": "2026-09-29T03:36:46Z",
+                "messageHeadline": "chore(deps): Update module modernc.org/sqlite to v1.60.0 (#31)",
+                "author": {
+                  "user": {
+                    "login": "renovate[bot]"
+                  }
+                },
+                "url": "https://github.com/libtnb/sqlite/commit/36729653628f0c7712ef9e0f7e2c584030934791"
+              },
+              {
+                "committedDate": "2026-09-15T21:28:42Z",
+                "messageHeadline": "chore(deps): Update module modernc.org/sqlite to v1.59.0 (#30)",
+                "author": {
+                  "user": {
+                    "login": "renovate[bot]"
+                  }
+                },
+                "url": "https://github.com/libtnb/sqlite/commit/c5937fcbc4fd5ef701e6b2850350ace35540125f"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 2,
+            "title": "Dependency Dashboard",
+            "state": "OPEN",
+            "updatedAt": "2026-09-29T19:57:37Z",
+            "url": "https://github.com/libtnb/sqlite/issues/2",
+            "author": {
+              "login": "renovate"
+            },
+            "comments": {
+              "nodes": []
+            }
+          },
+          {
+            "number": 24,
+            "title": "v1.2.0: migrator deadlocks when the pool is limited to a single connection",
+            "state": "CLOSED",
+            "updatedAt": "2026-07-22T10:23:17Z",
+            "url": "https://github.com/libtnb/sqlite/issues/24",
+            "author": {
+              "login": "andig"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "andig"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-07-22T09:48:31Z"
+                },
+                {
+                  "author": {
+                    "login": "andig"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-07-22T09:54:55Z"
+                },
+                {
+                  "author": {
+                    "login": "h2zi"
+                  },
+                  "authorAssociation": "CONTRIBUTOR",
+                  "createdAt": "2026-07-22T10:11:32Z"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "sqlite_old": {
+      "nameWithOwner": "glebarez/sqlite",
+      "url": "https://github.com/glebarez/sqlite",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "MIT"
+      },
+      "latestRelease": {
+        "tagName": "v1.11.0",
+        "publishedAt": "2024-03-14T07:02:54Z",
+        "url": "https://github.com/glebarez/sqlite/releases/tag/v1.11.0"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v1.11.0"
+          },
+          {
+            "name": "v1.10.0"
+          },
+          {
+            "name": "v1.9.0"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-08-02T11:25:47Z",
+                "messageHeadline": "ci: bind badge artifacts to triggering run",
+                "author": {
+                  "user": {
+                    "login": "davidpavlovschi"
+                  }
+                },
+                "url": "https://github.com/glebarez/sqlite/commit/caa6e2bf4e27bc5d7c58a61658589196a406bbf1"
+              },
+              {
+                "committedDate": "2026-08-02T11:25:47Z",
+                "messageHeadline": "ci: avoid duplicate PR runs and update badge actions",
+                "author": {
+                  "user": {
+                    "login": "davidpavlovschi"
+                  }
+                },
+                "url": "https://github.com/glebarez/sqlite/commit/d23ba0123ea0197975bb401dce4298bacdf71cea"
+              },
+              {
+                "committedDate": "2026-08-02T11:11:25Z",
+                "messageHeadline": "ci: update actions and restore Go caching",
+                "author": {
+                  "user": {
+                    "login": "davidpavlovschi"
+                  }
+                },
+                "url": "https://github.com/glebarez/sqlite/commit/61406964ea21bf49afa84e7de311b6a1d7f6bdeb"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 157,
+            "title": "Rotate the GIST_SECRET used by badge workflows",
+            "state": "OPEN",
+            "updatedAt": "2026-08-02T11:28:39Z",
+            "url": "https://github.com/glebarez/sqlite/issues/157",
+            "author": {
+              "login": "davidpavlovschi"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "davidpavlovschi"
+                  },
+                  "authorAssociation": "COLLABORATOR",
+                  "createdAt": "2026-08-02T11:00:38Z"
+                }
+              ]
+            }
+          },
+          {
+            "number": 152,
+            "title": "Call for maintainers/ recommended fork?",
+            "state": "OPEN",
+            "updatedAt": "2026-07-31T09:43:03Z",
+            "url": "https://github.com/glebarez/sqlite/issues/152",
+            "author": {
+              "login": "andig"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "andig"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-04-22T12:28:49Z"
+                },
+                {
+                  "author": {
+                    "login": "h2zi"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-04-25T21:40:28Z"
+                },
+                {
+                  "author": {
+                    "login": "glebarez"
+                  },
+                  "authorAssociation": "OWNER",
+                  "createdAt": "2026-04-26T05:43:07Z"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "mysql": {
+      "nameWithOwner": "go-gorm/mysql",
+      "url": "https://github.com/go-gorm/mysql",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "MIT"
+      },
+      "latestRelease": null,
+      "refs": {
+        "nodes": [
+          {
+            "name": "v1.6.0"
+          },
+          {
+            "name": "v1.5.7"
+          },
+          {
+            "name": "v1.5.6"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-07-31T07:41:38Z",
+                "messageHeadline": "build(deps): bump actions/setup-go from 5 to 7 (#191)",
+                "author": {
+                  "user": {
+                    "login": "dependabot[bot]"
+                  }
+                },
+                "url": "https://github.com/go-gorm/mysql/commit/90fd5b365215ad3b7f54453d7328b2bd6980c689"
+              },
+              {
+                "committedDate": "2026-06-25T06:35:08Z",
+                "messageHeadline": "build(deps): bump actions/checkout from 4 to 7 (#188)",
+                "author": {
+                  "user": {
+                    "login": "dependabot[bot]"
+                  }
+                },
+                "url": "https://github.com/go-gorm/mysql/commit/c16b3869d820712ba61d3717ce2fa624b5d6b9f1"
+              },
+              {
+                "committedDate": "2026-06-25T06:34:51Z",
+                "messageHeadline": "ci: switch tests Go matrix to stable/oldstable and update setup-go (#…",
+                "author": {
+                  "user": {
+                    "login": "AlessandroSechi"
+                  }
+                },
+                "url": "https://github.com/go-gorm/mysql/commit/0808860ec17e07e517a3354ef9758b63785c6110"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 176,
+            "title": "Add Schema-Diff Based Migration File Generator to GORM",
+            "state": "OPEN",
+            "updatedAt": "2025-08-10T23:34:35Z",
+            "url": "https://github.com/go-gorm/mysql/issues/176",
+            "author": {
+              "login": "arshiamohammdii"
+            },
+            "comments": {
+              "nodes": []
+            }
+          },
+          {
+            "number": 175,
+            "title": "parseTime DSN Option is mandatory for gorm.Model",
+            "state": "OPEN",
+            "updatedAt": "2025-07-25T05:26:57Z",
+            "url": "https://github.com/go-gorm/mysql/issues/175",
+            "author": {
+              "login": "bodo-hugo-barwich"
+            },
+            "comments": {
+              "nodes": []
+            }
+          }
+        ]
+      }
+    },
+    "postgres": {
+      "nameWithOwner": "go-gorm/postgres",
+      "url": "https://github.com/go-gorm/postgres",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "MIT"
+      },
+      "latestRelease": null,
+      "refs": {
+        "nodes": [
+          {
+            "name": "v1.6.3"
+          },
+          {
+            "name": "v1.6.2"
+          },
+          {
+            "name": "v1.6.1"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-09-14T16:04:24Z",
+                "messageHeadline": "fix: only qualify DROP/ALTER INDEX with an explicit schema, never CUR…",
+                "author": {
+                  "user": {
+                    "login": "tr1v3r"
+                  }
+                },
+                "url": "https://github.com/go-gorm/postgres/commit/1a2d67b91586ce34c989a2b2be91f9c37c0cfb86"
+              },
+              {
+                "committedDate": "2026-09-14T15:50:05Z",
+                "messageHeadline": "ci: switch tests Go matrix to oldstable/stable to match go.mod (#354)",
+                "author": {
+                  "user": {
+                    "login": "tr1v3r"
+                  }
+                },
+                "url": "https://github.com/go-gorm/postgres/commit/4e507a2cb23858f79d6b1fe2b1ac07875d2afb37"
+              },
+              {
+                "committedDate": "2026-07-31T07:55:55Z",
+                "messageHeadline": "Fix/preserve original error in translate (#335)",
+                "author": {
+                  "user": {
+                    "login": "JonathanGunawan30"
+                  }
+                },
+                "url": "https://github.com/go-gorm/postgres/commit/e269d69a4e8326487015b1ee79cc90d184209a7e"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 350,
+            "title": "Error when dropping index on table without explicit schema name",
+            "state": "CLOSED",
+            "updatedAt": "2026-09-14T16:04:25Z",
+            "url": "https://github.com/go-gorm/postgres/issues/350",
+            "author": {
+              "login": "muety"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "keif888"
+                  },
+                  "authorAssociation": "CONTRIBUTOR",
+                  "createdAt": "2026-08-25T11:32:50Z"
+                },
+                {
+                  "author": {
+                    "login": "ounis"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-08-28T06:24:38Z"
+                },
+                {
+                  "author": {
+                    "login": "raulci"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-09-01T08:40:15Z"
+                }
+              ]
+            }
+          },
+          {
+            "number": 332,
+            "title": "Dialector.Translate(error) omits original error message",
+            "state": "CLOSED",
+            "updatedAt": "2026-07-31T07:55:57Z",
+            "url": "https://github.com/go-gorm/postgres/issues/332",
+            "author": {
+              "login": "Vovan-VE"
+            },
+            "comments": {
+              "nodes": []
+            }
+          }
+        ]
+      }
+    },
+    "do": {
+      "nameWithOwner": "samber/do",
+      "url": "https://github.com/samber/do",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "MIT"
+      },
+      "latestRelease": {
+        "tagName": "v2.1.0",
+        "publishedAt": "2026-07-20T13:25:06Z",
+        "url": "https://github.com/samber/do/releases/tag/v2.1.0"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v2.1.0"
+          },
+          {
+            "name": "v2.0.0"
+          },
+          {
+            "name": "v2.0.0-rc1"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-09-07T16:52:04Z",
+                "messageHeadline": "chore(deps): bump brace-expansion from 1.1.13 to 1.1.18 in /docs (#301)",
+                "author": {
+                  "user": {
+                    "login": "dependabot[bot]"
+                  }
+                },
+                "url": "https://github.com/samber/do/commit/9bae325c6606c6e68b6494f2c31ef906028d1331"
+              },
+              {
+                "committedDate": "2026-09-07T16:51:50Z",
+                "messageHeadline": "style: fix linter (#312)",
+                "author": {
+                  "user": {
+                    "login": "samber"
+                  }
+                },
+                "url": "https://github.com/samber/do/commit/8bdac69913185088405b7a2da61beb4f6d1df683"
+              },
+              {
+                "committedDate": "2026-09-07T16:51:44Z",
+                "messageHeadline": "chore(deps-dev): bump typescript from 6.0.2 to 7.0.2 in /docs (#292)",
+                "author": {
+                  "user": {
+                    "login": "dependabot[bot]"
+                  }
+                },
+                "url": "https://github.com/samber/do/commit/18b5989d470faf417378781bac172646dd1be466"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 317,
+            "title": "Transient services report nil (pass) health checks, even when the type implements Healthchecker",
+            "state": "OPEN",
+            "updatedAt": "2026-09-27T13:50:45Z",
+            "url": "https://github.com/samber/do/issues/317",
+            "author": {
+              "login": "LarsArtmann"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "TastyHeadphones"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-09-27T13:50:45Z"
+                }
+              ]
+            }
+          },
+          {
+            "number": 318,
+            "title": "Feature: health check outcomes with explicit states (passed / not built / unsupported / skipped)",
+            "state": "OPEN",
+            "updatedAt": "2026-09-10T04:44:35Z",
+            "url": "https://github.com/samber/do/issues/318",
+            "author": {
+              "login": "LarsArtmann"
+            },
+            "comments": {
+              "nodes": []
+            }
+          }
+        ]
+      }
+    },
+    "goose": {
+      "nameWithOwner": "pressly/goose",
+      "url": "https://github.com/pressly/goose",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "NOASSERTION"
+      },
+      "latestRelease": {
+        "tagName": "v3.28.0",
+        "publishedAt": "2026-09-02T08:34:11Z",
+        "url": "https://github.com/pressly/goose/releases/tag/v3.28.0"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v3.28.0"
+          },
+          {
+            "name": "v3.27.3"
+          },
+          {
+            "name": "v3.27.2"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-10-01T12:10:44Z",
+                "messageHeadline": "docs: show env command in CLI help (#1132)",
+                "author": {
+                  "user": {
+                    "login": "2748109647"
+                  }
+                },
+                "url": "https://github.com/pressly/goose/commit/0e5c23df4b93cec4594830b21f66c9ae16d77f75"
+              },
+              {
+                "committedDate": "2026-09-28T22:25:57Z",
+                "messageHeadline": "Send goose version in YDB build-info header (#1063)",
+                "author": {
+                  "user": {
+                    "login": "asmyasnikov"
+                  }
+                },
+                "url": "https://github.com/pressly/goose/commit/d832df39b28e56ad96c4554a92f0009f3977a811"
+              },
+              {
+                "committedDate": "2026-09-24T08:14:00Z",
+                "messageHeadline": "docs: document ClickHouse dialect (#1127)",
+                "author": {
+                  "user": {
+                    "login": "ringerc"
+                  }
+                },
+                "url": "https://github.com/pressly/goose/commit/d181bdb26fab7d99a80298043059276dafb9b8c9"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 1131,
+            "title": "goose env isn't discoverable via --help",
+            "state": "CLOSED",
+            "updatedAt": "2026-10-01T12:10:50Z",
+            "url": "https://github.com/pressly/goose/issues/1131",
+            "author": {
+              "login": "EricTsuii"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "mfridman"
+                  },
+                  "authorAssociation": "COLLABORATOR",
+                  "createdAt": "2026-10-01T12:10:15Z"
+                }
+              ]
+            }
+          },
+          {
+            "number": 1126,
+            "title": "Pass a context and database handle to CreateTable",
+            "state": "OPEN",
+            "updatedAt": "2026-09-27T22:22:41Z",
+            "url": "https://github.com/pressly/goose/issues/1126",
+            "author": {
+              "login": "ringerc"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "ringerc"
+                  },
+                  "authorAssociation": "CONTRIBUTOR",
+                  "createdAt": "2026-09-25T01:35:53Z"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "jwt": {
+      "nameWithOwner": "golang-jwt/jwt",
+      "url": "https://github.com/golang-jwt/jwt",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "MIT"
+      },
+      "latestRelease": {
+        "tagName": "v5.3.1",
+        "publishedAt": "2026-01-28T19:59:47Z",
+        "url": "https://github.com/golang-jwt/jwt/releases/tag/v5.3.1"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v5.3.1"
+          },
+          {
+            "name": "v5.3.0"
+          },
+          {
+            "name": "v5.2.3"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-09-14T13:54:52Z",
+                "messageHeadline": "Add registered header parameter name constants (#535)",
+                "author": {
+                  "user": {
+                    "login": "oxisto"
+                  }
+                },
+                "url": "https://github.com/golang-jwt/jwt/commit/73c870b18e68b6e654b2b03f485aa3c9fab32cea"
+              },
+              {
+                "committedDate": "2026-07-06T08:54:58Z",
+                "messageHeadline": "fix: return ErrInvalidType for an invalid aud claim type in MapClaims…",
+                "author": {
+                  "user": {
+                    "login": "ultramcu"
+                  }
+                },
+                "url": "https://github.com/golang-jwt/jwt/commit/1a11d3724e63105d751decf9adbdc90165137b45"
+              },
+              {
+                "committedDate": "2026-07-04T11:13:45Z",
+                "messageHeadline": "Pin GitHub Actions to commit SHAs and harden CI workflows (#523)",
+                "author": {
+                  "user": {
+                    "login": "mfridman"
+                  }
+                },
+                "url": "https://github.com/golang-jwt/jwt/commit/0c0d48702ccdf7c3c8b1c3a11dd5a3939d8ec69a"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 542,
+            "title": "RFC violation: CR/LF anywhere in the token's sigature passes validation",
+            "state": "OPEN",
+            "updatedAt": "2026-10-09T12:52:49Z",
+            "url": "https://github.com/golang-jwt/jwt/issues/542",
+            "author": {
+              "login": "zmwangx"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "oxisto"
+                  },
+                  "authorAssociation": "COLLABORATOR",
+                  "createdAt": "2026-10-05T07:09:22Z"
+                },
+                {
+                  "author": {
+                    "login": "mfridman"
+                  },
+                  "authorAssociation": "MEMBER",
+                  "createdAt": "2026-10-09T12:52:49Z"
+                }
+              ]
+            }
+          },
+          {
+            "number": 539,
+            "title": "MapClaims rejects integer exp/nbf/iat from time.Unix()",
+            "state": "OPEN",
+            "updatedAt": "2026-10-09T12:42:26Z",
+            "url": "https://github.com/golang-jwt/jwt/issues/539",
+            "author": {
+              "login": "00200200"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "mfridman"
+                  },
+                  "authorAssociation": "MEMBER",
+                  "createdAt": "2026-10-09T12:42:26Z"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "casbin": {
+      "nameWithOwner": "apache/casbin",
+      "url": "https://github.com/apache/casbin",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "Apache-2.0"
+      },
+      "latestRelease": {
+        "tagName": "v3.11.0",
+        "publishedAt": "2026-08-20T02:57:58Z",
+        "url": "https://github.com/apache/casbin/releases/tag/v3.11.0"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v3.11.0"
+          },
+          {
+            "name": "v3.11.0-snapshot.7"
+          },
+          {
+            "name": "v3.11.0-snapshot.6"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-10-09T18:29:41Z",
+                "messageHeadline": "fix: avoid cache key collisions in cached enforcer",
+                "author": {
+                  "user": {
+                    "login": "hsluoyz"
+                  }
+                },
+                "url": "https://github.com/apache/casbin/commit/1e19095c5287eff82ae0d5cc07502d87017944f2"
+              },
+              {
+                "committedDate": "2026-10-09T18:26:54Z",
+                "messageHeadline": "fix: invalidate decision cache on policy change",
+                "author": {
+                  "user": {
+                    "login": "hsluoyz"
+                  }
+                },
+                "url": "https://github.com/apache/casbin/commit/27d2b2d3663f536a3466d16b5ce00878fc9cd968"
+              },
+              {
+                "committedDate": "2026-10-08T15:59:58Z",
+                "messageHeadline": "docs: add Trendshift badge to README",
+                "author": {
+                  "user": {
+                    "login": "hsluoyz"
+                  }
+                },
+                "url": "https://github.com/apache/casbin/commit/24d5dc40db0c7f61b17ce752cfdf90aa0632f2e8"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 1072,
+            "title": "[Question] How to get data with rbac with domains models",
+            "state": "CLOSED",
+            "updatedAt": "2026-10-05T06:57:27Z",
+            "url": "https://github.com/apache/casbin/issues/1072",
+            "author": {
+              "login": "zeihanaulia"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "casbin-bot"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2022-08-10T06:02:05Z"
+                },
+                {
+                  "author": {
+                    "login": "hsluoyz"
+                  },
+                  "authorAssociation": "MEMBER",
+                  "createdAt": "2022-12-08T12:48:10Z"
+                },
+                {
+                  "author": {
+                    "login": "maocaicai"
+                  },
+                  "authorAssociation": "CONTRIBUTOR",
+                  "createdAt": "2022-12-12T03:00:10Z"
+                }
+              ]
+            }
+          },
+          {
+            "number": 1672,
+            "title": "[feature] Support rate limiting through policy_effect extension",
+            "state": "OPEN",
+            "updatedAt": "2026-09-11T01:50:41Z",
+            "url": "https://github.com/apache/casbin/issues/1672",
+            "author": {
+              "login": "hsluoyz"
+            },
+            "comments": {
+              "nodes": []
+            }
+          }
+        ]
+      }
+    },
+    "adapter": {
+      "nameWithOwner": "apache/casbin-gorm-adapter",
+      "url": "https://github.com/apache/casbin-gorm-adapter",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "Apache-2.0"
+      },
+      "latestRelease": {
+        "tagName": "v3.41.0",
+        "publishedAt": "2026-01-20T16:17:13Z",
+        "url": "https://github.com/apache/casbin-gorm-adapter/releases/tag/v3.41.0"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v3.41.0"
+          },
+          {
+            "name": "v3.40.0"
+          },
+          {
+            "name": "v3.39.0"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-01-20T16:15:21Z",
+                "messageHeadline": "feat: implement persist.BatchAdapter interface (#283)",
+                "author": {
+                  "user": {
+                    "login": "ankitrgadiya"
+                  }
+                },
+                "url": "https://github.com/apache/casbin-gorm-adapter/commit/533597758aa2e278a6b68797aa0af1c159681a91"
+              },
+              {
+                "committedDate": "2026-01-07T05:52:52Z",
+                "messageHeadline": "feat: upgrade Casbin to v3.8.1 (#280)",
+                "author": {
+                  "user": {
+                    "login": "geekswamp"
+                  }
+                },
+                "url": "https://github.com/apache/casbin-gorm-adapter/commit/5183bebc4f6b52d1dfe63c2430160fb0f5c1f76f"
+              },
+              {
+                "committedDate": "2026-01-07T05:51:13Z",
+                "messageHeadline": "fix: upgrade CI Go version to 1.24",
+                "author": {
+                  "user": {
+                    "login": "hsluoyz"
+                  }
+                },
+                "url": "https://github.com/apache/casbin-gorm-adapter/commit/98e974009f356f10f60b3614e9777aef1b7fbd7c"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 281,
+            "title": "[bug] fix CI error",
+            "state": "CLOSED",
+            "updatedAt": "2026-01-07T05:51:42Z",
+            "url": "https://github.com/apache/casbin-gorm-adapter/issues/281",
+            "author": {
+              "login": "hsluoyz"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "hsluoyz"
+                  },
+                  "authorAssociation": "MEMBER",
+                  "createdAt": "2026-01-07T05:51:42Z"
+                }
+              ]
+            }
+          },
+          {
+            "number": 249,
+            "title": "Failure to call SavePolicy within the Transaction method when customizing table names",
+            "state": "CLOSED",
+            "updatedAt": "2025-12-30T01:02:27Z",
+            "url": "https://github.com/apache/casbin-gorm-adapter/issues/249",
+            "author": {
+              "login": "supuwoerc"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "supuwoerc"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2024-10-20T15:54:06Z"
+                },
+                {
+                  "author": {
+                    "login": "Hill1126"
+                  },
+                  "authorAssociation": "CONTRIBUTOR",
+                  "createdAt": "2024-11-13T10:26:26Z"
+                },
+                {
+                  "author": {
+                    "login": "ypli0629"
+                  },
+                  "authorAssociation": "CONTRIBUTOR",
+                  "createdAt": "2025-12-29T12:24:02Z"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "redis": {
+      "nameWithOwner": "redis/go-redis",
+      "url": "https://github.com/redis/go-redis",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "BSD-2-Clause"
+      },
+      "latestRelease": {
+        "tagName": "v9.23.0",
+        "publishedAt": "2026-10-05T14:54:17Z",
+        "url": "https://github.com/redis/go-redis/releases/tag/v9.23.0"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v9.23.0"
+          },
+          {
+            "name": "extra/redisprometheus/v9.23.0"
+          },
+          {
+            "name": "extra/redisotel-native/v9.23.0"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-10-08T11:56:14Z",
+                "messageHeadline": "feat: sq compression hnsw (#4077)",
+                "author": {
+                  "user": {
+                    "login": "vlady-kotsev"
+                  }
+                },
+                "url": "https://github.com/redis/go-redis/commit/760b98dc0b7d8621f09e1d91d7a6b32fe555bebe"
+              },
+              {
+                "committedDate": "2026-10-08T10:13:01Z",
+                "messageHeadline": "feat(search): add FILTER and LIMIT aggregate steps (#4076)",
+                "author": {
+                  "user": {
+                    "login": "ndyakov"
+                  }
+                },
+                "url": "https://github.com/redis/go-redis/commit/f79ab090819d1f11aa7b9e64f22e8d3ebe594e1b"
+              },
+              {
+                "committedDate": "2026-10-07T10:24:59Z",
+                "messageHeadline": "feat(bloom): add cellSize param to cms init (#4023)",
+                "author": {
+                  "user": {
+                    "login": "vlady-kotsev"
+                  }
+                },
+                "url": "https://github.com/redis/go-redis/commit/07b88b5dcd924850f0df28cbbb1113ea41c389d4"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 4079,
+            "title": "Support pure context cancellation for in-flight I/O when ContextTimeoutEnabled is true",
+            "state": "OPEN",
+            "updatedAt": "2026-10-10T01:37:13Z",
+            "url": "https://github.com/redis/go-redis/issues/4079",
+            "author": {
+              "login": "13589080127"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "13589080127"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-10-10T01:37:13Z"
+                }
+              ]
+            }
+          },
+          {
+            "number": 4083,
+            "title": "negative `db.client.connection.count` using redisotel-native metrics",
+            "state": "OPEN",
+            "updatedAt": "2026-10-09T13:15:16Z",
+            "url": "https://github.com/redis/go-redis/issues/4083",
+            "author": {
+              "login": "iwpnd"
+            },
+            "comments": {
+              "nodes": []
+            }
+          }
+        ]
+      }
+    },
+    "grpc": {
+      "nameWithOwner": "grpc/grpc-go",
+      "url": "https://github.com/grpc/grpc-go",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "Apache-2.0"
+      },
+      "latestRelease": {
+        "tagName": "v1.84.0",
+        "publishedAt": "2026-09-17T20:03:39Z",
+        "url": "https://github.com/grpc/grpc-go/releases/tag/v1.84.0"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v1.86.0-dev"
+          },
+          {
+            "name": "v1.84.0"
+          },
+          {
+            "name": "v1.83.2"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-10-10T09:41:07Z",
+                "messageHeadline": "gcpauthn: change the directory name to match the package name (#9491)",
+                "author": {
+                  "user": {
+                    "login": "eshitachandwani"
+                  }
+                },
+                "url": "https://github.com/grpc/grpc-go/commit/8c59ee6356bf92d0a5819b0cdbd3118876783028"
+              },
+              {
+                "committedDate": "2026-10-09T06:21:36Z",
+                "messageHeadline": "*:update the x/net package dependency (#9492)",
+                "author": {
+                  "user": {
+                    "login": "eshitachandwani"
+                  }
+                },
+                "url": "https://github.com/grpc/grpc-go/commit/5f1ccf56ea5ec964bbf447a10b561214f86387a6"
+              },
+              {
+                "committedDate": "2026-10-08T10:03:58Z",
+                "messageHeadline": "transport: replace linked list with ring buffer (#9444)",
+                "author": {
+                  "user": {
+                    "login": "arjan-bal"
+                  }
+                },
+                "url": "https://github.com/grpc/grpc-go/commit/39ebc82c352a3302c3d7f748b4359e26689d9187"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 9371,
+            "title": "Flaky test: TestAccountCheckWindowSizeWithLargeWindow",
+            "state": "OPEN",
+            "updatedAt": "2026-10-09T22:15:59Z",
+            "url": "https://github.com/grpc/grpc-go/issues/9371",
+            "author": {
+              "login": "eshitachandwani"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "ansh-devs"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-08-30T16:44:16Z"
+                },
+                {
+                  "author": {
+                    "login": "eshitachandwani"
+                  },
+                  "authorAssociation": "MEMBER",
+                  "createdAt": "2026-08-31T05:32:31Z"
+                },
+                {
+                  "author": {
+                    "login": "ansh-devs"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-08-31T05:49:46Z"
+                }
+              ]
+            }
+          },
+          {
+            "number": 9496,
+            "title": "xDS High availability - Support client switch to a different xDS instance under same xDS server uri",
+            "state": "OPEN",
+            "updatedAt": "2026-10-09T18:35:15Z",
+            "url": "https://github.com/grpc/grpc-go/issues/9496",
+            "author": {
+              "login": "axkum10"
+            },
+            "comments": {
+              "nodes": []
+            }
+          }
+        ]
+      }
+    },
+    "gateway": {
+      "nameWithOwner": "grpc-ecosystem/grpc-gateway",
+      "url": "https://github.com/grpc-ecosystem/grpc-gateway",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "BSD-3-Clause"
+      },
+      "latestRelease": {
+        "tagName": "v2.31.0",
+        "publishedAt": "2026-09-25T19:09:26Z",
+        "url": "https://github.com/grpc-ecosystem/grpc-gateway/releases/tag/v2.31.0"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v2.31.0"
+          },
+          {
+            "name": "v2.30.0"
+          },
+          {
+            "name": "v2.29.0"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-10-10T05:52:57Z",
+                "messageHeadline": "chore(deps): update dependency rules_python to v2.4.2 (#7503)",
+                "author": {
+                  "user": {
+                    "login": "renovate[bot]"
+                  }
+                },
+                "url": "https://github.com/grpc-ecosystem/grpc-gateway/commit/8d8ffa799daeceb4a9cc67e5f187203dc8cc2e56"
+              },
+              {
+                "committedDate": "2026-10-09T21:21:09Z",
+                "messageHeadline": "fix(openapiv3): don't repeat nested path parameters as query paramete…",
+                "author": {
+                  "user": {
+                    "login": "LuisFigueroaG"
+                  }
+                },
+                "url": "https://github.com/grpc-ecosystem/grpc-gateway/commit/83ac334a0989c04f03b56031e13080c5b496fad9"
+              },
+              {
+                "committedDate": "2026-10-09T20:58:21Z",
+                "messageHeadline": "chore(deps): update golang.org/x/exp digest to ca0d7ba (#7502)",
+                "author": {
+                  "user": {
+                    "login": "renovate[bot]"
+                  }
+                },
+                "url": "https://github.com/grpc-ecosystem/grpc-gateway/commit/0c9a1a2b6f97ca3c714ac8cc812257c5be7d4a87"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 2304,
+            "title": "Dependency Dashboard",
+            "state": "OPEN",
+            "updatedAt": "2026-10-10T09:15:03Z",
+            "url": "https://github.com/grpc-ecosystem/grpc-gateway/issues/2304",
+            "author": {
+              "login": "renovate"
+            },
+            "comments": {
+              "nodes": []
+            }
+          },
+          {
+            "number": 6677,
+            "title": "Tag overrides",
+            "state": "CLOSED",
+            "updatedAt": "2026-10-09T00:45:58Z",
+            "url": "https://github.com/grpc-ecosystem/grpc-gateway/issues/6677",
+            "author": {
+              "login": "johanbrandhorst"
+            },
+            "comments": {
+              "nodes": []
+            }
+          }
+        ]
+      }
+    },
+    "protobuf": {
+      "nameWithOwner": "protocolbuffers/protobuf-go",
+      "url": "https://github.com/protocolbuffers/protobuf-go",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "BSD-3-Clause"
+      },
+      "latestRelease": {
+        "tagName": "v1.36.12",
+        "publishedAt": "2026-08-10T15:29:56Z",
+        "url": "https://github.com/protocolbuffers/protobuf-go/releases/tag/v1.36.12"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v1.36.12"
+          },
+          {
+            "name": "v1.36.11"
+          },
+          {
+            "name": "v1.36.10"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-10-08T18:18:50Z",
+                "messageHeadline": "encoding/protojson: rename decodeCache fields and helpers for custom …",
+                "author": {
+                  "user": {
+                    "login": "JasonLunn"
+                  }
+                },
+                "url": "https://github.com/protocolbuffers/protobuf-go/commit/3933e752f9ea536e2cf45bf15b321274293863d3"
+              },
+              {
+                "committedDate": "2026-10-08T16:04:37Z",
+                "messageHeadline": "encoding/protojson: use jsonenumvalueoptionspb.E_Json for enum JSON n…",
+                "author": {
+                  "user": {
+                    "login": "JasonLunn"
+                  }
+                },
+                "url": "https://github.com/protocolbuffers/protobuf-go/commit/143349f5362322cf0a513f23f660c78f13be279d"
+              },
+              {
+                "committedDate": "2026-10-07T18:24:34Z",
+                "messageHeadline": "internal/editionssupport: declare support for edition 2026",
+                "author": {
+                  "user": {
+                    "login": "JasonLunn"
+                  }
+                },
+                "url": "https://github.com/protocolbuffers/protobuf-go/commit/0c373ff94f296da8645fbc892f211083b695709e"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": []
+      }
+    },
+    "protoc": {
+      "nameWithOwner": "protocolbuffers/protobuf",
+      "url": "https://github.com/protocolbuffers/protobuf",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "NOASSERTION"
+      },
+      "latestRelease": {
+        "tagName": "v36.2",
+        "publishedAt": "2026-09-17T17:33:01Z",
+        "url": "https://github.com/protocolbuffers/protobuf/releases/tag/v36.2"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v36.2"
+          },
+          {
+            "name": "v5.36.2-objectivec"
+          },
+          {
+            "name": "v36.1"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-10-10T05:40:31Z",
+                "messageHeadline": "Pass the parent message to `AddAllocated`/`Release` variants in `Exte…",
+                "author": {
+                  "user": {
+                    "login": "ClaytonKnittel"
+                  }
+                },
+                "url": "https://github.com/protocolbuffers/protobuf/commit/db4635af9d0d3ac3c3801f3a59d7c872ed2fda6d"
+              },
+              {
+                "committedDate": "2026-10-10T04:24:27Z",
+                "messageHeadline": "Pass the parent message to out-of-line extension set mutators.",
+                "author": {
+                  "user": {
+                    "login": "ClaytonKnittel"
+                  }
+                },
+                "url": "https://github.com/protocolbuffers/protobuf/commit/e4552e57640baddc89949931c2cc0fe22cba4203"
+              },
+              {
+                "committedDate": "2026-10-10T03:27:06Z",
+                "messageHeadline": "Return by value from `RepeatedFieldProxy::emplace_back` for primitive…",
+                "author": {
+                  "user": {
+                    "login": "ClaytonKnittel"
+                  }
+                },
+                "url": "https://github.com/protocolbuffers/protobuf/commit/170c5299f9b56aac4ad9bc72e2e4ea559089d1a2"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 9918,
+            "title": "Python: Add type hints and py.typed",
+            "state": "CLOSED",
+            "updatedAt": "2026-10-10T12:40:22Z",
+            "url": "https://github.com/protocolbuffers/protobuf/issues/9918",
+            "author": {
+              "login": "gitpushdashf"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "anandolee"
+                  },
+                  "authorAssociation": "CONTRIBUTOR",
+                  "createdAt": "2022-05-06T03:40:42Z"
+                },
+                {
+                  "author": {
+                    "login": "gitpushdashf"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2022-05-06T16:55:13Z"
+                },
+                {
+                  "author": {
+                    "login": "anandolee"
+                  },
+                  "authorAssociation": "CONTRIBUTOR",
+                  "createdAt": "2022-05-07T04:01:20Z"
+                }
+              ]
+            }
+          },
+          {
+            "number": 29651,
+            "title": "[Python] Null pointer dereference (SIGSEGV) in _message.abi3.so on s390x (big-endian) at process startup — regression from 6.31.1 → 6.32+",
+            "state": "OPEN",
+            "updatedAt": "2026-10-09T10:16:19Z",
+            "url": "https://github.com/protocolbuffers/protobuf/issues/29651",
+            "author": {
+              "login": "gayathri-alageswaran"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "JasonLunn"
+                  },
+                  "authorAssociation": "MEMBER",
+                  "createdAt": "2026-09-08T17:37:26Z"
+                },
+                {
+                  "author": {
+                    "login": "knnyhng"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-10-08T14:50:04Z"
+                },
+                {
+                  "author": {
+                    "login": "knnyhng"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-10-08T16:19:16Z"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "lint": {
+      "nameWithOwner": "golangci/golangci-lint",
+      "url": "https://github.com/golangci/golangci-lint",
+      "isArchived": false,
+      "licenseInfo": {
+        "spdxId": "GPL-3.0"
+      },
+      "latestRelease": {
+        "tagName": "v2.14.0",
+        "publishedAt": "2026-09-24T11:27:54Z",
+        "url": "https://github.com/golangci/golangci-lint/releases/tag/v2.14.0"
+      },
+      "refs": {
+        "nodes": [
+          {
+            "name": "v2.14.0"
+          },
+          {
+            "name": "v2.13.2"
+          },
+          {
+            "name": "v2.13.1"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "nodes": [
+              {
+                "committedDate": "2026-10-09T22:54:31Z",
+                "messageHeadline": "gosec: improve concurency default value (#6859)",
+                "author": {
+                  "user": {
+                    "login": "ldez"
+                  }
+                },
+                "url": "https://github.com/golangci/golangci-lint/commit/6a4a138631363326f09a91823db60630c38cb41e"
+              },
+              {
+                "committedDate": "2026-10-09T21:53:52Z",
+                "messageHeadline": "fix: env vars loading (#6857)",
+                "author": {
+                  "user": {
+                    "login": "ldez"
+                  }
+                },
+                "url": "https://github.com/golangci/golangci-lint/commit/a8e6e8bc7d432dccb6b359633169ba7b55045705"
+              },
+              {
+                "committedDate": "2026-10-09T16:09:22Z",
+                "messageHeadline": "dev: refactor revive implementation (#6855)",
+                "author": {
+                  "user": {
+                    "login": "alexandear"
+                  }
+                },
+                "url": "https://github.com/golangci/golangci-lint/commit/5e7d0c42ef205fc7a738753a8126511290b42d66"
+              }
+            ]
+          }
+        }
+      },
+      "issues": {
+        "nodes": [
+          {
+            "number": 6858,
+            "title": "Use GOMAXPROCS rather than NumCPUs for gosec",
+            "state": "CLOSED",
+            "updatedAt": "2026-10-09T22:54:33Z",
+            "url": "https://github.com/golangci/golangci-lint/issues/6858",
+            "author": {
+              "login": "scop"
+            },
+            "comments": {
+              "nodes": []
+            }
+          },
+          {
+            "number": 6856,
+            "title": "goutil.Env.Discover discards discovered env",
+            "state": "CLOSED",
+            "updatedAt": "2026-10-09T21:53:54Z",
+            "url": "https://github.com/golangci/golangci-lint/issues/6856",
+            "author": {
+              "login": "danp"
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "author": {
+                    "login": "boring-cyborg"
+                  },
+                  "authorAssociation": "NONE",
+                  "createdAt": "2026-10-09T16:11:08Z"
+                },
+                {
+                  "author": {
+                    "login": "ldez"
+                  },
+                  "authorAssociation": "MEMBER",
+                  "createdAt": "2026-10-09T16:56:23Z"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

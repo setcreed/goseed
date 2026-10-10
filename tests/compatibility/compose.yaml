@@ -1,0 +1,35 @@
+services:
+  mysql:
+    image: mysql:8.4.11@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
+    environment:
+      MYSQL_ROOT_PASSWORD: ${GOSEED_TEST_PASSWORD:?test password required}
+      MYSQL_DATABASE: goseed_test
+      MYSQL_USER: goseed_test
+      MYSQL_PASSWORD: ${GOSEED_TEST_PASSWORD:?test password required}
+    ports:
+      - "127.0.0.1::3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+  postgres:
+    image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+    environment:
+      POSTGRES_USER: goseed_test
+      POSTGRES_PASSWORD: ${GOSEED_TEST_PASSWORD:?test password required}
+      POSTGRES_DB: goseed_test
+    ports:
+      - "127.0.0.1::5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "goseed_test", "-d", "goseed_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+volumes:
+  mysql_data:
+  postgres_data:
