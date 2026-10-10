@@ -16,7 +16,7 @@ http:
 log:
   level: info
   format: json
-database:
+[[if ne .Database "none"]]database:
 [[if eq .Database "sqlite"]]
   path: data/app.db
   busy_timeout: 5s
@@ -35,6 +35,7 @@ database:
   max_open: 4
   max_idle: 2
   slow_threshold: 200ms
+[[end]]
 jwt:
   secret: ""
   issuer: [[.Name]]

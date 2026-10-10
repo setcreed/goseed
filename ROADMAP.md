@@ -2,15 +2,15 @@
 
 ## 当前状态
 
-文档基线、D1 与 D2 已完成，D3 的 MySQL、PostgreSQL 模板已完成真实服务验证。首次基线提交为 `01c8d6c`，本地分支为 `main`，未配置远端。主模块为 `github.com/setcreed/goseed`，工具链固定为 Go 1.26.4。三个 SQL 模板可独立构建，默认 HTTP + SQLite + JWT 的实际进程及容器验证通过。
+文档基线、D1 与 D2 已完成，D3 的 MySQL、PostgreSQL 模板已完成真实服务验证，无数据库变体已完成进程与容器验证。首次基线提交为 `01c8d6c`，本地分支为 `main`，未配置远端。主模块为 `github.com/setcreed/goseed`，工具链固定为 Go 1.26.4。三个 SQL 模板与无数据库模板可独立构建，默认 HTTP + SQLite + JWT 及无数据库 HTTP + JWT 的实际进程和容器验证通过。
 
-当前无进行中事项，D3 尚余无数据库、Redis 与 Casbin；下一功能为无数据库变体。root CLI 仍仅提供帮助与版本，项目生成写入在 D5 接入。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
+当前无进行中事项，D3 尚余 Redis 与 Casbin，下一功能为 Redis 可选能力。root CLI 仍仅提供帮助与版本，项目生成写入在 D5 接入。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
 
 ## 待开始
 
 | 检查点 | 交付 | 依赖 |
 |---|---|---|
-| D3 后续 | 无数据库、Redis、Casbin | D2；SQL 变体已完成 |
+| D3 后续 | Redis、Casbin | D2；SQL 与无数据库变体已完成 |
 | D4 | gRPC、dual、Gateway | D2；相关组合依赖 D3 |
 | D5 | 全参数项目生成器与 dry-run | D2、D3、D4 |
 | D6 | 模块与 CRUD 业务生成器 | D5 |
@@ -27,6 +27,8 @@
 - 待细化：D6 的 CRUD 字段声明完整格式与生成登记接口。
 
 ## 最近完成
+
+- 2026-10-11 07:05 D3 无数据库：Render 支持 `Database: "none"`，保留 HTTP/JWT 与公共配置、日志、生命周期；裁剪 ORM、SQL 驱动、数据库配置、模型、Store 和迁移。交付 Handler → Biz 认证问候示例、严格 query/文本校验、固定清单、Swagger 2.0 和独立项目文档；Make 开发入口不迁移，Docker 不创建数据目录。root CLI 写入保持 D5 范围，下一功能为 Redis。契约见 [可选模板](docs/template-options.md) 。
 
 - 2026-10-11 06:49 D3 SQL 数据库：内部 Render/Options 支持 SQLite、MySQL、PostgreSQL，生成时裁剪驱动、配置、SQL 方言与固定清单；外部数据库提供独立 Connector、默认验证 TLS、连接池、UTC 与脱敏协议日志。交付真实数据库夹具与 `make template-db`，同步变体文档；统一 JWT 主体上限、控制字符及业务文本 NUL 边界，MySQL 相同值更新按匹配行数处理。D3 的其他能力保持待开始。
 
@@ -47,6 +49,8 @@
 - 2026-10-10 23:16 D0：初始化 `main` 分支，建立项目规范、需求、架构、命令契约、实施方案和文档导航；默认 SQLite/JWT，三种数据库、Redis、Casbin 与四种协议进入首版范围。交付入口：[README](README.md) 与 [实施方案](docs/implementation.md) 。
 
 ## 最近验证
+
+- 2026-10-11 07:05 D3 无数据库：最终 `make check`、`make race build`、`make template-container` 与模板契约检查通过；四种产物均通过 readonly 测试/vet/race/lint，清单不变。无数据库依赖树与文件裁剪、本机及 Linux amd64 纯 Go 构建、JWT 两主体、UTF-8/控制字符/长度/未知与重复参数、Context、非法配置、迁移命令无写入、TLS/CORS、JSON 日志脱敏与重启/退出通过。实际无数据库容器验证非 root、只读根文件系统、无卷与 JWT；默认容器迁移/CRUD/持久化回归通过。定位新二进制首次执行约 4.99s、再次非法命令约 9ms，测试先检查无写入帮助，再按原 3s 门槛验证失败退出。专用测试标签下容器、镜像与卷只读检查全部为零。
 
 - 2026-10-11 06:49 D3 SQL 数据库：`make check`、`make race build`、相关集成测试/vet/lint 通过；三个变体的 readonly 清单、直接依赖裁剪、文档与 Swagger 通过，MySQL/PostgreSQL 最新模板完成 Linux amd64 纯 Go 构建。最终 `make template-db` 使用固定摘要 MySQL 8.4.11、PostgreSQL 18.6，所有外部用例无跳过；迁移重放、空库只读检查、实际 schema 不匹配、唯一/大小写/Unicode、零值与相同值更新、跨仓储回滚、运行中 deadline 与随后池复用、启动失败关闭、HTTP 主体隔离、重启持久化及日志脱敏通过。真实 TLS 验证受信 CA 成功、未知 CA/主机名不符/错误密码/生产明文拒绝；定位并修正 MySQL Charset 接入及握手排序规则问题。最终专用容器、卷与网络只读检查均为零。
 

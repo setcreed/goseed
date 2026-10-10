@@ -1,0 +1,21 @@
+package example
+
+import (
+ "context"
+ "net/http/httptest"
+ "strings"
+ "testing"
+ "time"
+
+ biz "[[.Module]]/internal/apiserver/biz/example"
+ "[[.Module]]/internal/pkg/contextx"
+ "github.com/gin-gonic/gin"
+)
+
+func TestQueryAndContextFailures(t *testing.T){
+ gin.SetMode(gin.ReleaseMode);router:=gin.New();router.Use(func(c *gin.Context){c.Request=c.Request.WithContext(contextx.WithSubject(c.Request.Context(),"alice"))});New(biz.New()).Register(router.Group("/v1/examples"))
+ for _,query:=range []string{"name=","name=a&name=b","unknown=x","name=%ZZ","name=%ff","name=bad%00name","name=a;ignored=b","name=%20a","name="+strings.Repeat("a",81)}{recorder:=httptest.NewRecorder();router.ServeHTTP(recorder,httptest.NewRequest("GET","/v1/examples?"+query,nil));if recorder.Code!=400{t.Fatalf("query accepted: %q %d",query,recorder.Code)}}
+ canceled,cancel:=context.WithCancel(context.Background());cancel()
+ expired,stop:=context.WithDeadline(context.Background(),time.Now().Add(-time.Second));defer stop()
+ for _,ctx:=range []context.Context{canceled,expired}{recorder:=httptest.NewRecorder();request:=httptest.NewRequest("GET","/v1/examples",nil).WithContext(ctx);router.ServeHTTP(recorder,request);if recorder.Code!=504{t.Fatalf("context status: %d want 504",recorder.Code)}}
+}

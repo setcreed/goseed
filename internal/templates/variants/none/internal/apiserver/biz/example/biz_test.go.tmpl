@@ -1,0 +1,20 @@
+package example
+
+import (
+ "context"
+ "errors"
+ "strings"
+ "testing"
+ "time"
+ "[[.Module]]/internal/pkg/contextx"
+ "[[.Module]]/internal/pkg/errno"
+)
+
+func TestGreetingBoundaries(t *testing.T){
+ business:=New();ctx:=contextx.WithSubject(context.Background(),"alice")
+ for _,name:=range []string{"world",strings.Repeat("中",80)}{result,err:=business.Greet(ctx,name);if err!=nil||result.Message!="hello, "+name||result.Subject!="alice"{t.Fatalf("greeting: %v",err)}}
+ for _,name:=range []string{""," surrounding","trailing ","\tname","bad\x00name","bad\nname",string([]byte{0xff}),strings.Repeat("中",81)}{if _,err:=business.Greet(ctx,name);err==nil{t.Fatal("invalid name accepted")}}
+ if _,err:=business.Greet(context.Background(),"world");!errors.Is(err,errno.Unauthorized){t.Fatal("missing subject accepted")}
+ canceled,cancel:=context.WithCancel(ctx);cancel();if _,err:=business.Greet(canceled,"world");!errors.Is(err,context.Canceled){t.Fatal("cancellation lost")}
+ expired,stop:=context.WithDeadline(ctx,time.Now().Add(-time.Second));defer stop();if _,err:=business.Greet(expired,"world");!errors.Is(err,context.DeadlineExceeded){t.Fatal("deadline lost")}
+}

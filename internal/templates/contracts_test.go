@@ -10,7 +10,7 @@ import (
 )
 
 func TestDeliveredContracts(t *testing.T) {
-	for _, backend := range []string{"sqlite", "mysql", "postgres"} {
+	for _, backend := range []string{"sqlite", "mysql", "postgres", "none"} {
 		t.Run(backend, func(t *testing.T) { checkDeliveredContracts(t, backend) })
 	}
 }
@@ -42,6 +42,27 @@ func checkDeliveredContracts(t *testing.T, backend string) {
 		lock.Runtime[name] = version
 	}
 	manifest := string(files["go.mod"])
+	if backend == "none" {
+		for filename, content := range files {
+			for _, prefix := range []string{"migrations/", "internal/pkg/database/", "internal/apiserver/model/", "internal/apiserver/store/", "internal/testutil/"} {
+				if strings.HasPrefix(filename, prefix) {
+					t.Fatalf("database file delivered in none project: %s", filename)
+				}
+			}
+			if filename == "go.mod" || filename == "go.sum" || strings.HasSuffix(filename, ".go") {
+				for _, dependency := range []string{"gorm.io/", "modernc.org/", "github.com/libtnb/sqlite", "github.com/pressly/goose", "github.com/go-sql-driver/mysql", "github.com/jackc/pgx"} {
+					if strings.Contains(string(content), dependency) {
+						t.Fatalf("database dependency leaked in %s: %s", filename, dependency)
+					}
+				}
+			}
+		}
+		for filename, forbidden := range map[string]string{"configs/app.example.yaml": "database:", "build/docker/Dockerfile": "/app/data", "Makefile": "migrate", "cmd/apiserver/app/app.go": "migrate"} {
+			if strings.Contains(string(files[filename]), forbidden) {
+				t.Fatalf("database entry leaked in %s", filename)
+			}
+		}
+	}
 	for driver, selected := range map[string]bool{"github.com/libtnb/sqlite": backend == "sqlite", "modernc.org/sqlite": backend == "sqlite", "gorm.io/driver/mysql": backend == "mysql", "github.com/go-sql-driver/mysql": backend == "mysql", "gorm.io/driver/postgres": backend == "postgres", "github.com/jackc/pgx/v5": backend == "postgres"} {
 		if strings.Contains(manifest, driver+" ") != selected {
 			t.Fatalf("incorrect driver composition for %s: %s", backend, driver)
@@ -118,7 +139,15 @@ func checkDeliveredContracts(t *testing.T, backend string) {
 	if !ok {
 		t.Fatal("Swagger paths missing")
 	}
-	for _, route := range []string{"/healthz", "/readyz", "/v1/examples", "/v1/examples/{id}"} {
+	expectedRoutes := []string{"/healthz", "/readyz", "/v1/examples"}
+	if backend == "none" {
+		if len(routes) != 3 || len(routes["/v1/examples"].(map[string]any)) != 1 {
+			t.Fatal("none document includes unsupported routes or methods")
+		}
+	} else {
+		expectedRoutes = append(expectedRoutes, "/v1/examples/{id}")
+	}
+	for _, route := range expectedRoutes {
 		if _, ok := routes[route]; !ok {
 			t.Fatalf("missing documented route %s", route)
 		}

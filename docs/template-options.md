@@ -4,7 +4,7 @@
 
 ## SQL 数据库变体
 
-内部 `templates.Render(Project, Options)` 返回完整文件计划；`Options.Database` 为空时采用 SQLite，支持 `sqlite`、`mysql`、`postgres`。尚未实现的枚举直接拒绝，不生成部分文件。`Default` 保持默认模板语义。
+内部 `templates.Render(Project, Options)` 返回完整文件计划；`Options.Database` 为空时采用 SQLite，数据库枚举为 `sqlite`、`mysql`、`postgres`、`none`。未知枚举直接拒绝，不生成部分文件。`Default` 保持默认模板语义。
 
 选择发生在生成阶段：产物只包含对应驱动、配置字段、SQL 方言、测试与使用文档，不在运行时切换数据库。共用 Handler → Biz → Store、JWT、错误和生命周期。依赖清单按变体固定，构建使用 readonly；渲染不联网、不 tidy、不写文件。
 
@@ -26,6 +26,16 @@ JWT 主体限制为 1 至 128 个 Unicode 字符，拒绝控制字符及首尾�
 
 数据库认证失败、TLS 不可信、无效 CA、取消、缺 schema、错误 schema 或池关闭均必须失败；启动失败不能泄露连接池。基础 CRUD 验证不代替业务上线前的容量、备份恢复和数据库权限评估。
 
+## 无数据库变体
+
+`Database: "none"` 在生成时移除数据库配置、ORM、数据库驱动、迁移、模型与 Store；目录 `variants/none/` 仅维护无数据库示例、必要测试、依赖清单和使用文档的替换模板，其余 HTTP/JWT 基础能力共用基础模板。生成项目不使用内存仓储模拟持久化。
+
+示例采用 Handler → Biz，`GET /v1/examples` 必须通过 JWT 认证，返回 `{"message":"hello, world","subject":"alice"}`。可选 query `name` 默认 `world`，显式提供时为 1 至 80 个 Unicode 字符，拒绝无效 UTF-8、控制字符与首尾空白。Handler 拒绝未知或重复参数及错误百分号编码；Biz 校验输入、请求主体并传播取消或 deadline。没有资源 CRUD 路由、写入或重启持久化承诺。
+
+保留配置优先级与强类型校验、开发密钥初始化/签发、HTTP TLS/CORS、日志脱敏、请求预算和优雅退出；就绪只反映服务生命周期。`migrate` 命令直接报错且不创建文件，帮助与 Makefile 不登记迁移；`make dev` 仅初始化并启动。旧数据库 YAML 字段作为未知配置拒绝。Docker 继续使用固定构建镜像与非 root scratch 运行，不创建或声明数据库数据目录。
+
+验收以实际生成模块为对象：readonly 测试、vet、race、lint、本机构建与 Linux 纯 Go 构建；核对依赖树和交付文件不含 ORM/驱动/迁移，清单不变。真实进程无需数据库即可启动，覆盖 JWT、两个主体、输入边界、未登记方法/资源、重启、退出及日志脱敏。数据库模板继续执行原有回归。
+
 ## 后续能力
 
-无数据库变体移除 ORM、模型和迁移，提供无持久化业务示例；Redis、Casbin 依照架构与命令契约实施。具体配置和失败行为在对应功能实施前补充本文件。
+Redis、Casbin 依照架构与命令契约实施。具体配置和失败行为在对应功能实施前补充本文件。

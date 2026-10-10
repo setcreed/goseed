@@ -45,7 +45,7 @@ func Default(project Project) ([]File, error) {
 	return Render(project, Options{})
 }
 
-// Render prepares a standalone HTTP/JWT project with the selected SQL backend.
+// Render prepares a standalone HTTP/JWT project with the selected storage.
 func Render(project Project, options Options) ([]File, error) {
 	if !namePattern.MatchString(project.Name) {
 		return nil, fmt.Errorf("invalid project name")
@@ -61,7 +61,7 @@ func Render(project Project, options Options) ([]File, error) {
 	if options.Database == "" {
 		options.Database = "sqlite"
 	}
-	if options.Database != "sqlite" && options.Database != "mysql" && options.Database != "postgres" {
+	if options.Database != "sqlite" && options.Database != "mysql" && options.Database != "postgres" && options.Database != "none" {
 		return nil, fmt.Errorf("unsupported database")
 	}
 	data := templateData{Project: project, Options: options}
@@ -78,7 +78,11 @@ func Render(project Project, options Options) ([]File, error) {
 	for _, file := range base {
 		files[file.Path] = file
 	}
-	for _, directory := range []string{"variants/sql", "variants/" + options.Database} {
+	directories := []string{"variants/sql", "variants/" + options.Database}
+	if options.Database == "none" {
+		directories = []string{"variants/none"}
+	}
+	for _, directory := range directories {
 		variant, err := renderTree(sources, directory, data)
 		if err != nil {
 			return nil, err
@@ -115,6 +119,13 @@ func renderTree(source fs.FS, root string, data templateData) ([]File, error) {
 			return fmt.Errorf("unrecognized template: %s", filename)
 		}
 		relative := strings.TrimSuffix(strings.TrimPrefix(filename, root+"/"), ".tmpl")
+		if data.Database == "none" {
+			for _, prefix := range []string{"migrations/", "internal/pkg/database/", "internal/apiserver/model/", "internal/apiserver/store/"} {
+				if strings.HasPrefix(relative, prefix) {
+					return nil
+				}
+			}
+		}
 		if name := path.Base(relative); strings.HasPrefix(name, "dot.") {
 			relative = path.Join(path.Dir(relative), "."+strings.TrimPrefix(name, "dot."))
 		}

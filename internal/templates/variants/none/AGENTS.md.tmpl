@@ -1,0 +1,29 @@
+# [[.Name]] 项目规范
+
+## 定位与入口
+
+本项目是独立 HTTP/JWT 业务服务，模块 `[[.Module]]`，Go 1.26.4。开始先读本文件与 ROADMAP，当前使用方式见 README；项目规则仅在本文件维护。
+
+## 目录与工程边界
+
+- `cmd/apiserver/`：进程、服务及开发命令。
+- `internal/apiserver/bootstrap/`：DI 组装与生命周期，do 容器仅在这里使用。
+- `internal/apiserver/router.go`：路由和公共中间件。
+- `internal/apiserver/handler/http/<module>/`：协议解析、输入与响应。
+- `internal/apiserver/biz/<module>/`：业务规则，通过显式构造函数传递依赖，不导入 Gin 或 DI。
+- `internal/pkg/`：配置、认证、日志、错误、中间件及 HTTP 生命周期。
+- `configs/app.example.yaml`：无密钥配置模板；真实配置不提交。
+- `api/openapi/`：Swagger 2.0，接口变化时同步。
+- `build/docker/`：容器构建；`.tmp/<task>/`：本次临时文件，不作为运行输入。
+
+调用方向 Handler → Biz。项目没有持久化、Store、共享资源模型、ORM 或迁移；不得用内存仓储伪装业务持久化。增加存储能力前明确仓储接口、迁移和运行验收。
+
+配置顺序为默认值、文件、已绑定环境变量、显式参数；新增配置同步默认值、绑定、强类型与业务校验、示例和 README。默认生产环境，无默认 JWT 密钥；生产禁用开发初始化和签发。不增加公开临时 Token 入口，所有业务路由明确认证。
+
+保留 Context、输入边界、请求预算和退出排空。错误保持稳定码与请求 ID，日志不包含秘密、Token、正文、查询参数或堆栈。
+
+## 工作流与验证
+
+代码、配置和文档保持一致；ROADMAP 记录当前进度，README 只写已实现能力。依赖变化同步完整清单，普通检查 readonly；不增加重复能力或生成器运行依赖。
+
+先 `make tools` 安装项目内 linter，再 `make check`；并发或生命周期修改执行 `make race`，交付前 `make build`。认证和输入校验覆盖失败路径。不得提交 `.tmp/`、`.tools/`、`bin/`、真实配置、密钥或证书。提交、推送及公开部署遵循当前用户授权。

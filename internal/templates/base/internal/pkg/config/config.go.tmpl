@@ -19,7 +19,7 @@ type Config struct {
 	Env string
 	HTTP HTTP
 	Log Log
-	Database Database
+	[[if ne .Database "none"]]Database Database[[end]]
 	JWT JWT
 }
 
@@ -40,7 +40,7 @@ type HTTP struct {
 }
 
 type Log struct { Level string; Format string }
-type Database struct {
+[[if ne .Database "none"]]type Database struct {
 	[[if eq .Database "sqlite"]]
 	Path string
 	BusyTimeout time.Duration `mapstructure:"busy_timeout"`
@@ -59,7 +59,7 @@ type Database struct {
 	MaxOpen int `mapstructure:"max_open"`
 	MaxIdle int `mapstructure:"max_idle"`
 	SlowThreshold time.Duration `mapstructure:"slow_threshold"`
-}
+}[[end]]
 type JWT struct { Secret string; Issuer string; Audience string; TTL time.Duration }
 type Overrides struct { Address string; Env string }
 
@@ -74,12 +74,12 @@ func Load(filename string, explicit bool, overrides Overrides) (Config, error) {
 		"http.max_body_bytes": 1048576, "http.max_header_bytes": 1048576,
 		"http.allowed_origins": []string{}, "http.tls_cert": "", "http.tls_key": "", "http.pprof": false,
 		"log.level": "info", "log.format": "json",
-		[[if eq .Database "sqlite"]]"database.path": "data/app.db", "database.busy_timeout": "5s",[[else]]
+		[[if ne .Database "none"]][[if eq .Database "sqlite"]]"database.path": "data/app.db", "database.busy_timeout": "5s",[[else]]
 		"database.host": "127.0.0.1", "database.port": [[if eq .Database "mysql"]]3306[[else]]5432[[end]],
 		"database.user": "[[.Name]]", "database.password": "", "database.name": "[[.Name]]",
 		"database.tls": true, "database.ca_file": "", "database.connect_timeout": "5s",
 		"database.conn_max_lifetime": "30m", "database.conn_max_idle_time": "5m",[[end]]
-		"database.max_open": 4, "database.max_idle": 2, "database.slow_threshold": "200ms",
+		"database.max_open": 4, "database.max_idle": 2, "database.slow_threshold": "200ms",[[end]]
 		"jwt.secret": "", "jwt.issuer": "[[.Name]]", "jwt.audience": "[[.Name]]-api", "jwt.ttl": "15m",
 	}
 	for key, value := range defaults {
@@ -102,7 +102,7 @@ func Load(filename string, explicit bool, overrides Overrides) (Config, error) {
 		if !valid{return Config{},fmt.Errorf("invalid configuration type for %s",key)}
 	}
 	for key:=range defaults {if err:=v.BindEnv(key,"APP_"+strings.ToUpper(strings.ReplaceAll(key,".","_")));err!=nil{return Config{},errors.New("cannot bind configuration environment")}}
-	for _, key := range []string{"http.read_header_timeout","http.read_timeout","http.write_timeout","http.idle_timeout","http.request_timeout","http.shutdown_timeout",[[if eq .Database "sqlite"]]"database.busy_timeout",[[else]]"database.connect_timeout","database.conn_max_lifetime","database.conn_max_idle_time",[[end]]"database.slow_threshold","jwt.ttl"} {
+	for _, key := range []string{"http.read_header_timeout","http.read_timeout","http.write_timeout","http.idle_timeout","http.request_timeout","http.shutdown_timeout",[[if ne .Database "none"]][[if eq .Database "sqlite"]]"database.busy_timeout",[[else]]"database.connect_timeout","database.conn_max_lifetime","database.conn_max_idle_time",[[end]]"database.slow_threshold",[[end]]"jwt.ttl"} {
 		value, ok := v.Get(key).(string)
 		if !ok { return Config{}, fmt.Errorf("%s requires a duration string with units",key) }
 		if _, err := time.ParseDuration(value); err != nil { return Config{}, fmt.Errorf("invalid duration for %s",key) }
@@ -132,7 +132,7 @@ func (c Config) Validate() error {
 	if c.Log.Level != "debug" && c.Log.Level != "info" && c.Log.Level != "warn" && c.Log.Level != "error" { return errors.New("invalid log.level") }
 	if c.Log.Format != "json" && c.Log.Format != "console" { return errors.New("invalid log.format") }
 	if c.Env == "production" && c.Log.Format != "json" { return errors.New("production requires JSON logs") }
-	[[if eq .Database "sqlite"]]
+	[[if ne .Database "none"]][[if eq .Database "sqlite"]]
 	if c.Database.Path == "" || strings.ContainsAny(c.Database.Path, "\x00\r\n") || c.Database.Path == ":memory:" { return errors.New("database.path requires a persistent file") }
 	if c.Database.BusyTimeout < time.Millisecond || c.Database.BusyTimeout > 30*time.Second {return errors.New("invalid database busy timeout")}
 	[[else]]
@@ -142,7 +142,7 @@ func (c Config) Validate() error {
 	if !c.Database.TLS && (c.Env=="production" || c.Database.CAFile!=""){return errors.New("database TLS is required in production; CA requires TLS")}
 	if c.Database.ConnectTimeout<time.Second || c.Database.ConnectTimeout>30*time.Second || c.Database.ConnMaxLifetime<=0 || c.Database.ConnMaxIdleTime<=0 || c.Database.ConnMaxIdleTime>c.Database.ConnMaxLifetime {return errors.New("invalid database connection timeouts")}
 	[[end]]
-	if c.Database.MaxOpen < 1 || c.Database.MaxOpen > 64 || c.Database.MaxIdle < 0 || c.Database.MaxIdle > c.Database.MaxOpen || c.Database.SlowThreshold <= 0 { return errors.New("invalid database connection settings") }
+	if c.Database.MaxOpen < 1 || c.Database.MaxOpen > 64 || c.Database.MaxIdle < 0 || c.Database.MaxIdle > c.Database.MaxOpen || c.Database.SlowThreshold <= 0 { return errors.New("invalid database connection settings") }[[end]]
 	key, err := base64.StdEncoding.Strict().DecodeString(c.JWT.Secret)
 	if err != nil || len(key) < 32 { return errors.New("jwt.secret requires Base64 encoding of at least 32 bytes") }
 	if strings.TrimSpace(c.JWT.Issuer) == "" || strings.TrimSpace(c.JWT.Audience) == "" || c.JWT.TTL < time.Second || c.JWT.TTL > time.Hour { return errors.New("invalid jwt issuer, audience or ttl") }

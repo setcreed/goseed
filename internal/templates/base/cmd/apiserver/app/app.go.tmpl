@@ -16,8 +16,8 @@ import (
 	"[[.Module]]/internal/apiserver/bootstrap"
 	"[[.Module]]/internal/pkg/config"
  "[[.Module]]/internal/pkg/auth"
-	"[[.Module]]/internal/pkg/database"
-	logx "[[.Module]]/internal/pkg/log"
+	[[if ne .Database "none"]]"[[.Module]]/internal/pkg/database"
+	logx "[[.Module]]/internal/pkg/log"[[end]]
 )
 
 func Run(ctx context.Context, args []string, output io.Writer, version string) error {
@@ -26,16 +26,16 @@ func Run(ctx context.Context, args []string, output io.Writer, version string) e
 	if len(args)>0 && !strings.HasPrefix(args[0],"-") { command = args[0]; args = args[1:] }
 	if command == "dev" {
 		if len(args)==0 || (args[0]!="init" && args[0]!="token") { return errors.New("expected dev init or token") }; action=args[0];args = args[1:]
-	} else if command == "migrate" {
+	} [[if ne .Database "none"]]else if command == "migrate" {
 		if len(args)==0 || (args[0]!="up" && args[0]!="status") {return errors.New("expected migrate up or status")};action=args[0];args=args[1:]
-	} else if command != "serve" { return errors.New("unknown command") }
+	} [[end]]else if command != "serve" { return errors.New("unknown command") }
 	flags := flag.NewFlagSet(command,flag.ContinueOnError); flags.SetOutput(io.Discard)
 	filename := flags.String("config",config.DefaultPath,"configuration file")
 	address := flags.String("address","","HTTP listen address")
 	environment := flags.String("env","","runtime environment")
  var subject,lifetime string
  if command=="dev" && action=="token" {flags.StringVar(&subject,"subject","","token subject");flags.StringVar(&lifetime,"ttl","","token lifetime")}
-	if err := flags.Parse(args); err != nil { if errors.Is(err,flag.ErrHelp) { _,err = fmt.Fprintln(output,"commands: serve [--config file] [--address host:port] [--env environment]; dev init [--config file]; dev token --subject value [--ttl duration] [--config file]; migrate up|status [--config file]"); return err }; return err }
+	if err := flags.Parse(args); err != nil { if errors.Is(err,flag.ErrHelp) { _,err = fmt.Fprintln(output,"commands: serve [--config file] [--address host:port] [--env environment]; dev init [--config file]; dev token --subject value [--ttl duration] [--config file][[if ne .Database "none"]]; migrate up|status [--config file][[end]]"); return err }; return err }
 	if flags.NArg()!=0 { return errors.New("unexpected arguments") }
 	explicit := false; flags.Visit(func(f *flag.Flag){ if f.Name=="config" { explicit = true } })
 	if command!="serve" && (*address!="" || *environment!="") {return errors.New("--address and --env only apply to serve")}
@@ -47,14 +47,14 @@ func Run(ctx context.Context, args []string, output io.Writer, version string) e
   ttl:=settings.JWT.TTL; if lifetime!="" {ttl,err=time.ParseDuration(lifetime);if err!=nil{return errors.New("invalid token lifetime")}}
   service,err:=auth.New(settings.JWT);if err!=nil{return err};token,err:=service.Issue(subject,ttl);if err!=nil{return err};_,err=fmt.Fprintln(output,token);return err
  }
- if command=="migrate" {
+ [[if ne .Database "none"]]if command=="migrate" {
 		if *address!="" || *environment!="" {return errors.New("migrate only accepts --config")}
 		logging,err:=logx.New(settings.Log,version);if err!=nil{return err};defer func(){_ = logging.Sync()}()
 		migrationContext,cancel:=context.WithTimeout(ctx,time.Minute);defer cancel()
 		db,err:=database.Open(migrationContext,settings.Database,logging);if err!=nil{return err};defer func(){_ = db.Close()}()
 		if action=="up" {if err:=db.Migrate(migrationContext);err!=nil{return err}}
 		version,err:=db.Version(migrationContext);if err!=nil{return err};_,err=fmt.Fprintf(output,"schema version: %d\n",version);return err
-	}
+	}[[end]]
 	application,err := bootstrap.New(settings,version)
 	if err != nil { return err }
 	return application.Run(ctx)
@@ -73,7 +73,7 @@ func Init(filename string, output io.Writer) error {
 	if err := os.MkdirAll(filepath.Dir(filename),0750); err != nil { return errors.New("cannot create development config directory") }
 	file,err := os.OpenFile(filename,os.O_WRONLY|os.O_CREATE|os.O_EXCL,0600)
 	if err != nil { return errors.New("cannot create development configuration without overwrite") }
-	content := fmt.Sprintf("env: development\nlog:\n  format: console\n[[if ne .Database "sqlite"]]database:\n  tls: false\n[[end]]jwt:\n  secret: %q\n",base64.StdEncoding.EncodeToString(key[:]))
+	content := fmt.Sprintf("env: development\nlog:\n  format: console\n[[if or (eq .Database "mysql") (eq .Database "postgres")]]database:\n  tls: false\n[[end]]jwt:\n  secret: %q\n",base64.StdEncoding.EncodeToString(key[:]))
 	_,writeError := file.WriteString(content); closeError := file.Close()
 	if writeError!=nil || closeError!=nil { _ = os.Remove(filename); return errors.New("cannot write development configuration") }
 	_,err = fmt.Fprintln(output,"development configuration created"); return err

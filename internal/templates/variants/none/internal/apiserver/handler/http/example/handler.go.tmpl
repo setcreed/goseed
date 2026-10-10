@@ -1,0 +1,20 @@
+package example
+
+import (
+ "net/url"
+ biz "[[.Module]]/internal/apiserver/biz/example"
+ "[[.Module]]/internal/pkg/errno"
+ "[[.Module]]/internal/pkg/middleware"
+ "github.com/gin-gonic/gin"
+)
+
+type Handler struct{biz *biz.Biz}
+func New(business *biz.Biz)*Handler{return &Handler{biz:business}}
+func(h *Handler)Register(group *gin.RouterGroup){group.GET("",h.Greet)}
+func(h *Handler)Greet(c *gin.Context){
+ values,err:=url.ParseQuery(c.Request.URL.RawQuery)
+ if err!=nil{middleware.Failure(c,errno.Invalid("invalid query encoding"));return}
+ name:="world"
+ for key,entries:=range values{if key!="name"||len(entries)!=1{middleware.Failure(c,errno.Invalid("only one name parameter is supported"));return};name=entries[0]}
+ result,err:=h.biz.Greet(c.Request.Context(),name);if err!=nil{middleware.Failure(c,err);return};c.JSON(200,result)
+}

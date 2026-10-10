@@ -1,0 +1,62 @@
+# [[.Name]]
+
+独立 Go HTTP 业务服务，模块 `[[.Module]]`，工具链 Go 1.26.4。包含 JWT、无持久化示例、配置、日志、健康检查和优雅退出。项目规范见 [AGENTS.md](AGENTS.md) ，开发状态见 [ROADMAP.md](ROADMAP.md) 。
+
+## 开发启动
+
+```sh
+make build
+./bin/apiserver dev init
+./bin/apiserver dev token --subject alice --ttl 15m
+./bin/apiserver serve
+```
+
+`dev init` 创建权限 0600 的 `configs/app.yaml`，生成随机密钥并保留已有有效开发配置；`make dev` 依次初始化和启动。默认地址 `127.0.0.1:8080`，无需数据库，也没有迁移命令。
+
+```sh
+TOKEN=$(./bin/apiserver dev token --subject alice)
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/v1/examples
+curl -H "Authorization: Bearer $TOKEN" 'http://127.0.0.1:8080/v1/examples?name=Go'
+```
+
+JWT 固定 HS256。主体为 1 至 128 个 Unicode 字符，无首尾空白和控制字符；TTL 默认 15m、至少 1s、不能超过配置上限，配置最多 1h。Token 命令仅限开发环境，不提供 HTTP 登录、刷新或签发入口。接入真实账户后通过受控认证流程调用 JWT 包。
+
+## 配置与生产启动
+
+配置示例为 [configs/app.example.yaml](configs/app.example.yaml) 。优先级：默认值 < YAML 文件 < 已绑定 `APP_*` 环境变量 < 显式服务参数。环境变量按完整字段路径大写并将点改为下划线，例如 `APP_HTTP_REQUEST_TIMEOUT`；时长必须含单位，例如 `5s`。拒绝未知 YAML 键与不匹配的文件类型，包括旧数据库配置。
+
+默认生产环境，日志 JSON。没有默认密钥；安全提供 `APP_JWT_SECRET`，它必须为 Base64 编码且原始随机密钥至少 32 字节。issuer 默认 `[[.Name]]`，audience 默认 `[[.Name]]-api`。生产禁用 `dev init/token`。
+
+```sh
+# 由部署环境安全注入 APP_JWT_SECRET 后执行。
+APP_ENV=production APP_HTTP_ADDRESS=0.0.0.0:8080 ./bin/apiserver serve
+./bin/apiserver serve --config configs/app.yaml --address 127.0.0.1:9000
+```
+
+显式 `--config` 缺失会报错；没有默认文件时可以使用环境变量启动。若已有开发配置，生产还需覆盖 `APP_LOG_FORMAT=json` 并提供生产密钥；`--env production` 只覆盖环境。
+
+HTTP 提供请求预算、正文/Header 限制；TLS 证书与私钥通过 `http.tls_cert/tls_key` 成对设置。CORS 只允许 `http.allowed_origins` 中的精确来源；pprof 默认关闭，仅允许开发环境回环地址。SIGTERM 后停止就绪并排空请求，超过关闭预算强制取消。
+
+## 接口与分层
+
+接口文件为 [Swagger 2.0](api/openapi/swagger.json) 。`/healthz` 与 `/readyz` 为公开健康入口；就绪反映服务生命周期。
+
+`GET /v1/examples` 需要 `Authorization: Bearer <token>`，默认返回 `{"message":"hello, world","subject":"alice"}`。可选 query `name` 为 1 至 80 个 Unicode 字符，拒绝空值、控制字符、首尾空白、无效 UTF-8、错误编码、未知与重复参数。
+
+示例采用 Handler → Biz，Biz 校验业务输入与 Context 主体，取消或 deadline 返回超时错误。不含模型、Store、ORM 或迁移；不会保存业务数据，也不提供资源 CRUD。后续需要存储时先设计仓储契约及持久化方案。
+
+错误响应包含 `code`、`message`、`request_id`；认证失败 401、输入错误 400、未登记资源 404、方法不支持 405、请求取消/超时 504、内部错误 500。响应头包含 `X-Request-ID`。UTC 日志不输出秘密、Token、正文、查询参数或堆栈。
+
+## 检查与容器
+
+```sh
+make tools
+make check
+make race
+make build
+docker build -f build/docker/Dockerfile -t [[.Name]]:local .
+```
+
+`go.mod/go.sum` 包含完整依赖，构建与测试使用 readonly；linter 固定 2.14.0，显式安装到 `.tools/bin/`，缓存放 `.tmp/`。生成项目无需生成器运行。
+
+容器以 UID/GID 10001 运行，使用固定摘要 Go 1.26.4 构建镜像及 scratch 运行镜像。安全注入 `APP_JWT_SECRET` 后直接启动，默认监听 `0.0.0.0:8080`，不需要数据库或数据卷。示例及开发 Token 不代替真实账号体系、业务要求和环境上线验收。

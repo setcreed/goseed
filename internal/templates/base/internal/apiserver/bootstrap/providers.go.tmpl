@@ -2,38 +2,38 @@ package bootstrap
 
 import (
 	"context"
-	"time"
+	[[if ne .Database "none"]]"time"[[end]]
 
 	"[[.Module]]/internal/apiserver"
 	examplebiz "[[.Module]]/internal/apiserver/biz/example"
 	examplehandler "[[.Module]]/internal/apiserver/handler/http/example"
-	examplestore "[[.Module]]/internal/apiserver/store/example"
+	[[if ne .Database "none"]]examplestore "[[.Module]]/internal/apiserver/store/example"[[end]]
 	"[[.Module]]/internal/pkg/auth"
 	"[[.Module]]/internal/pkg/config"
-	"[[.Module]]/internal/pkg/database"
+	[[if ne .Database "none"]]"[[.Module]]/internal/pkg/database"[[end]]
 	logx "[[.Module]]/internal/pkg/log"
 	"[[.Module]]/internal/pkg/server"
 	"github.com/samber/do/v2"
 	"go.uber.org/zap"
 )
 
-type App struct { Server *server.Server; Logger *zap.Logger; Database *database.Database }
+type App struct { Server *server.Server; Logger *zap.Logger; [[if ne .Database "none"]]Database *database.Database[[end]] }
 
 func New(settings config.Config, version string) (*App,error) {
 	logger,err := logx.New(settings.Log,version)
 	if err != nil { return nil,err }
-	startup,cancel:=context.WithTimeout(context.Background(),10*time.Second);defer cancel()
+	[[if ne .Database "none"]]startup,cancel:=context.WithTimeout(context.Background(),10*time.Second);defer cancel()
 	db,err:=database.Open(startup,settings.Database,logger)
 	if err!=nil { _ = logger.Sync(); return nil,err }
-	if err:=db.CheckSchema(startup);err!=nil {_ = db.Close(); _ = logger.Sync(); return nil,err}
+	if err:=db.CheckSchema(startup);err!=nil {_ = db.Close(); _ = logger.Sync(); return nil,err}[[end]]
 	injector := do.New()
 	do.ProvideValue(injector,settings)
 	do.ProvideValue(injector,logger)
-	do.ProvideValue(injector,db)
-	authentication,err:=auth.New(settings.JWT);if err!=nil{_ = db.Close(); _ = logger.Sync();return nil,err}
+	[[if ne .Database "none"]]do.ProvideValue(injector,db)[[end]]
+	authentication,err:=auth.New(settings.JWT);if err!=nil{[[if ne .Database "none"]]_ = db.Close();[[end]] _ = logger.Sync();return nil,err}
 	do.ProvideValue(injector,authentication)
-	do.ProvideValue(injector,examplehandler.New(examplebiz.New(examplestore.New(db.DB))))
-	do.ProvideValue(injector,&server.Readiness{CheckDependency:db.Pool.PingContext})
+	do.ProvideValue(injector,examplehandler.New(examplebiz.New([[if ne .Database "none"]]examplestore.New(db.DB)[[end]])))
+	do.ProvideValue(injector,&server.Readiness{[[if ne .Database "none"]]CheckDependency:db.Pool.PingContext[[end]]})
 	do.Provide(injector,func(i do.Injector)(*server.Server,error){
 		configuration,err := do.Invoke[config.Config](i); if err != nil { return nil,err }
 		logging,err := do.Invoke[*zap.Logger](i); if err != nil { return nil,err }
@@ -43,8 +43,8 @@ func New(settings config.Config, version string) (*App,error) {
 		return server.New(apiserver.NewRouter(configuration.HTTP,ready,logging,authentication,examples),configuration.HTTP,ready,logging)
 	})
 	httpServer,err := do.Invoke[*server.Server](injector)
-	if err != nil { _ = db.Close(); _ = logger.Sync(); return nil,err }
-	return &App{Server:httpServer,Logger:logger,Database:db},nil
+	if err != nil { [[if ne .Database "none"]]_ = db.Close();[[end]] _ = logger.Sync(); return nil,err }
+	return &App{Server:httpServer,Logger:logger,[[if ne .Database "none"]]Database:db[[end]]},nil
 }
 
-func (a *App) Run(ctx context.Context) error { defer func(){ _ = a.Database.Close(); _ = a.Logger.Sync() }(); return a.Server.Run(ctx) }
+func (a *App) Run(ctx context.Context) error { defer func(){ [[if ne .Database "none"]]_ = a.Database.Close();[[end]] _ = a.Logger.Sync() }(); return a.Server.Run(ctx) }

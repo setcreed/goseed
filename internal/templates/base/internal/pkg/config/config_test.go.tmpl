@@ -9,7 +9,7 @@ import (
 )
 
 func TestConfigurationBoundary(t *testing.T) {
-	[[if ne .Database "sqlite"]]t.Setenv("APP_DATABASE_PASSWORD","unit-test-placeholder")[[end]]
+	[[if or (eq .Database "mysql") (eq .Database "postgres")]]t.Setenv("APP_DATABASE_PASSWORD","unit-test-placeholder")[[end]]
 	t.Setenv("APP_JWT_SECRET", base64.StdEncoding.EncodeToString([]byte(strings.Repeat("s",32))))
 	filename := filepath.Join(t.TempDir(), "app.yaml")
 	if err := os.WriteFile(filename, []byte("http:\n  address: 127.0.0.1:8001\n"), 0600); err != nil { t.Fatal(err) }
@@ -27,7 +27,7 @@ func TestConfigurationBoundary(t *testing.T) {
 	if err := os.WriteFile(filename,[]byte("{}\n"),0600); err != nil { t.Fatal(err) }
 	if _, err := Load(filename,true,Overrides{}); err == nil || strings.Contains(err.Error(),"test-secret-must-not-appear") { t.Fatal("missing validation or secret disclosure") }
 }
-[[if ne .Database "sqlite"]]
+[[if or (eq .Database "mysql") (eq .Database "postgres")]]
 func TestExternalDatabaseConfiguration(t *testing.T){
  t.Setenv("APP_JWT_SECRET",base64.StdEncoding.EncodeToString(make([]byte,32)))
  t.Setenv("APP_DATABASE_PASSWORD","unit-test-placeholder")

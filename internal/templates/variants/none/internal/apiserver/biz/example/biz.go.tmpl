@@ -1,0 +1,22 @@
+package example
+
+import (
+ "context"
+ "strings"
+ "unicode"
+ "unicode/utf8"
+
+ "[[.Module]]/internal/pkg/contextx"
+ "[[.Module]]/internal/pkg/errno"
+)
+
+type Biz struct{}
+func New()*Biz{return &Biz{}}
+type Greeting struct{Message string `json:"message"`;Subject string `json:"subject"`}
+
+func(b *Biz)Greet(ctx context.Context,name string)(*Greeting,error){
+ if err:=ctx.Err();err!=nil{return nil,err}
+ subject:=contextx.Subject(ctx);if strings.TrimSpace(subject)==""{return nil,errno.Unauthorized}
+ if !utf8.ValidString(name)||utf8.RuneCountInString(name)<1||utf8.RuneCountInString(name)>80||strings.TrimSpace(name)!=name||strings.ContainsFunc(name,unicode.IsControl){return nil,errno.Invalid("name requires 1 to 80 characters without controls or surrounding whitespace")}
+ return &Greeting{Message:"hello, "+name,Subject:subject},nil
+}

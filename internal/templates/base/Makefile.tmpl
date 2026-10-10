@@ -8,7 +8,7 @@ export GOTOOLCHAIN := go1.26.4
 export GOWORK := off
 
 .DEFAULT_GOAL := check
-.PHONY: build test race vet lint fmt-check check tools dev-init serve migrate migration-status dev
+.PHONY: build test race vet lint fmt-check check tools dev-init serve [[if ne .Database "none"]]migrate migration-status [[end]]dev
 build:
 	CGO_ENABLED=0 $(GO) build -mod=readonly -trimpath -ldflags '-X main.version=$(VERSION)' -o bin/apiserver ./cmd/apiserver
 test:
@@ -22,7 +22,7 @@ lint:
 	@.tools/bin/golangci-lint version | grep -F 'version 2.14.0 ' >/dev/null
 	.tools/bin/golangci-lint run ./...
 fmt-check:
-	@files="$$(gofmt -l cmd internal migrations)"; test -z "$$files" || { printf '%s\n' "$$files"; exit 1; }
+	@files="$$(gofmt -l cmd internal[[if ne .Database "none"]] migrations[[end]])"; test -z "$$files" || { printf '%s\n' "$$files"; exit 1; }
 check: fmt-check test vet lint
 tools:
 	GOBIN=$(CURDIR)/.tools/bin $(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
@@ -30,10 +30,11 @@ dev-init:
 	$(GO) run ./cmd/apiserver dev init
 serve:
 	$(GO) run ./cmd/apiserver serve
-migrate:
+[[if ne .Database "none"]]migrate:
 	$(GO) run ./cmd/apiserver migrate up
 migration-status:
 	$(GO) run ./cmd/apiserver migrate status
+[[end]]
 dev: dev-init
-	$(GO) run ./cmd/apiserver migrate up
-	$(GO) run ./cmd/apiserver serve
+	[[if ne .Database "none"]]$(GO) run ./cmd/apiserver migrate up
+	[[end]]$(GO) run ./cmd/apiserver serve

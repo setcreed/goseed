@@ -11,7 +11,7 @@ import (
 )
 
 func TestDevelopmentInitPreservesKeysAndRejectsProduction(t *testing.T) {
-	[[if ne .Database "sqlite"]]t.Setenv("APP_DATABASE_PASSWORD","unit-test-placeholder")[[end]]
+	[[if or (eq .Database "mysql") (eq .Database "postgres")]]t.Setenv("APP_DATABASE_PASSWORD","unit-test-placeholder")[[end]]
 	filename:=filepath.Join(t.TempDir(),"app.yaml")
 	var output bytes.Buffer
 	if err:=Init(filename,&output); err!=nil { t.Fatal(err) }
@@ -25,7 +25,7 @@ func TestDevelopmentInitPreservesKeysAndRejectsProduction(t *testing.T) {
 }
 
 func TestDevTokenRequiresDevelopmentConfig(t *testing.T){
- [[if ne .Database "sqlite"]]t.Setenv("APP_DATABASE_PASSWORD","unit-test-placeholder")[[end]]
+ [[if or (eq .Database "mysql") (eq .Database "postgres")]]t.Setenv("APP_DATABASE_PASSWORD","unit-test-placeholder")[[end]]
  directory:=t.TempDir();filename:=filepath.Join(directory,"app.yaml")
  if err:=Init(filename,io.Discard);err!=nil{t.Fatal(err)}
  var output bytes.Buffer
