@@ -40,3 +40,6 @@
 先 `make tools` 显式安装本地固定版本 linter，再执行 `make check`；并发与生命周期修改执行 `make race`。数据库相关修改使用真实 [[if eq .Database "sqlite"]]SQLite 文件[[else]][[.Database]] 服务[[end]]验证，认证修改验证失败路径。交付前确认 `make build`，不提交 `.tmp/`、`.tools/`、`bin/`、真实配置、密钥或数据库文件。
 
 提交、推送、迁移生产数据库及公开部署均遵循当前用户授权，授权未明确时先确认。
+[[if .Redis]]
+Redis 配置、缓存边界与验证入口见 [Redis](docs/redis.md) ；Biz 只依赖缓存接口，客户端由 App 统一关闭，不将缓存当作唯一权威状态。
+[[end]]

@@ -81,3 +81,8 @@ docker build -f build/docker/Dockerfile -t [[.Name]]:local .
 
 普通检查明确跳过需要外部数据库的测试。使用专用测试服务及有建库权限的测试账号，提供 `GOSEED_TEST_DATABASE_HOST/PORT/USER/PASSWORD`，设置 `GOSEED_TEST_EXTERNAL=1` 后执行 `make test` 或 `make race`。测试创建随机 `goseed_test_*` 数据库，结束仅删除本次创建的库；禁止使用生产凭据。生产应用账号无需具有建库或删库权限。服务验证另需真实 TLS 与部署配置。
 [[end]]
+[[if .Redis]]
+## Redis 缓存
+
+本项目包含可选缓存与必需依赖配置；开发启动前按环境提供 Redis 地址/凭据，开发初始化允许明文连接。生产要求密码和验证 TLS。使用、TTL 一致性边界、健康与真实验收见 [Redis](docs/redis.md) 。
+[[end]]

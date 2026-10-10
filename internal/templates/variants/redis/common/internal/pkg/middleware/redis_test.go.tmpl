@@ -1,0 +1,14 @@
+package middleware
+
+import (
+ "context"
+ "net/http/httptest"
+ "testing"
+ "[[.Module]]/internal/pkg/errno"
+ "github.com/gin-gonic/gin"
+)
+
+func TestRequiredDependencyBudgetDiffersFromCallerTimeout(t *testing.T){
+ gin.SetMode(gin.ReleaseMode)
+ for _,test:=range []struct{failure error;status int}{{errno.WithCause(errno.Unavailable,context.DeadlineExceeded),503},{context.DeadlineExceeded,504},{context.Canceled,504}}{router:=gin.New();router.GET("/",func(c *gin.Context){Failure(c,test.failure)});response:=httptest.NewRecorder();router.ServeHTTP(response,httptest.NewRequest("GET","/",nil));if response.Code!=test.status{t.Fatalf("failure status: %d want %d",response.Code,test.status)}}
+}

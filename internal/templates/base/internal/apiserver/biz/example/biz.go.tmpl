@@ -17,7 +17,7 @@ type Repository interface{
  Update(context.Context,string,uint64,model.ExampleChanges)(*model.Example,error)
  Delete(context.Context,string,uint64)error
 }
-type Biz struct {repository Repository}
+type Biz struct {repository Repository;[[if .Redis]]cache Cache[[end]]}
 func New(repository Repository)*Biz{return &Biz{repository:repository}}
 type CreateInput struct{Name string `json:"name"`;Description string `json:"description"`;Enabled *bool `json:"enabled,omitempty"`}
 type Page struct{Items []model.Example `json:"items"`;Total int64 `json:"total"`;Page int `json:"page"`;PageSize int `json:"page_size"`}
@@ -27,17 +27,17 @@ func validateDescription(value string)error{if !utf8.ValidString(value)||strings
 func(b *Biz)Create(ctx context.Context,input CreateInput)(*model.Example,error){
  owner,err:=subject(ctx);if err!=nil{return nil,err};if err:=validateName(input.Name);err!=nil{return nil,err};if err:=validateDescription(input.Description);err!=nil{return nil,err}
  item:=&model.Example{Owner:owner,Name:input.Name,Description:input.Description,Enabled:true};if input.Enabled!=nil{item.Enabled=*input.Enabled}
- if err:=b.repository.Create(ctx,item);err!=nil{return nil,err};return item,nil
+ [[if .Redis]]if err:=b.checkCache(ctx);err!=nil{return nil,err};[[end]]if err:=b.repository.Create(ctx,item);err!=nil{return nil,err};return item,nil
 }
-func(b *Biz)Get(ctx context.Context,id uint64)(*model.Example,error){owner,err:=subject(ctx);if err!=nil{return nil,err};if id==0{return nil,errno.Invalid("id must be positive")};return b.repository.Get(ctx,owner,id)}
+func(b *Biz)Get(ctx context.Context,id uint64)(*model.Example,error){owner,err:=subject(ctx);if err!=nil{return nil,err};if id==0{return nil,errno.Invalid("id must be positive")};[[if .Redis]]if b.cache!=nil{return b.getCached(ctx,owner,id)};[[end]]return b.repository.Get(ctx,owner,id)}
 func(b *Biz)List(ctx context.Context,page,size int)(*Page,error){
  owner,err:=subject(ctx);if err!=nil{return nil,err};if page<1||page>100000||size<1||size>100{return nil,errno.Invalid("invalid pagination")}
- items,total,err:=b.repository.List(ctx,owner,page,size);if err!=nil{return nil,err};return &Page{Items:items,Total:total,Page:page,PageSize:size},nil
+ [[if .Redis]]if err:=b.checkCache(ctx);err!=nil{return nil,err};[[end]]items,total,err:=b.repository.List(ctx,owner,page,size);if err!=nil{return nil,err};return &Page{Items:items,Total:total,Page:page,PageSize:size},nil
 }
 func(b *Biz)Update(ctx context.Context,id uint64,input model.ExampleChanges)(*model.Example,error){
  owner,err:=subject(ctx);if err!=nil{return nil,err};if id==0{return nil,errno.Invalid("id must be positive")}
  if input.Name==nil&&input.Description==nil&&input.Enabled==nil{return nil,errno.Invalid("update requires at least one field")}
  if input.Name!=nil{if err:=validateName(*input.Name);err!=nil{return nil,err}};if input.Description!=nil{if err:=validateDescription(*input.Description);err!=nil{return nil,err}}
- return b.repository.Update(ctx,owner,id,input)
+ [[if .Redis]]if err:=b.checkCache(ctx);err!=nil{return nil,err};item,err:=b.repository.Update(ctx,owner,id,input);if err==nil{b.invalidate(ctx,owner,id)};return item,err[[else]]return b.repository.Update(ctx,owner,id,input)[[end]]
 }
-func(b *Biz)Delete(ctx context.Context,id uint64)error{owner,err:=subject(ctx);if err!=nil{return err};if id==0{return errno.Invalid("id must be positive")};return b.repository.Delete(ctx,owner,id)}
+func(b *Biz)Delete(ctx context.Context,id uint64)error{owner,err:=subject(ctx);if err!=nil{return err};if id==0{return errno.Invalid("id must be positive")};[[if .Redis]]if err:=b.checkCache(ctx);err!=nil{return err};err=b.repository.Delete(ctx,owner,id);if err==nil{b.invalidate(ctx,owner,id)};return err[[else]]return b.repository.Delete(ctx,owner,id)[[end]]}

@@ -2415,5 +2415,60 @@
         }
       }
     }
+  },
+  "redis_supplement": {
+    "repository": {
+      "html_url": "https://github.com/redis/go-redis",
+      "archived": false,
+      "license": {
+        "key": "bsd-2-clause",
+        "name": "BSD 2-Clause \"Simplified\" License",
+        "spdx_id": "BSD-2-Clause",
+        "url": "https://api.github.com/licenses/bsd-2-clause",
+        "node_id": "MDc6TGljZW5zZTQ="
+      }
+    },
+    "release": {
+      "tag_name": "v9.23.0",
+      "published_at": "2026-10-05T14:54:17Z",
+      "html_url": "https://github.com/redis/go-redis/releases/tag/v9.23.0"
+    },
+    "commits": [
+      {
+        "sha": "760b98dc0b7d8621f09e1d91d7a6b32fe555bebe",
+        "html_url": "https://github.com/redis/go-redis/commit/760b98dc0b7d8621f09e1d91d7a6b32fe555bebe",
+        "date": "2026-10-08T11:56:14Z",
+        "message": "feat: sq compression hnsw (#4077)"
+      },
+      {
+        "sha": "f79ab090819d1f11aa7b9e64f22e8d3ebe594e1b",
+        "html_url": "https://github.com/redis/go-redis/commit/f79ab090819d1f11aa7b9e64f22e8d3ebe594e1b",
+        "date": "2026-10-08T10:13:01Z",
+        "message": "feat(search): add FILTER and LIMIT aggregate steps (#4076)"
+      },
+      {
+        "sha": "07b88b5dcd924850f0df28cbbb1113ea41c389d4",
+        "html_url": "https://github.com/redis/go-redis/commit/07b88b5dcd924850f0df28cbbb1113ea41c389d4",
+        "date": "2026-10-07T10:24:59Z",
+        "message": "feat(bloom): add cellSize param to cms init (#4023)"
+      }
+    ],
+    "cancellation": {
+      "html_url": "https://github.com/redis/go-redis/issues/4079",
+      "state": "open",
+      "updated_at": "2026-10-10T01:37:13Z",
+      "title": "Support pure context cancellation for in-flight I/O when ContextTimeoutEnabled is true"
+    },
+    "comments": [
+      {
+        "html_url": "https://github.com/redis/go-redis/issues/4079#issuecomment-6092254817",
+        "author": "13589080127",
+        "created_at": "2026-10-10T01:37:13Z"
+      }
+    ]
+  },
+  "redis_image_supplement": {
+    "image": "redis:8.10.2-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0",
+    "source": "https://raw.githubusercontent.com/docker-library/official-images/master/library/redis"
   }
 }

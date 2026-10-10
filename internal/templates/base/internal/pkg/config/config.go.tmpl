@@ -21,6 +21,7 @@ type Config struct {
 	Log Log
 	[[if ne .Database "none"]]Database Database[[end]]
 	JWT JWT
+	[[if .Redis]]Redis Redis[[end]]
 }
 
 type HTTP struct {
@@ -61,6 +62,20 @@ type Log struct { Level string; Format string }
 	SlowThreshold time.Duration `mapstructure:"slow_threshold"`
 }[[end]]
 type JWT struct { Secret string; Issuer string; Audience string; TTL time.Duration }
+[[if .Redis]]type Redis struct {
+ Address string
+ Username string
+ Password string
+ DB int
+ KeyPrefix string `mapstructure:"key_prefix"`
+ TTL time.Duration
+ CommandTimeout time.Duration `mapstructure:"command_timeout"`
+ DialTimeout time.Duration `mapstructure:"dial_timeout"`
+ PoolSize int `mapstructure:"pool_size"`
+ Required bool
+ TLS bool
+ CAFile string `mapstructure:"ca_file"`
+}[[end]]
 type Overrides struct { Address string; Env string }
 
 func Load(filename string, explicit bool, overrides Overrides) (Config, error) {
@@ -81,6 +96,7 @@ func Load(filename string, explicit bool, overrides Overrides) (Config, error) {
 		"database.conn_max_lifetime": "30m", "database.conn_max_idle_time": "5m",[[end]]
 		"database.max_open": 4, "database.max_idle": 2, "database.slow_threshold": "200ms",[[end]]
 		"jwt.secret": "", "jwt.issuer": "[[.Name]]", "jwt.audience": "[[.Name]]-api", "jwt.ttl": "15m",
+		[[if .Redis]]"redis.address":"127.0.0.1:6379","redis.username":"","redis.password":"","redis.db":0,"redis.key_prefix":"[[.Name]]","redis.ttl":"30s","redis.command_timeout":"200ms","redis.dial_timeout":"1s","redis.pool_size":4,"redis.required":false,"redis.tls":true,"redis.ca_file":"",[[end]]
 	}
 	for key, value := range defaults {
 		v.SetDefault(key, value)
@@ -102,7 +118,7 @@ func Load(filename string, explicit bool, overrides Overrides) (Config, error) {
 		if !valid{return Config{},fmt.Errorf("invalid configuration type for %s",key)}
 	}
 	for key:=range defaults {if err:=v.BindEnv(key,"APP_"+strings.ToUpper(strings.ReplaceAll(key,".","_")));err!=nil{return Config{},errors.New("cannot bind configuration environment")}}
-	for _, key := range []string{"http.read_header_timeout","http.read_timeout","http.write_timeout","http.idle_timeout","http.request_timeout","http.shutdown_timeout",[[if ne .Database "none"]][[if eq .Database "sqlite"]]"database.busy_timeout",[[else]]"database.connect_timeout","database.conn_max_lifetime","database.conn_max_idle_time",[[end]]"database.slow_threshold",[[end]]"jwt.ttl"} {
+	for _, key := range []string{"http.read_header_timeout","http.read_timeout","http.write_timeout","http.idle_timeout","http.request_timeout","http.shutdown_timeout",[[if ne .Database "none"]][[if eq .Database "sqlite"]]"database.busy_timeout",[[else]]"database.connect_timeout","database.conn_max_lifetime","database.conn_max_idle_time",[[end]]"database.slow_threshold",[[end]]"jwt.ttl"[[if .Redis]],"redis.ttl","redis.command_timeout","redis.dial_timeout"[[end]]} {
 		value, ok := v.Get(key).(string)
 		if !ok { return Config{}, fmt.Errorf("%s requires a duration string with units",key) }
 		if _, err := time.ParseDuration(value); err != nil { return Config{}, fmt.Errorf("invalid duration for %s",key) }
@@ -146,5 +162,6 @@ func (c Config) Validate() error {
 	key, err := base64.StdEncoding.Strict().DecodeString(c.JWT.Secret)
 	if err != nil || len(key) < 32 { return errors.New("jwt.secret requires Base64 encoding of at least 32 bytes") }
 	if strings.TrimSpace(c.JWT.Issuer) == "" || strings.TrimSpace(c.JWT.Audience) == "" || c.JWT.TTL < time.Second || c.JWT.TTL > time.Hour { return errors.New("invalid jwt issuer, audience or ttl") }
+	[[if .Redis]]if err:=c.Redis.Validate(c.Env,c.HTTP.RequestTimeout);err!=nil{return err}[[end]]
 	return nil
 }

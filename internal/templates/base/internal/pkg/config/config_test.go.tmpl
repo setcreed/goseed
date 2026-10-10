@@ -10,7 +10,8 @@ import (
 
 func TestConfigurationBoundary(t *testing.T) {
 	[[if or (eq .Database "mysql") (eq .Database "postgres")]]t.Setenv("APP_DATABASE_PASSWORD","unit-test-placeholder")[[end]]
-	t.Setenv("APP_JWT_SECRET", base64.StdEncoding.EncodeToString([]byte(strings.Repeat("s",32))))
+	[[if .Redis]]t.Setenv("APP_REDIS_PASSWORD","unit-test-placeholder");t.Setenv("APP_REDIS_ADDRESS","127.0.0.1:1")[[end]]
+ t.Setenv("APP_JWT_SECRET", base64.StdEncoding.EncodeToString([]byte(strings.Repeat("s",32))))
 	filename := filepath.Join(t.TempDir(), "app.yaml")
 	if err := os.WriteFile(filename, []byte("http:\n  address: 127.0.0.1:8001\n"), 0600); err != nil { t.Fatal(err) }
 	t.Setenv("APP_HTTP_ADDRESS", "127.0.0.1:8002")

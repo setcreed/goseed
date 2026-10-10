@@ -12,7 +12,7 @@ export GOWORK := off
 export GOTOOLCHAIN := go1.26.4
 
 .DEFAULT_GOAL := check
-.PHONY: build test race vet lint fmt fmt-check check contract-check tools compatibility compatibility-cross compatibility-db protocol-tools protocol-check template-container template-db
+.PHONY: build test race vet lint fmt fmt-check check contract-check tools compatibility compatibility-cross compatibility-db protocol-tools protocol-check template-container template-db template-redis
 
 build:
 	$(GO) build -mod=readonly -trimpath -ldflags '-X main.version=$(VERSION)' -o bin/goseed ./cmd/goseed
@@ -65,6 +65,9 @@ template-container:
 
 template-db:
 	python3 scripts/template-db.py
+
+template-redis:
+	python3 scripts/template-redis.py
 
 # Explicit installation only; build/test/check never install global tools.
 tools:

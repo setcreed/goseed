@@ -1,0 +1,1069 @@
+[[if eq .Database "none"]]
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "[[.Name]] HTTP API",
+    "version": "v1",
+    "description": "需要 JWT 认证的无持久化问候示例。拒绝未知、重复或无效查询参数。"
+  },
+  "basePath": "/",
+  "schemes": [
+    "http",
+    "https"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "securityDefinitions": {
+    "Bearer": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header",
+      "description": "值为 Bearer <token>；JWT 固定 HS256。"
+    }
+  },
+  "security": [
+    {
+      "Bearer": []
+    }
+  ],
+  "parameters": {
+    "RequestID": {
+      "name": "X-Request-ID",
+      "in": "header",
+      "required": false,
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,64}$",
+      "description": "无效值重新生成，响应头返回 ID。"
+    }
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "health",
+        "summary": "进程存活",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "进程可响应",
+            "schema": {
+              "$ref": "#/definitions/Health"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/parameters/RequestID"
+          }
+        ]
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "ready",
+        "summary": "服务关闭状态就绪检查",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "就绪",
+            "schema": {
+              "$ref": "#/definitions/Health"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "503": {
+            "description": "不可用",
+            "schema": {
+              "$ref": "#/definitions/Health"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/parameters/RequestID"
+          }
+        ]
+      }
+    },
+    "/v1/examples": {
+      "get": {
+        "operationId": "greet",
+        "summary": "需要 JWT 认证的无持久化问候",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/parameters/RequestID"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "type": "string",
+            "required": false,
+            "default": "world",
+            "minLength": 1,
+            "maxLength": 80,
+            "description": "Valid UTF-8, no controls or surrounding whitespace; no other or duplicate parameters."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Greeting",
+            "schema": {
+              "$ref": "#/definitions/Greeting"
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          },
+          "504": {
+            "description": "Request timeout",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "Error": {
+      "type": "object",
+      "required": [
+        "code",
+        "message",
+        "request_id"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        }
+      }
+    },
+    "Health": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "unavailable"
+          ]
+        }
+      }
+    },
+    "Greeting": {
+      "type": "object",
+      "required": [
+        "message",
+        "subject"
+      ],
+      "properties": {
+        "message": {
+          "type": "string",
+          "example": "hello, world"
+        },
+        "subject": {
+          "type": "string",
+          "example": "alice"
+        }
+      }
+    }
+  }
+}
+[[else]]
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "[[.Name]] HTTP API",
+    "version": "v1",
+    "description": "JWT 主体隔离的示例资源。写入拒绝未知、重复、null 及额外 JSON 值。"
+  },
+  "basePath": "/",
+  "schemes": [
+    "http",
+    "https"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "securityDefinitions": {
+    "Bearer": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header",
+      "description": "值为 Bearer <token>；JWT 固定 HS256。"
+    }
+  },
+  "security": [
+    {
+      "Bearer": []
+    }
+  ],
+  "parameters": {
+    "RequestID": {
+      "name": "X-Request-ID",
+      "in": "header",
+      "required": false,
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,64}$",
+      "description": "无效值重新生成，响应头返回 ID。"
+    }
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "health",
+        "summary": "进程存活",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "进程可响应",
+            "schema": {
+              "$ref": "#/definitions/Health"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/parameters/RequestID"
+          }
+        ]
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "ready",
+        "summary": "数据库及关闭状态就绪检查",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "就绪",
+            "schema": {
+              "$ref": "#/definitions/Health"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "503": {
+            "description": "不可用",
+            "schema": {
+              "$ref": "#/definitions/Health"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/parameters/RequestID"
+          }
+        ]
+      }
+    },
+    "/v1/examples": {
+      "post": {
+        "operationId": "createExample",
+        "summary": "创建当前主体资源",
+        "tags": [
+          "examples"
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CreateExample"
+            }
+          },
+          {
+            "$ref": "#/parameters/RequestID"
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "输入无效",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "401": {
+            "description": "认证失败",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "403": {
+            "description": "来源不允许",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在或不属于当前主体",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "409": {
+            "description": "名称冲突",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "504": {
+            "description": "请求超时",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "201": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/Example"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listExamples",
+        "summary": "按 id 升序列出当前主体资源",
+        "tags": [
+          "examples"
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "default": 1
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          },
+          {
+            "$ref": "#/parameters/RequestID"
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "输入无效",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "401": {
+            "description": "认证失败",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "403": {
+            "description": "来源不允许",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在或不属于当前主体",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "409": {
+            "description": "名称冲突",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "504": {
+            "description": "请求超时",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ExamplePage"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      }
+    },
+    "/v1/examples/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1,
+          "maximum": 9223372036854775807
+        }
+      ],
+      "get": {
+        "operationId": "getExample",
+        "summary": "读取当前主体资源",
+        "tags": [
+          "examples"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/parameters/RequestID"
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "输入无效",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "401": {
+            "description": "认证失败",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "403": {
+            "description": "来源不允许",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在或不属于当前主体",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "409": {
+            "description": "名称冲突",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "504": {
+            "description": "请求超时",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/Example"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateExample",
+        "summary": "更新存在字段，保留空描述与 false",
+        "tags": [
+          "examples"
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/UpdateExample"
+            }
+          },
+          {
+            "$ref": "#/parameters/RequestID"
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "输入无效",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "401": {
+            "description": "认证失败",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "403": {
+            "description": "来源不允许",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在或不属于当前主体",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "409": {
+            "description": "名称冲突",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "504": {
+            "description": "请求超时",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/Example"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteExample",
+        "summary": "删除当前主体资源",
+        "tags": [
+          "examples"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/parameters/RequestID"
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "输入无效",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "401": {
+            "description": "认证失败",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "403": {
+            "description": "来源不允许",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在或不属于当前主体",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "409": {
+            "description": "名称冲突",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "504": {
+            "description": "请求超时",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "204": {
+            "description": "成功",
+            "headers": {
+              "X-Request-ID": {
+                "type": "string"
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "CreateExample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "名称无首尾空白；同主体名称唯一。"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000,
+          "default": ""
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "UpdateExample": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "名称无首尾空白；同主体名称唯一。"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Example": {
+      "type": "object",
+      "required": [
+        "id",
+        "owner",
+        "name",
+        "description",
+        "enabled",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "名称无首尾空白；同主体名称唯一。"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "integer",
+          "format": "int64",
+          "readOnly": true
+        },
+        "owner": {
+          "type": "string",
+          "readOnly": true
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "readOnly": true,
+          "description": "UTC"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "readOnly": true,
+          "description": "UTC"
+        }
+      }
+    },
+    "ExamplePage": {
+      "type": "object",
+      "required": [
+        "items",
+        "total",
+        "page",
+        "page_size"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Example"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "page": {
+          "type": "integer"
+        },
+        "page_size": {
+          "type": "integer"
+        }
+      }
+    },
+    "Error": {
+      "type": "object",
+      "required": [
+        "code",
+        "message",
+        "request_id"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        }
+      }
+    },
+    "Health": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "unavailable"
+          ]
+        }
+      }
+    }
+  }
+}
+[[end]]

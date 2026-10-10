@@ -12,12 +12,18 @@ import (
 func TestDeliveredContracts(t *testing.T) {
 	for _, backend := range []string{"sqlite", "mysql", "postgres", "none"} {
 		t.Run(backend, func(t *testing.T) { checkDeliveredContracts(t, backend) })
+		t.Run(backend+"-redis", func(t *testing.T) { checkDeliveredOptions(t, Options{Database: backend, Redis: true}) })
 	}
 }
 
 func checkDeliveredContracts(t *testing.T, backend string) {
+	checkDeliveredOptions(t, Options{Database: backend})
+}
+
+func checkDeliveredOptions(t *testing.T, options Options) {
 	t.Helper()
-	plan, err := Render(Project{Name: "demo", Module: "example.com/demo"}, Options{Database: backend})
+	backend := options.Database
+	plan, err := Render(Project{Name: "demo", Module: "example.com/demo"}, options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,6 +48,17 @@ func checkDeliveredContracts(t *testing.T, backend string) {
 		lock.Runtime[name] = version
 	}
 	manifest := string(files["go.mod"])
+	if strings.Contains(manifest, "github.com/redis/go-redis/v9 ") != options.Redis {
+		t.Fatal("incorrect Redis dependency composition")
+	}
+	for _, filename := range []string{"internal/pkg/cache/redis.go", "internal/apiserver/biz/example/cache.go", "docs/redis.md"} {
+		if _, exists := files[filename]; exists != options.Redis {
+			t.Fatalf("incorrect Redis file composition: %s", filename)
+		}
+	}
+	if strings.Contains(string(files["configs/app.example.yaml"]), "redis:") != options.Redis {
+		t.Fatal("incorrect Redis configuration composition")
+	}
 	if backend == "none" {
 		for filename, content := range files {
 			for _, prefix := range []string{"migrations/", "internal/pkg/database/", "internal/apiserver/model/", "internal/apiserver/store/", "internal/testutil/"} {

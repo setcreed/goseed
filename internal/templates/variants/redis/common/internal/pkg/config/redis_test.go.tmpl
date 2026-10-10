@@ -1,0 +1,22 @@
+package config
+
+import (
+ "encoding/base64"
+ "os"
+ "path/filepath"
+ "strings"
+ "testing"
+)
+
+func TestRedisConfiguration(t *testing.T){
+ t.Setenv("APP_JWT_SECRET",base64.StdEncoding.EncodeToString(make([]byte,32)))
+ [[if or (eq .Database "mysql") (eq .Database "postgres")]]t.Setenv("APP_DATABASE_PASSWORD","unit-placeholder")[[end]]
+ t.Setenv("APP_REDIS_PASSWORD","unit-placeholder")
+ file:=filepath.Join(t.TempDir(),"app.yaml")
+ for _,input:=range []string{"redis:\n  address: bad\n","redis:\n  address: host:0\n","redis:\n  db: 16\n","redis:\n  pool_size: 0\n","redis:\n  key_prefix: 'bad*prefix'\n","redis:\n  ttl: 0s\n","redis:\n  ttl: 6m\n","redis:\n  command_timeout: 5s\n","redis:\n  command_timeout: 1\n","redis:\n  dial_timeout: 0s\n","redis:\n  tls: false\n","redis:\n  required: 1\n","env: development\nredis:\n  tls: false\n  ca_file: private.pem\n"}{if err:=os.WriteFile(file,[]byte(input),0600);err!=nil{t.Fatal(err)};if _,err:=Load(file,true,Overrides{});err==nil{t.Fatalf("invalid Redis config accepted: %s",input)}}
+ if err:=os.WriteFile(file,[]byte("{}\n"),0600);err!=nil{t.Fatal(err)}
+ settings,err:=Load(file,true,Overrides{});if err!=nil||!settings.Redis.TLS||settings.Redis.Required{t.Fatalf("defaults: %v",err)}
+ t.Setenv("APP_REDIS_PASSWORD","");if _,err:=Load(file,true,Overrides{});err==nil{t.Fatal("production without password accepted")}
+ if err:=os.WriteFile(file,[]byte("env: development\nredis:\n  tls: false\n"),0600);err!=nil{t.Fatal(err)};if _,err:=Load(file,true,Overrides{});err!=nil{t.Fatal(err)}
+ t.Setenv("APP_REDIS_PASSWORD","private\npassword");if _,err:=Load(file,true,Overrides{});err==nil||strings.Contains(err.Error(),"private"){t.Fatal("credentials invalid or disclosed")}
+}

@@ -70,4 +70,6 @@ SQL 变体由 `make test` 执行生成产物静态与运行基础检查；`make 
 
 无数据库变体由 `make test` 核对文件/依赖裁剪并运行 JWT 问候进程；`make template-container` 同时验证其非 root、只读根文件系统、无数据卷启动与重启。其配置、命令与输入契约见可选模板文档。
 
+Redis 由 `Options.Redis` 生成时选择，业务只依赖缓存接口；默认可选故障回源，必需模式阻断不可用依赖。缓存不是权威业务状态，写后失效失败与并发回填由 TTL 收敛，强一致读取应绕过缓存。`make test` 核对四种存储组合和受控连接取消，`make template-redis` 使用固定镜像、专用 TLS/密码和随机回环端口，真实用例不得跳过；只停止与清理本次名称和标签匹配的容器，禁止共享 Redis 的全库清空。
+
 新增完成与验证记录时，使用 `TZ=Asia/Shanghai date "+%Y-%m-%d %H:%M"` 获取北京时间并更新 ROADMAP。

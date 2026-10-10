@@ -22,8 +22,8 @@ func Failure(c *gin.Context, err error) {
 	e := errno.Internal
 	var business *errno.Error
 	if errors.As(err,&business) { e = business }
-	if errors.Is(err,context.DeadlineExceeded) || errors.Is(err,context.Canceled) { e = &errno.Error{Code:"deadline_exceeded",Message:"request timeout"} }
-	status := map[string]int{"invalid_argument":400,"unauthorized":401,"forbidden":403,"not_found":404,"conflict":409,"deadline_exceeded":504,"method_not_allowed":405}[e.Code]
+	if [[if .Redis]]e.Code!="unavailable"&&[[end]](errors.Is(err,context.DeadlineExceeded) || errors.Is(err,context.Canceled)) { e = &errno.Error{Code:"deadline_exceeded",Message:"request timeout"} }
+	status := map[string]int{"invalid_argument":400,"unauthorized":401,"forbidden":403,"not_found":404,"conflict":409,"deadline_exceeded":504,"method_not_allowed":405[[if .Redis]],"unavailable":503[[end]]}[e.Code]
 	if status == 0 { status = 500 }
 	if status == 401 { c.Header("WWW-Authenticate","Bearer") }
 	c.Set("error_code",e.Code)

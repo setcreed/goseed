@@ -1,0 +1,43 @@
+package example
+
+import (
+ "context"
+ [[if eq .Database "none"]]"encoding/json"[[end]]
+ "errors"
+ "testing"
+ "[[.Module]]/internal/pkg/contextx"
+ "[[.Module]]/internal/pkg/errno"
+ [[if ne .Database "none"]]"[[.Module]]/internal/apiserver/model"[[end]]
+)
+
+// This fake is a test-only cache port, never a runtime persistence implementation.
+type recordingCache struct{values map[string][]byte;sets,deletes int;failure error}
+func(c *recordingCache)Get(_ context.Context,key string)([]byte,bool,error){value,ok:=c.values[key];return value,ok,c.failure}
+func(c *recordingCache)Set(_ context.Context,key string,value []byte)error{c.sets++;c.values[key]=value;return nil}
+func(c *recordingCache)Delete(_ context.Context,key string)error{c.deletes++;delete(c.values,key);return nil}
+func(c *recordingCache)Check(context.Context)error{return c.failure}
+
+[[if ne .Database "none"]]
+type cacheRepository struct{Repository;gets,updates,deletes int;item model.Example;failure error}
+func(r *cacheRepository)Get(_ context.Context,owner string,id uint64)(*model.Example,error){r.gets++;if r.failure!=nil{return nil,r.failure};if r.item.Owner!=owner||r.item.ID!=id{return nil,errno.NotFound};item:=r.item;return &item,nil}
+func(r *cacheRepository)Update(_ context.Context,_ string,_ uint64,changes model.ExampleChanges)(*model.Example,error){r.updates++;if changes.Name!=nil{r.item.Name=*changes.Name};return &r.item,nil}
+func(r *cacheRepository)Delete(context.Context,string,uint64)error{r.deletes++;return nil}
+func TestCacheAsideIsolationAndInvalidation(t *testing.T){
+ cache:=&recordingCache{values:map[string][]byte{}};repository:=&cacheRepository{item:model.Example{ID:1,Owner:"alice",Name:"first"}};business:=NewCached(repository,cache);ctx:=contextx.WithSubject(context.Background(),"alice")
+ for range 2{if _,err:=business.Get(ctx,1);err!=nil{t.Fatal(err)}};if repository.gets!=1||cache.sets!=1{t.Fatal("cache miss/hit did not avoid second load")}
+ if _,err:=business.Get(contextx.WithSubject(context.Background(),"bob"),1);!errors.Is(err,errno.NotFound){t.Fatal("subject isolation")}
+ key:=cacheKey("alice","1");for _,data:=range [][]byte{[]byte("invalid JSON"),[]byte(`{"id":1,"owner":"bob","name":"private"}`)}{cache.values[key]=data;if item,err:=business.Get(ctx,1);err!=nil||item.Owner!="alice"{t.Fatal("corrupt/foreign cache accepted")}}
+ name:="updated";if _,err:=business.Update(ctx,1,model.ExampleChanges{Name:&name});err!=nil{t.Fatal(err)};if _,exists:=cache.values[key];exists{t.Fatal("updated resource remained cached")};if item,err:=business.Get(ctx,1);err!=nil||item.Name!=name{t.Fatal("update did not reload")}
+ if err:=business.Delete(ctx,1);err!=nil{t.Fatal(err)};if _,exists:=cache.values[key];exists{t.Fatal("deleted resource remained cached")}
+ repository.failure=errno.NotFound;before:=cache.sets;if _,err:=business.Get(ctx,1);!errors.Is(err,errno.NotFound)||cache.sets!=before{t.Fatal("not found was cached")}
+ cache.failure=errno.Unavailable;if _,err:=business.Get(ctx,1);!errors.Is(err,errno.Unavailable){t.Fatal("required cache failure ignored")};updates,deletes:=repository.updates,repository.deletes;if _,err:=business.Update(ctx,1,model.ExampleChanges{Name:&name});!errors.Is(err,errno.Unavailable){t.Fatal("write proceeded with required cache failure")};if err:=business.Delete(ctx,1);!errors.Is(err,errno.Unavailable)||repository.updates!=updates||repository.deletes!=deletes{t.Fatal("required failure reached persistence")}
+}
+[[else]]
+func TestGreetingCacheAsideAndIsolation(t *testing.T){
+ cache:=&recordingCache{values:map[string][]byte{}};business:=NewCached(cache);alice:=contextx.WithSubject(context.Background(),"alice")
+ for range 2{if _,err:=business.Greet(alice,"world");err!=nil{t.Fatal(err)}};if cache.sets!=1{t.Fatal("greeting was not served from cache")}
+ bob:=contextx.WithSubject(context.Background(),"bob");if result,err:=business.Greet(bob,"world");err!=nil||result.Subject!="bob"||cache.sets!=2{t.Fatal("greeting subject isolation")}
+ foreign,_:=json.Marshal(Greeting{Message:"hello, world",Subject:"bob"});cache.values[cacheKey("alice","world")]=foreign;if result,err:=business.Greet(alice,"world");err!=nil||result.Subject!="alice"||cache.deletes!=1{t.Fatal("foreign cached identity accepted")}
+ cache.failure=errno.Unavailable;if _,err:=business.Greet(alice,"world");!errors.Is(err,errno.Unavailable){t.Fatal("required cache failure ignored")}
+}
+[[end]]

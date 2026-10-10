@@ -1,0 +1,63 @@
+package cache
+
+import (
+ "bufio"
+ "context"
+ "crypto/rand"
+ "encoding/hex"
+ "errors"
+ "net"
+ "os"
+ "strconv"
+ "strings"
+ "sync"
+ "testing"
+ "time"
+
+ "[[.Module]]/internal/pkg/config"
+ "[[.Module]]/internal/pkg/errno"
+ "go.uber.org/zap"
+ "go.uber.org/zap/zaptest/observer"
+)
+
+func settings()config.Redis{return config.Redis{Address:"127.0.0.1:1",KeyPrefix:"unit",TTL:time.Second,CommandTimeout:100*time.Millisecond,DialTimeout:100*time.Millisecond,PoolSize:2}}
+func TestUnavailableAndInvalidCA(t *testing.T){
+ cfg:=settings();client,err:=Open(context.Background(),cfg,zap.NewNop());if err!=nil{t.Fatal(err)};defer func(){_ = client.Close()}()
+ if _,hit,err:=client.Get(context.Background(),"key");err!=nil||hit{t.Fatal("optional failure did not miss")}
+ cfg.Required=true;if client,err:=Open(context.Background(),cfg,zap.NewNop());client!=nil||!errors.Is(err,errno.Unavailable){t.Fatal("required failure accepted")}
+ cfg.Required=false;cfg.TLS=true;cfg.CAFile="absent-private-ca";if client,err:=Open(context.Background(),cfg,zap.NewNop());client!=nil||err==nil||strings.Contains(err.Error(),"private-ca"){t.Fatal("invalid CA accepted or disclosed")}
+}
+
+// A controlled RESP2 peer finishes initialization, then withholds a GET reply.
+func TestInFlightContextBudget(t *testing.T){
+ listener,err:=net.Listen("tcp","127.0.0.1:0");if err!=nil{t.Fatal(err)}
+ var mu sync.Mutex;closing:=false;var connections []net.Conn;var workers sync.WaitGroup;accepted:=make(chan struct{},4)
+ workers.Add(1);go func(){defer workers.Done();for{connection,err:=listener.Accept();if err!=nil{return};mu.Lock();if closing{mu.Unlock();_ = connection.Close();return};connections=append(connections,connection);workers.Add(1);mu.Unlock();go func(){defer workers.Done();reader:=bufio.NewReader(connection);for{line,err:=reader.ReadString('\n');if err!=nil{return};count,err:=strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(line,"*")));if err!=nil{return};var command string;for i:=0;i<count;i++{if _,err:=reader.ReadString('\n');err!=nil{return};part,err:=reader.ReadString('\n');if err!=nil{return};if i==0{command=strings.TrimSpace(part)}};switch command{case "hello":_,_ = connection.Write([]byte("-ERR unknown command\r\n"));case "ping":_,_ = connection.Write([]byte("+PONG\r\n"));case "get":accepted<-struct{}{};if _,err:=reader.ReadByte();err!=nil{return};default:_,_ = connection.Write([]byte("+OK\r\n"))}}}()} }()
+ t.Cleanup(func(){_ = listener.Close();mu.Lock();closing=true;for _,connection:=range connections{_ = connection.Close()};mu.Unlock();workers.Wait()})
+ cfg:=settings();cfg.Address=listener.Addr().String();cfg.Required=true;client,err:=Open(context.Background(),cfg,zap.NewNop());if err!=nil{t.Fatal(err)};defer func(){_ = client.Close()}()
+ for _,deadline:=range []bool{false,true}{ctx,cancel:=context.WithCancel(context.Background());if deadline{cancel();ctx,cancel=context.WithTimeout(context.Background(),40*time.Millisecond)};done:=make(chan error,1);started:=time.Now();go func(){_,_,err:=client.Get(ctx,"key");done<-err}();select{case <-accepted:case <-time.After(time.Second):cancel();t.Fatal("GET did not enter socket read")};if !deadline{cancel()};want:=context.Canceled;if deadline{want=context.DeadlineExceeded};select{case err:=<-done:if !errors.Is(err,want)||time.Since(started)>time.Second{t.Fatalf("Context not bounded or propagated: %v",err)};case <-time.After(time.Second):cancel();t.Fatal("unbounded Redis read")};cancel()}
+}
+
+func TestRealRedisTTLIsolationAndTLS(t *testing.T){
+ if os.Getenv("GOSEED_TEST_REDIS")!="1"{t.Skip("dedicated Redis fixture required")}
+ cfg:=settings();cfg.Address=os.Getenv("GOSEED_TEST_REDIS_ADDRESS");cfg.Password=os.Getenv("GOSEED_TEST_REDIS_PASSWORD");cfg.CAFile=os.Getenv("GOSEED_TEST_REDIS_CA_FILE");cfg.TLS=true;cfg.Required=true;cfg.CommandTimeout=200*time.Millisecond
+ if cfg.Address==""||cfg.Password==""||cfg.CAFile==""{t.Fatal("explicit Redis address, password and CA required")}
+ var random [12]byte;if _,err:=rand.Read(random[:]);err!=nil{t.Fatal(err)};cfg.KeyPrefix="goseed_test_"+hex.EncodeToString(random[:])
+ core,logs:=observer.New(zap.WarnLevel);client,err:=Open(context.Background(),cfg,zap.New(core));if err!=nil{t.Fatal(err)};defer func(){_ = client.Close()}()
+ ctx:=context.Background();if _,hit,err:=client.Get(ctx,"private-key");err!=nil||hit{t.Fatal("initial miss")}
+ if err:=client.Set(ctx,"private-key",[]byte("private-value"));err!=nil{t.Fatal(err)}
+ if value,hit,err:=client.Get(ctx,"private-key");err!=nil||!hit||string(value)!="private-value"{t.Fatal("cache hit")}
+ if ttl,err:=client.client.PTTL(ctx,client.key("private-key")).Result();err!=nil||ttl<=0||ttl>time.Second{t.Fatal("TTL not applied")}
+ other:=cfg;other.KeyPrefix+="_other";isolated,err:=Open(ctx,other,zap.NewNop());if err!=nil{t.Fatal(err)};defer func(){_ = isolated.Close()}();if _,hit,err:=isolated.Get(ctx,"private-key");err!=nil||hit{t.Fatal("namespace isolation")}
+ if err:=client.Delete(ctx,"private-key");err!=nil{t.Fatal(err)};if _,hit,err:=client.Get(ctx,"private-key");err!=nil||hit{t.Fatal("invalidation")}
+ if err:=client.Set(ctx,"expiry",[]byte("value"));err!=nil{t.Fatal(err)};deadline:=time.Now().Add(2*time.Second);expired:=false;for time.Now().Before(deadline){_,hit,err:=client.Get(ctx,"expiry");if err!=nil{t.Fatal(err)};if !hit{expired=true;break};time.Sleep(20*time.Millisecond)};if !expired{t.Fatal("value did not expire")}
+ for _,mutate:=range []func(*config.Redis){func(c *config.Redis){c.Password="private-wrong-password"},func(c *config.Redis){c.CAFile=""},func(c *config.Redis){_,port,_:=net.SplitHostPort(c.Address);c.Address=net.JoinHostPort("localhost",port)}}{invalid:=cfg;mutate(&invalid);if other,err:=Open(ctx,invalid,zap.New(core));err==nil||other!=nil{t.Fatal("invalid Redis authentication/TLS accepted")}}
+ if err:=client.client.Do(ctx,"CLIENT","PAUSE",250,"ALL").Err();err!=nil{t.Fatal(err)}
+ deadlineContext,end:=context.WithTimeout(ctx,20*time.Millisecond);started:=time.Now();_,_,err=client.Get(deadlineContext,"expiry");end();if !errors.Is(err,context.DeadlineExceeded)||time.Since(started)>time.Second{t.Fatal("real Redis deadline lost or unbounded")};time.Sleep(300*time.Millisecond);if err:=client.Ping(ctx);err!=nil{t.Fatal("pool did not recover after deadline")}
+ if err:=client.client.Do(ctx,"CLIENT","PAUSE",250,"ALL").Err();err!=nil{t.Fatal(err)}
+ inFlight,stop:=context.WithCancel(ctx);done:=make(chan error,1);go func(){_,_,err:=client.Get(inFlight,"expiry");done<-err}();time.Sleep(20*time.Millisecond);stop();select{case err:=<-done:if !errors.Is(err,context.Canceled){t.Fatal("real Redis pure cancellation lost")};case <-time.After(time.Second):t.Fatal("real Redis pure cancellation unbounded")};time.Sleep(300*time.Millisecond);if err:=client.Ping(ctx);err!=nil{t.Fatal("pool did not recover after cancel")}
+ canceled,cancel:=context.WithCancel(ctx);cancel();if err:=client.Set(canceled,"canceled",[]byte("value"));!errors.Is(err,context.Canceled){t.Fatal("cancellation lost")}
+ if _,hit,err:=client.Get(ctx,"canceled");err!=nil||hit{t.Fatal("canceled write executed")}
+ if err:=client.Close();err!=nil{t.Fatal(err)};if err:=client.Ping(ctx);!errors.Is(err,errno.Unavailable){t.Fatal("closed pool accepted command")}
+ for _,entry:=range logs.All(){data:=entry.Message+entry.ContextMap()["operation"].(string);for _,secret:=range []string{cfg.Password,"private-key","private-value","private-wrong-password"}{if strings.Contains(data,secret){t.Fatal("Redis log disclosed input")}}}
+}

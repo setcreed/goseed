@@ -27,3 +27,6 @@
 代码、配置和文档保持一致；ROADMAP 记录当前进度，README 只写已实现能力。依赖变化同步完整清单，普通检查 readonly；不增加重复能力或生成器运行依赖。
 
 先 `make tools` 安装项目内 linter，再 `make check`；并发或生命周期修改执行 `make race`，交付前 `make build`。认证和输入校验覆盖失败路径。不得提交 `.tmp/`、`.tools/`、`bin/`、真实配置、密钥或证书。提交、推送及公开部署遵循当前用户授权。
+[[if .Redis]]
+Redis 配置、缓存边界与验证入口见 [Redis](docs/redis.md) ；Biz 只依赖缓存接口，客户端由 App 统一关闭，不将缓存当作唯一权威状态。
+[[end]]

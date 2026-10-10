@@ -2,13 +2,14 @@ package bootstrap
 
 import (
 	"context"
-	[[if ne .Database "none"]]"time"[[end]]
+	[[if or (ne .Database "none") .Redis]]"time"[[end]]
 
 	"[[.Module]]/internal/apiserver"
 	examplebiz "[[.Module]]/internal/apiserver/biz/example"
 	examplehandler "[[.Module]]/internal/apiserver/handler/http/example"
 	[[if ne .Database "none"]]examplestore "[[.Module]]/internal/apiserver/store/example"[[end]]
 	"[[.Module]]/internal/pkg/auth"
+	[[if .Redis]]"[[.Module]]/internal/pkg/cache"[[end]]
 	"[[.Module]]/internal/pkg/config"
 	[[if ne .Database "none"]]"[[.Module]]/internal/pkg/database"[[end]]
 	logx "[[.Module]]/internal/pkg/log"
@@ -17,13 +18,13 @@ import (
 	"go.uber.org/zap"
 )
 
-type App struct { Server *server.Server; Logger *zap.Logger; [[if ne .Database "none"]]Database *database.Database[[end]] }
+type App struct { Server *server.Server; Logger *zap.Logger[[if ne .Database "none"]];Database *database.Database[[end]][[if .Redis]];Cache *cache.Client[[end]] }
 
 func New(settings config.Config, version string) (*App,error) {
 	logger,err := logx.New(settings.Log,version)
 	if err != nil { return nil,err }
-	[[if ne .Database "none"]]startup,cancel:=context.WithTimeout(context.Background(),10*time.Second);defer cancel()
-	db,err:=database.Open(startup,settings.Database,logger)
+	[[if or (ne .Database "none") .Redis]]startup,cancel:=context.WithTimeout(context.Background(),10*time.Second);defer cancel()[[end]]
+	[[if ne .Database "none"]]db,err:=database.Open(startup,settings.Database,logger)
 	if err!=nil { _ = logger.Sync(); return nil,err }
 	if err:=db.CheckSchema(startup);err!=nil {_ = db.Close(); _ = logger.Sync(); return nil,err}[[end]]
 	injector := do.New()
@@ -31,9 +32,11 @@ func New(settings config.Config, version string) (*App,error) {
 	do.ProvideValue(injector,logger)
 	[[if ne .Database "none"]]do.ProvideValue(injector,db)[[end]]
 	authentication,err:=auth.New(settings.JWT);if err!=nil{[[if ne .Database "none"]]_ = db.Close();[[end]] _ = logger.Sync();return nil,err}
+	[[if .Redis]]caching,err:=cache.Open(startup,settings.Redis,logger);if err!=nil{[[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}
+	do.ProvideValue(injector,caching)[[end]]
 	do.ProvideValue(injector,authentication)
-	do.ProvideValue(injector,examplehandler.New(examplebiz.New([[if ne .Database "none"]]examplestore.New(db.DB)[[end]])))
-	do.ProvideValue(injector,&server.Readiness{[[if ne .Database "none"]]CheckDependency:db.Pool.PingContext[[end]]})
+	do.ProvideValue(injector,examplehandler.New(examplebiz.[[if .Redis]]NewCached([[if ne .Database "none"]]examplestore.New(db.DB),[[end]]caching)[[else]]New([[if ne .Database "none"]]examplestore.New(db.DB)[[end]])[[end]]))
+	do.ProvideValue(injector,&server.Readiness{[[if .Redis]]CheckDependency:func(ctx context.Context)error{[[if ne .Database "none"]]if err:=db.Pool.PingContext(ctx);err!=nil{return err};[[end]]return caching.Check(ctx)}[[else if ne .Database "none"]]CheckDependency:db.Pool.PingContext[[end]]})
 	do.Provide(injector,func(i do.Injector)(*server.Server,error){
 		configuration,err := do.Invoke[config.Config](i); if err != nil { return nil,err }
 		logging,err := do.Invoke[*zap.Logger](i); if err != nil { return nil,err }
@@ -43,8 +46,8 @@ func New(settings config.Config, version string) (*App,error) {
 		return server.New(apiserver.NewRouter(configuration.HTTP,ready,logging,authentication,examples),configuration.HTTP,ready,logging)
 	})
 	httpServer,err := do.Invoke[*server.Server](injector)
-	if err != nil { [[if ne .Database "none"]]_ = db.Close();[[end]] _ = logger.Sync(); return nil,err }
-	return &App{Server:httpServer,Logger:logger,[[if ne .Database "none"]]Database:db[[end]]},nil
+	if err != nil { [[if .Redis]]_ = caching.Close();[[end]][[if ne .Database "none"]]_ = db.Close();[[end]] _ = logger.Sync(); return nil,err }
+	return &App{Server:httpServer,Logger:logger,[[if ne .Database "none"]]Database:db,[[end]][[if .Redis]]Cache:caching[[end]]},nil
 }
 
-func (a *App) Run(ctx context.Context) error { defer func(){ [[if ne .Database "none"]]_ = a.Database.Close();[[end]] _ = a.Logger.Sync() }(); return a.Server.Run(ctx) }
+func (a *App) Run(ctx context.Context) error { defer func(){ [[if .Redis]]_ = a.Cache.Close();[[end]][[if ne .Database "none"]]_ = a.Database.Close();[[end]] _ = a.Logger.Sync() }(); return a.Server.Run(ctx) }

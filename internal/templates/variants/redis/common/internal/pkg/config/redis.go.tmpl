@@ -1,0 +1,21 @@
+package config
+
+import (
+ "errors"
+ "net"
+ "regexp"
+ "strconv"
+ "strings"
+ "time"
+)
+
+var namespacePattern=regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9:_-]{0,63}$`)
+func(c Redis)Validate(env string,requestTimeout time.Duration)error{
+ host,port,err:=net.SplitHostPort(c.Address);if err!=nil||host==""||strings.ContainsAny(host,"\x00\r\n/\\@? "){return errors.New("invalid redis.address")};if value,err:=strconv.Atoi(port);err!=nil||value<1||value>65535{return errors.New("invalid redis.address port")}
+ if !namespacePattern.MatchString(c.KeyPrefix)||c.DB<0||c.DB>15||c.PoolSize<1||c.PoolSize>64{return errors.New("invalid Redis namespace, DB or pool size")}
+ if c.TTL<time.Second||c.TTL>5*time.Minute||c.CommandTimeout<time.Millisecond||c.CommandTimeout>5*time.Second||c.CommandTimeout>=requestTimeout||c.DialTimeout<time.Millisecond||c.DialTimeout>5*time.Second{return errors.New("invalid Redis TTL or timeouts")}
+ if strings.ContainsAny(c.Username+c.Password,"\x00\r\n"){return errors.New("invalid Redis credentials")}
+ if env=="production"&&(!c.TLS||c.Password==""){return errors.New("production Redis requires TLS and a password")}
+ if !c.TLS&&c.CAFile!=""{return errors.New("Redis CA requires TLS")}
+ return nil
+}

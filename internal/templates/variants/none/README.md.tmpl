@@ -60,3 +60,8 @@ docker build -f build/docker/Dockerfile -t [[.Name]]:local .
 `go.mod/go.sum` 包含完整依赖，构建与测试使用 readonly；linter 固定 2.14.0，显式安装到 `.tools/bin/`，缓存放 `.tmp/`。生成项目无需生成器运行。
 
 容器以 UID/GID 10001 运行，使用固定摘要 Go 1.26.4 构建镜像及 scratch 运行镜像。安全注入 `APP_JWT_SECRET` 后直接启动，默认监听 `0.0.0.0:8080`，不需要数据库或数据卷。示例及开发 Token 不代替真实账号体系、业务要求和环境上线验收。
+[[if .Redis]]
+## Redis 缓存
+
+本项目包含可选缓存与必需依赖配置；开发启动前按环境提供 Redis 地址/凭据，开发初始化允许明文连接。生产要求密码和验证 TLS。使用、TTL 一致性边界、健康与真实验收见 [Redis](docs/redis.md) 。
+[[end]]

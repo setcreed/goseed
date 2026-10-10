@@ -2,7 +2,7 @@
 
 运行库维护核验日期：2026-10-10。版本清单以 [dependencies.lock.json](../dependencies.lock.json) 为准；原始官方仓库响应快照见 [dependency-audit.json](dependency-audit.json) 。固定直接依赖、间接依赖与校验和保存在主模块、兼容性模块及独立业务模板的依赖清单中。
 
-依赖维护证据来自 D1，模板运行验证记录以 ROADMAP 为准。主模块只引入 Cobra，默认业务模板只包含 HTTP、SQLite、JWT 与实际需要的配置/日志/DI/ORM/迁移依赖；独立兼容性模块核验的其他能力不自动进入默认项目。
+依赖维护证据来自 D1 及下列正式接入补充核验，模板运行验证记录以 ROADMAP 为准。主模块只引入 Cobra，默认业务模板只包含 HTTP、SQLite、JWT 与实际需要的配置/日志/DI/ORM/迁移依赖；独立兼容性模块核验的其他能力不自动进入默认项目。
 
 ## 核验方法
 
@@ -43,7 +43,7 @@
 - GORM MySQL/PostgreSQL 使用官方驱动。MySQL 样本没有维护者 issue 回复证据；PostgreSQL 有近期源码修复。GORM [默认事务超时问题](https://github.com/go-gorm/gorm/issues/7875) 仍待处理，模板使用请求 Context 与自行持有 cancel 的超时，不依赖该配置项。
 - Casbin 使用普通或同步 Enforcer，暂不使用 CachedEnforcer；近期缓存判断修复不代表已进入 v3.11.0。策略存储采用复用现有 GORM 连接的最小适配器，表由 Goose 显式迁移。官方适配器虽然提供关闭自动建表开关，但 [固定版本源码](https://github.com/apache/casbin-gorm-adapter/blob/v3.41.0/adapter.go) 与 [依赖清单](https://github.com/apache/casbin-gorm-adapter/blob/v3.41.0/go.mod) 同时引入多种驱动及旧 SQLite 库，会破坏按参数裁剪的依赖边界。D1 原型仅验证可行性，D3 再实现完整输入约束、Context 和受控策略操作。
 - JWT v5.3.1 的 [签名段 CR/LF issue](https://github.com/golang-jwt/jwt/issues/542) 有维护者讨论；底层 Base64 解码可能接受换行。D2 在解析前校验三段 Base64URL 字符语法，并固定算法和必需 claims，不能只依赖签名校验或 `WithStrictDecoding`。
-- Redis 客户端保留明确的读写超时；[取消相关 issue](https://github.com/redis/go-redis/issues/4079) 留到 D3 的真实连接与故障验证。D1 仅验证客户端构造与版本兼容，不声明缓存行为已验证。
+- Redis 客户端仅由 Redis 选项引入，明确设置读写、连接池和命令预算，禁用隐式重试与实验性流水线；取消约束、正式接入和真实验证边界见下方补充核验。
 
 标准库没有 GORM 的方言适配、Casbin 的权限模型、SQL 迁移版本机制或 Gateway 代码生成能力，因此这些库用于对应能力；不再引入同类框架。Zap 与 Viper 用于已确定的日志和配置方案。
 
@@ -58,6 +58,16 @@
 MySQL 默认配置不保证 TLS，见 [TLS 默认值 issue](https://github.com/go-sql-driver/mysql/issues/1728) ；模板显式提供 TLS 配置，不使用全局注册。真实验证发现连接握手不支持 309 号 `utf8mb4_0900_bin`，因此连接仅设置 utf8mb4，唯一约束的二进制语义由迁移中的表列决定。驱动协议日志统一为脱敏 JSON 事件。
 
 pgx 存在未解决的 [缓冲响应与取消竞争报告](https://github.com/jackc/pgx/issues/2673) ，报告涉及 v5.11.0 及 v5.8.0，不能认为升级即可解决。模板使用请求 Context 和无语句缓存执行模式；实际验证覆盖运行中 deadline 及随后复用连接，尚未复现该报告的人工延迟 Write 调度场景。后续驱动维护与上线负载验证须继续核对该问题，基础回归不证明所有取消竞争已消除。
+
+## Redis 补充核验
+
+2026-10-11 通过官方 GitHub API 重新核对 `redis/go-redis` 的归档状态、许可证、最近发布、最近三次人工提交和 issue 评论，精简响应保存在 `dependency-audit.json` 的 `redis_supplement`。仓库未归档，许可证 BSD-2-Clause，最新发布仍为 [v9.23.0](https://github.com/redis/go-redis/releases/tag/v9.23.0)（2026-10-05），沿用已固定版本。最近人工代码维护为 [2026-10-08](https://github.com/redis/go-redis/commit/760b98dc0b7d8621f09e1d91d7a6b32fe555bebe)；[#4079](https://github.com/redis/go-redis/issues/4079) 仍开放，评论仅有报告者补充，不能声称维护者已经修复取消问题。
+
+标准库不提供 Redis 协议客户端、连接池、认证和重连能力，因此正式 Redis 变体使用 go-redis，Biz 仅依赖本项目缓存接口。固定 [v9.23.0 配置源码](https://github.com/redis/go-redis/blob/v9.23.0/options.go) 对应 RESP2、禁用重试/实验流水线、开启 Context 超时和明确 socket/池超时。每次命令保留调用者 Context，并限制为默认 200ms 的短预算；纯 cancel 可能等待 socket 预算才返回，不承诺瞬时取消。受控 RESP 连接和真实 TLS Redis 的运行中 cancel/deadline、后续池复用均有验收，覆盖当前配置，不证明上游全部竞争场景已解决。
+
+连接失败只记录脱敏操作和请求 ID，不输出密码、地址、键值或原始 SDK 协议日志。内部缓存命令超时映射为依赖不可用（必需模式 HTTP 503，可选模式回源），调用者取消或 deadline 映射为 HTTP 504；两种预算不能混淆。连接建立与 CA 校验、启动失败、就绪和退出由应用管理，不依赖 DI 自动生命周期。
+
+真实验收固定 [Docker Official Images 的 Redis 清单](https://github.com/docker-library/official-images/blob/master/library/redis) 中的 `8.10.2-alpine`。通过官方 Registry API 核对多架构摘要 `sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0`，并在实际 TLS 容器验收中核对 RepoDigest；版本见锁定清单 `redis_image`，来源记录在 `redis_image_supplement`。`make template-redis` 只使用本次唯一名称/标签、密码和证书，不使用共享实例或执行全库清空。
 
 ## 协议工具及产物
 
@@ -81,6 +91,7 @@ pgx 存在未解决的 [缓冲响应与取消竞争报告](https://github.com/ja
 - `make compatibility-cross`：纯 Go 交叉编译独立模块与生成协议的测试程序，不在宿主机执行跨平台二进制。
 - `make compatibility-db`：新建唯一 Compose 项目、回环随机端口和全新测试卷，要求真实 MySQL/PostgreSQL 测试通过，结束后只清理本次资源。
 - `make protocol-check`：校验工具版本，在 `.tmp/` 重新生成并比较 Go/gRPC/Gateway/Swagger 文件。
+- `make template-redis`：固定摘要的专用 TLS Redis，验证缓存、隔离、TTL、取消、TLS/认证失败及必需／可选模式故障恢复；结束仅清理本次容器与凭据。
 
 交叉编译使用 `CGO_ENABLED=0`，验证测试程序可为 Linux amd64、Linux arm64 和 Windows amd64 构建；本机 darwin/arm64 实际运行。交叉编译不代表已在其他平台运行。完整运行结果与尚未完成项统一记入 [ROADMAP](../ROADMAP.md) 。
 

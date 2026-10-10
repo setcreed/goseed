@@ -41,3 +41,17 @@ jwt:
   issuer: [[.Name]]
   audience: [[.Name]]-api
   ttl: 15m
+[[if .Redis]]redis:
+  address: 127.0.0.1:6379
+  username: ""
+  password: ""
+  db: 0
+  key_prefix: [[.Name]]
+  ttl: 30s
+  command_timeout: 200ms
+  dial_timeout: 1s
+  pool_size: 4
+  required: false
+  tls: true
+  ca_file: ""
+[[end]]

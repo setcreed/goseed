@@ -73,7 +73,7 @@ func Init(filename string, output io.Writer) error {
 	if err := os.MkdirAll(filepath.Dir(filename),0750); err != nil { return errors.New("cannot create development config directory") }
 	file,err := os.OpenFile(filename,os.O_WRONLY|os.O_CREATE|os.O_EXCL,0600)
 	if err != nil { return errors.New("cannot create development configuration without overwrite") }
-	content := fmt.Sprintf("env: development\nlog:\n  format: console\n[[if or (eq .Database "mysql") (eq .Database "postgres")]]database:\n  tls: false\n[[end]]jwt:\n  secret: %q\n",base64.StdEncoding.EncodeToString(key[:]))
+	content := fmt.Sprintf("env: development\nlog:\n  format: console\n[[if or (eq .Database "mysql") (eq .Database "postgres")]]database:\n  tls: false\n[[end]][[if .Redis]]redis:\n  tls: false\n[[end]]jwt:\n  secret: %q\n",base64.StdEncoding.EncodeToString(key[:]))
 	_,writeError := file.WriteString(content); closeError := file.Close()
 	if writeError!=nil || closeError!=nil { _ = os.Remove(filename); return errors.New("cannot write development configuration") }
 	_,err = fmt.Fprintln(output,"development configuration created"); return err

@@ -1,0 +1,34 @@
+# Redis 缓存
+
+本项目在生成时选择了 Redis，客户端在 `internal/pkg/cache/`，Biz 通过小接口使用缓存；App 负责启动、健康与关闭。配置示例见 [配置](../configs/app.example.yaml) ，项目命令见 [README](../README.md) 。
+
+## 配置与运行
+
+通过 `APP_REDIS_ADDRESS/USERNAME/PASSWORD/DB/KEY_PREFIX/TTL/COMMAND_TIMEOUT/DIAL_TIMEOUT/POOL_SIZE/REQUIRED/TLS/CA_FILE` 覆盖相应 YAML 配置。默认地址 `127.0.0.1:6379`，DB 0，namespace `[[.Name]]`，TTL 30s、命令预算 200ms、拨号上限 1s、池大小 4、required false、TLS true。生产必须安全提供密码，并验证 Redis 服务端 TLS 证书；私有 CA 通过 ca_file 加入。不同应用与环境应配置不同 namespace。开发初始化仅设置开发明文 TLS 选项，地址和凭据由环境提供。
+
+TTL 范围 1s 至 5m，命令预算 1ms 至 5s 且小于 HTTP 请求预算，拨号上限 1ms 至 5s；池大小 1 至 64，DB 0 至 15。namespace 为 1 至 64 个 ASCII 字母/数字/冒号/下划线/连字符，以字母或数字开头。配置无效与 CA 文件错误始终拒绝启动；不允许跳过证书校验或明文回退。
+
+```sh
+# 安全提供 Redis 地址和凭据后执行；生产保持 APP_REDIS_TLS=true。
+./bin/apiserver serve
+```
+
+选择 Redis 不改变 JWT 认证，不提供集群、Sentinel、队列、分布式锁、限流、会话撤销或公开缓存管理接口。运行前需准备外部 Redis 服务并提供配置。
+
+## 示例与一致性
+
+[[if ne .Database "none"]]`GET /v1/examples/{id}` 按主体及 ID 缓存成功结果；miss 回源数据库并设置 TTL，更新/删除成功后失效。列表、404 与错误不缓存。缓存数据必须匹配当前主体、ID 及文本约束；坏数据视为 miss。[[else]]`GET /v1/examples?name=Go` 按主体及 name 缓存问候计算结果；结果必须匹配当前主体与问候内容。没有持久化或资源 CRUD。[[end]]Key 为 namespace + 格式版本 + 主体/资源的 SHA-256 摘要，不使用原始主体或输入文本。
+
+默认可选缓存故障记录脱敏事件并回源，不影响就绪；恢复后后续请求重新连接。`required: true` 时，启动失败关闭客户端并退出，就绪依赖 Redis Ping，读取与 SQL 业务写入前检查失败返回 `unavailable`、HTTP 503。调用方取消和 deadline 始终传播，返回 HTTP 504。
+
+每次命令有独立短 deadline，明确读写/池等待超时并关闭重试。运行中纯取消可能等待至短命令 deadline，未承诺立即打断 I/O；保留调用方取消错误。不开启客户端缓存和实验流水线，不重试可能已经执行的写入。
+
+缓存与数据库没有跨系统事务。缓存填充或已提交 SQL 之后的失效失败只记录事件，不把成功写入改报失败；并发 miss 也可能回填旧值，TTL 限制旧值的持续时间。需要立即撤销、强一致或唯一权威状态的业务必须绕过示例缓存，另行设计状态存储与故障规则。
+
+日志只有稳定事件、操作类型和请求 ID，不包含密码、连接地址、Key、值、原始协议错误或堆栈。
+
+## 验证
+
+`make check`、`make race` 验证配置、缓存接口、坏值/主体隔离、失效与受控 RESP2 连接上的运行中取消。需要真实 Redis 的用例在没有显式夹具时跳过。
+
+真实用例仅在 `GOSEED_TEST_REDIS=1` 且提供 `GOSEED_TEST_REDIS_ADDRESS/PASSWORD/CA_FILE` 时执行；TLS 证书应包含 `127.0.0.1` IP SAN，测试包含未知 CA、localhost 主机名不符与错误密码拒绝。使用专用测试实例，测试 namespace 随机，结束不清空整个 Redis。执行 `make race` 验证真实 TTL、命中、失效、隔离与关闭。goseed 仓库的 `make template-redis` 另验证实际服务故障/恢复与必需依赖状态，测试后只清理本次容器及临时文件。

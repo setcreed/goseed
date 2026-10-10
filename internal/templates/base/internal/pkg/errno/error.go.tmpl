@@ -13,5 +13,6 @@ var (
 	Conflict = &Error{Code:"conflict",Message:"resource already exists"}
 	Unauthorized = &Error{Code:"unauthorized",Message:"authentication required"}
 	Internal = &Error{Code:"internal",Message:"internal server error"}
+	[[if .Redis]]Unavailable = &Error{Code:"unavailable",Message:"dependency unavailable"}[[end]]
 )
 func Invalid(message string) error { return &Error{Code:"invalid_argument",Message:message} }

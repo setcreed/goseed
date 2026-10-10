@@ -30,6 +30,7 @@ type Project struct {
 // Options selects source at generation time, never at service runtime.
 type Options struct {
 	Database string
+	Redis    bool
 }
 
 type templateData struct {
@@ -69,7 +70,7 @@ func Render(project Project, options Options) ([]File, error) {
 	if err != nil {
 		return nil, err
 	}
-	if options.Database == "sqlite" {
+	if options.Database == "sqlite" && !options.Redis {
 		return base, nil
 	}
 	// Variant directories intentionally replace matching base files, and add
@@ -79,8 +80,14 @@ func Render(project Project, options Options) ([]File, error) {
 		files[file.Path] = file
 	}
 	directories := []string{"variants/sql", "variants/" + options.Database}
+	if options.Database == "sqlite" {
+		directories = nil
+	}
 	if options.Database == "none" {
 		directories = []string{"variants/none"}
+	}
+	if options.Redis {
+		directories = append(directories, "variants/redis/common", "variants/redis/"+options.Database)
 	}
 	for _, directory := range directories {
 		variant, err := renderTree(sources, directory, data)

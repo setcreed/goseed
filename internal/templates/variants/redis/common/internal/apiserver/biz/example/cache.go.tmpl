@@ -1,0 +1,43 @@
+package example
+
+import (
+ "context"
+ "crypto/sha256"
+ "encoding/hex"
+ "encoding/json"
+ [[if ne .Database "none"]]"strconv"
+ "[[.Module]]/internal/apiserver/model"[[end]]
+)
+
+// Cache is the business port; it does not expose Redis or transport types.
+type Cache interface{
+ Get(context.Context,string)([]byte,bool,error)
+ Set(context.Context,string,[]byte)error
+ Delete(context.Context,string)error
+ Check(context.Context)error
+}
+func cacheKey(subject,resource string)string{sum:=sha256.Sum256([]byte(subject+"\x00"+resource));return "example:"+hex.EncodeToString(sum[:])}
+
+[[if ne .Database "none"]]
+func NewCached(repository Repository,cache Cache)*Biz{return &Biz{repository:repository,cache:cache}}
+func(b *Biz)getCached(ctx context.Context,owner string,id uint64)(*model.Example,error){
+ key:=cacheKey(owner,strconv.FormatUint(id,10))
+ data,hit,err:=b.cache.Get(ctx,key);if err!=nil{return nil,err}
+ if hit{var item model.Example;if json.Unmarshal(data,&item)==nil&&item.Owner==owner&&item.ID==id&&validateName(item.Name)==nil&&validateDescription(item.Description)==nil{return &item,nil};_ = b.cache.Delete(ctx,key)}
+ item,err:=b.repository.Get(ctx,owner,id);if err!=nil{return nil,err}
+ if err:=ctx.Err();err!=nil{return nil,err}
+ if data,err:=json.Marshal(item);err==nil{_ = b.cache.Set(ctx,key,data)}
+ if err:=ctx.Err();err!=nil{return nil,err};return item,nil
+}
+func(b *Biz)checkCache(ctx context.Context)error{if b.cache!=nil{return b.cache.Check(ctx)};return ctx.Err()}
+func(b *Biz)invalidate(ctx context.Context,owner string,id uint64){if b.cache!=nil{_ = b.cache.Delete(ctx,cacheKey(owner,strconv.FormatUint(id,10)))}}
+[[else]]
+func NewCached(cache Cache)*Biz{return &Biz{cache:cache}}
+func(b *Biz)greetCached(ctx context.Context,subject,name string)(*Greeting,error){
+ key:=cacheKey(subject,name);data,hit,err:=b.cache.Get(ctx,key);if err!=nil{return nil,err}
+ if hit{var result Greeting;if json.Unmarshal(data,&result)==nil&&result.Subject==subject&&result.Message=="hello, "+name{return &result,nil};_ = b.cache.Delete(ctx,key)}
+ if err:=ctx.Err();err!=nil{return nil,err}
+ result:=&Greeting{Message:"hello, "+name,Subject:subject};if data,err:=json.Marshal(result);err==nil{_ = b.cache.Set(ctx,key,data)}
+ if err:=ctx.Err();err!=nil{return nil,err};return result,nil
+}
+[[end]]

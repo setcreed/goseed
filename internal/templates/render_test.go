@@ -66,6 +66,31 @@ func TestInvalidProject(t *testing.T) {
 	}
 }
 
+func TestRedisPlanDeterminism(t *testing.T) {
+	project := Project{Name: "demo", Module: "example.com/demo"}
+	for _, backend := range []string{"sqlite", "mysql", "postgres", "none"} {
+		t.Run(backend, func(t *testing.T) {
+			options := Options{Database: backend, Redis: true}
+			first, err := Render(project, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			second, err := Render(project, options)
+			if err != nil || len(first) == 0 || len(first) != len(second) {
+				t.Fatal("inconsistent Redis plan")
+			}
+			for i, file := range first {
+				if file.Path != second[i].Path || !bytes.Equal(file.Content, second[i].Content) {
+					t.Fatal("non-deterministic Redis plan")
+				}
+				if i > 0 && first[i-1].Path >= file.Path {
+					t.Fatal("plan order or duplicate path")
+				}
+			}
+		})
+	}
+}
+
 func TestRenderFailuresReturnNoPartialPlan(t *testing.T) {
 	for _, invalid := range []string{"[[.Missing]]", "[[", "package invalid; func {"} {
 		source := fstest.MapFS{"base/a.txt.tmpl": &fstest.MapFile{Data: []byte("valid")}, "base/b.go.tmpl": &fstest.MapFile{Data: []byte(invalid)}}

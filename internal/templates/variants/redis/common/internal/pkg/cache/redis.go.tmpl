@@ -1,0 +1,69 @@
+// Package cache provides bounded Redis operations; application code owns its lifecycle.
+package cache
+
+import (
+ "context"
+ "crypto/tls"
+ "crypto/x509"
+ "errors"
+ "net"
+ "os"
+ "sync"
+ "time"
+
+ "[[.Module]]/internal/pkg/config"
+ "[[.Module]]/internal/pkg/contextx"
+ "[[.Module]]/internal/pkg/errno"
+ "github.com/redis/go-redis/v9"
+ "go.uber.org/zap"
+)
+
+type Client struct{client *redis.Client;settings config.Redis;logger *zap.Logger}
+var loggerOnce sync.Once
+type silentProtocolLog struct{}
+func(silentProtocolLog)Printf(context.Context,string,...interface{}){}
+
+func Open(ctx context.Context,settings config.Redis,logger *zap.Logger)(*Client,error){
+ loggerOnce.Do(func(){redis.SetLogger(silentProtocolLog{})})
+ var tlsConfig *tls.Config
+ if settings.TLS{
+  host,_,err:=net.SplitHostPort(settings.Address);if err!=nil{return nil,errors.New("invalid Redis address")}
+  tlsConfig=&tls.Config{MinVersion:tls.VersionTLS12,ServerName:host}
+  if settings.CAFile!=""{roots,err:=x509.SystemCertPool();if err!=nil{return nil,errors.New("cannot load system CA roots")};data,err:=os.ReadFile(settings.CAFile);if err!=nil||!roots.AppendCertsFromPEM(data){return nil,errors.New("invalid Redis CA certificate")};tlsConfig.RootCAs=roots}
+ }
+ client:=redis.NewClient(&redis.Options{Addr:settings.Address,Username:settings.Username,Password:settings.Password,DB:settings.DB,Protocol:2,TLSConfig:tlsConfig,DialTimeout:settings.DialTimeout,DialerRetries:1,ReadTimeout:settings.CommandTimeout,WriteTimeout:settings.CommandTimeout,PoolTimeout:settings.CommandTimeout,PoolSize:settings.PoolSize,MaxRetries:-1,ContextTimeoutEnabled:true,DisableIdentity:true,PipelinePoolSize:-1})
+ result:=&Client{client:client,settings:settings,logger:logger}
+ if err:=result.Ping(ctx);err!=nil{if settings.Required||ctx.Err()!=nil{_ = client.Close();return nil,err}}
+ return result,nil
+}
+
+func(c *Client)Close()error{return c.client.Close()}
+func(c *Client)key(key string)string{return c.settings.KeyPrefix+":v1:"+key}
+// Socket deadlines may fire before the Context timer goroutine publishes Err.
+func contextError(ctx context.Context)error{if err:=ctx.Err();err!=nil{return err};if deadline,ok:=ctx.Deadline();ok&&!time.Now().Before(deadline){return context.DeadlineExceeded};return nil}
+func(c *Client)failure(ctx context.Context,operation string,err error)error{
+ if err:=contextError(ctx);err!=nil{return err}
+ c.logger.Warn("Redis operation failed",zap.String("operation",operation),zap.String("request_id",contextx.RequestID(ctx)))
+ return errno.WithCause(errno.Unavailable,err)
+}
+func(c *Client)Ping(ctx context.Context)error{
+ if err:=ctx.Err();err!=nil{return err};budget,cancel:=context.WithTimeout(ctx,c.settings.CommandTimeout);defer cancel()
+ if err:=c.client.Ping(budget).Err();err!=nil{return c.failure(ctx,"ping",err)};return ctx.Err()
+}
+func(c *Client)Check(ctx context.Context)error{if !c.settings.Required{return ctx.Err()};return c.Ping(ctx)}
+func(c *Client)Get(ctx context.Context,key string)([]byte,bool,error){
+ if err:=ctx.Err();err!=nil{return nil,false,err};budget,cancel:=context.WithTimeout(ctx,c.settings.CommandTimeout);defer cancel()
+ value,err:=c.client.Get(budget,c.key(key)).Bytes()
+ if err:=contextError(ctx);err!=nil{return nil,false,err}
+ if errors.Is(err,redis.Nil){return nil,false,nil}
+ if err!=nil{failure:=c.failure(ctx,"get",err);if c.settings.Required{return nil,false,failure};return nil,false,nil}
+ return value,true,nil
+}
+func(c *Client)Set(ctx context.Context,key string,value []byte)error{
+ if err:=ctx.Err();err!=nil{return err};budget,cancel:=context.WithTimeout(ctx,c.settings.CommandTimeout);defer cancel()
+ if err:=c.client.Set(budget,c.key(key),value,c.settings.TTL).Err();err!=nil{return c.failure(ctx,"set",err)};return ctx.Err()
+}
+func(c *Client)Delete(ctx context.Context,key string)error{
+ if err:=ctx.Err();err!=nil{return err};budget,cancel:=context.WithTimeout(ctx,c.settings.CommandTimeout);defer cancel()
+ if err:=c.client.Del(budget,c.key(key)).Err();err!=nil{return c.failure(ctx,"delete",err)};return ctx.Err()
+}
