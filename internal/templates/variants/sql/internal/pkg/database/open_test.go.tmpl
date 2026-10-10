@@ -1,0 +1,32 @@
+package database
+
+import (
+ "context"
+ "crypto/tls"
+ "path/filepath"
+ "strings"
+ "testing"
+ "time"
+ [[if eq .Database "mysql"]]mysqldriver "github.com/go-sql-driver/mysql"[[end]]
+
+ "[[.Module]]/internal/pkg/config"
+ "go.uber.org/zap"
+)
+
+func TestConnectionSecurityAndFailurePrivacy(t *testing.T){
+ settings:=config.Database{Host:"127.0.0.1",Port:1,User:"unit",Password:"private-password:@?/#",Name:"unit",TLS:true,ConnectTimeout:time.Second,MaxOpen:2,MaxIdle:1,ConnMaxLifetime:time.Minute,ConnMaxIdleTime:time.Second,SlowThreshold:time.Second}
+ cfg,err:=connectionConfig(settings);if err!=nil{t.Fatal(err)}
+ secure:=cfg.[[if eq .Database "mysql"]]TLS[[else]]TLSConfig[[end]]
+ if secure==nil||secure.InsecureSkipVerify||secure.MinVersion!=tls.VersionTLS12||secure.ServerName!=settings.Host{t.Fatal("TLS verification is not enforced")}
+ [[if eq .Database "postgres"]]if len(cfg.Fallbacks)!=0||cfg.Password!=settings.Password||cfg.Database!=settings.Name||cfg.RuntimeParams["timezone"]!="UTC"{t.Fatal("connection settings or TLS fallback")}
+ [[else]]if cfg.Passwd!=settings.Password||!cfg.ParseTime||cfg.Loc!=time.UTC{t.Fatal("connection settings or UTC")}
+ if _,exists:=cfg.Params["charset"];exists||!strings.Contains(cfg.FormatDSN(),"charset=utf8mb4"){t.Fatal("charset must use the driver option rather than a SQL system variable")}
+ if _,err:=mysqldriver.NewConnector(cfg);err!=nil{t.Fatal("connector rejects charset or TLS configuration")}
+ [[end]]
+ settings.CAFile=filepath.Join(t.TempDir(),"private-missing-ca.pem")
+ if _,err:=connectionConfig(settings);err==nil||strings.Contains(err.Error(),"private"){t.Fatal("CA failure missing or disclosed")}
+ settings.TLS=false;if _,err:=connectionConfig(settings);err==nil{t.Fatal("CA accepted with disabled TLS")};settings.CAFile=""
+ cfg,err=connectionConfig(settings);if err!=nil||cfg.[[if eq .Database "mysql"]]TLS[[else]]TLSConfig[[end]]!=nil{t.Fatal("development plaintext selection")}
+ ctx,cancel:=context.WithCancel(context.Background());cancel()
+ db,err:=Open(ctx,settings,zap.NewNop());if err==nil||db!=nil||strings.Contains(err.Error(),settings.Password){t.Fatal("canceled opening or secret disclosure")}
+}

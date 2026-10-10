@@ -3,19 +3,19 @@ package example
 import (
  "context"
  "errors"
- "path/filepath"
+ [[if eq .Database "sqlite"]]"path/filepath"[[end]]
  "testing"
  "time"
 
  "[[.Module]]/internal/apiserver/model"
- "[[.Module]]/internal/pkg/config"
+ [[if eq .Database "sqlite"]]"[[.Module]]/internal/pkg/config"
  "[[.Module]]/internal/pkg/database"
+ "go.uber.org/zap"[[else]]"[[.Module]]/internal/testutil"[[end]]
  "[[.Module]]/internal/pkg/errno"
- "go.uber.org/zap"
  "gorm.io/gorm"
 )
 func TestRepositoryOwnershipZerosAndTransaction(t *testing.T){
- ctx:=context.Background();db,err:=database.Open(ctx,config.Database{Path:filepath.Join(t.TempDir(),"app.db"),MaxOpen:4,MaxIdle:2,BusyTimeout:50*time.Millisecond,SlowThreshold:time.Second},zap.NewNop());if err!=nil{t.Fatal(err)};defer func(){_ = db.Close()}();if err:=db.Migrate(ctx);err!=nil{t.Fatal(err)}
+ ctx:=context.Background();[[if eq .Database "sqlite"]]db,err:=database.Open(ctx,config.Database{Path:filepath.Join(t.TempDir(),"app.db"),MaxOpen:4,MaxIdle:2,BusyTimeout:50*time.Millisecond,SlowThreshold:time.Second},zap.NewNop());if err!=nil{t.Fatal(err)};defer func(){_ = db.Close()}();if err:=db.Migrate(ctx);err!=nil{t.Fatal(err)}[[else]]db:=testutil.Database(t)[[end]]
  repository:=New(db.DB);item:=&model.Example{Owner:"alice",Name:"first",Description:"value",Enabled:true};if err:=repository.Create(ctx,item);err!=nil{t.Fatal(err)}
  if item.CreatedAt.IsZero()||item.UpdatedAt.IsZero()||item.CreatedAt.Location()!=time.UTC{t.Fatal("missing UTC timestamps")}
  if _,err:=repository.Get(ctx,"bob",item.ID);!errors.Is(err,errno.NotFound){t.Fatal("cross-owner read")}

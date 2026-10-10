@@ -2,15 +2,15 @@
 
 ## 当前状态
 
-文档基线、D1 与 D2 已完成，首次基线提交为 `01c8d6c`，本地分支为 `main`，未配置远端。主模块为 `github.com/setcreed/goseed`，工具链固定为 Go 1.26.4。默认 HTTP + SQLite + JWT 模板可独立构建和运行，实际服务进程及容器验证通过。
+文档基线、D1 与 D2 已完成，D3 的 MySQL、PostgreSQL 模板已完成真实服务验证。首次基线提交为 `01c8d6c`，本地分支为 `main`，未配置远端。主模块为 `github.com/setcreed/goseed`，工具链固定为 Go 1.26.4。三个 SQL 模板可独立构建，默认 HTTP + SQLite + JWT 的实际进程及容器验证通过。
 
-已授权的 D2 工作完成，当前无进行中事项；下一检查点为 D3。root CLI 仍仅提供帮助与版本，项目生成写入在 D5 接入。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) 。
+当前无进行中事项，D3 尚余无数据库、Redis 与 Casbin；下一功能为无数据库变体。root CLI 仍仅提供帮助与版本，项目生成写入在 D5 接入。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
 
 ## 待开始
 
 | 检查点 | 交付 | 依赖 |
 |---|---|---|
-| D3 | MySQL、PostgreSQL、无数据库、Redis、Casbin | D2 |
+| D3 后续 | 无数据库、Redis、Casbin | D2；SQL 变体已完成 |
 | D4 | gRPC、dual、Gateway | D2；相关组合依赖 D3 |
 | D5 | 全参数项目生成器与 dry-run | D2、D3、D4 |
 | D6 | 模块与 CRUD 业务生成器 | D5 |
@@ -22,10 +22,13 @@
 
 - 待核验：D3 的正式 Casbin 策略适配实现、输入约束与请求 Context；D1 原型已在三种数据库通过，不作为业务实现复用。
 - 待核验：D3 的真实 Redis 行为、故障与生命周期；D1 仅完成客户端构造和版本兼容验证。
+- 待核验：pgx 缓冲响应与取消竞争的人工延迟 Write 场景；基础运行中 deadline 与随后池复用已通过，未声明解决上游报告。官方证据与版本边界见 [依赖核验](docs/dependencies.md) 。
 - 待确认：goseed 自身许可证；仅在公开发布前必须确定。主模块已确定为 `github.com/setcreed/goseed`，Go 工具链固定为 1.26.4。
 - 待细化：D6 的 CRUD 字段声明完整格式与生成登记接口。
 
 ## 最近完成
+
+- 2026-10-11 06:49 D3 SQL 数据库：内部 Render/Options 支持 SQLite、MySQL、PostgreSQL，生成时裁剪驱动、配置、SQL 方言与固定清单；外部数据库提供独立 Connector、默认验证 TLS、连接池、UTC 与脱敏协议日志。交付真实数据库夹具与 `make template-db`，同步变体文档；统一 JWT 主体上限、控制字符及业务文本 NUL 边界，MySQL 相同值更新按匹配行数处理。D3 的其他能力保持待开始。
 
 - 2026-10-11 01:21 D2 完成：交付完整独立 HTTP/SQLite/JWT 项目模板、固定 go.mod/go.sum、项目文档与规范、配置/迁移/Makefile、Swagger 2.0、固定摘要非 root Dockerfile；普通检查不 tidy。HTTP 标准库协议错误接入统一脱敏日志，补齐进程级启动失败、可信 TLS 与 CORS 验收；交付入口为 README。
 - 2026-10-11 01:10 D2 错误与请求边界：Store 错误保留内部 cause 并按稳定业务码判定，错误文本不披露原因；数据库日志关联请求 ID，补齐请求预算及开发配置拒绝覆盖/符号链接回归，证书和私钥默认忽略。
@@ -44,6 +47,8 @@
 - 2026-10-10 23:16 D0：初始化 `main` 分支，建立项目规范、需求、架构、命令契约、实施方案和文档导航；默认 SQLite/JWT，三种数据库、Redis、Casbin 与四种协议进入首版范围。交付入口：[README](README.md) 与 [实施方案](docs/implementation.md) 。
 
 ## 最近验证
+
+- 2026-10-11 06:49 D3 SQL 数据库：`make check`、`make race build`、相关集成测试/vet/lint 通过；三个变体的 readonly 清单、直接依赖裁剪、文档与 Swagger 通过，MySQL/PostgreSQL 最新模板完成 Linux amd64 纯 Go 构建。最终 `make template-db` 使用固定摘要 MySQL 8.4.11、PostgreSQL 18.6，所有外部用例无跳过；迁移重放、空库只读检查、实际 schema 不匹配、唯一/大小写/Unicode、零值与相同值更新、跨仓储回滚、运行中 deadline 与随后池复用、启动失败关闭、HTTP 主体隔离、重启持久化及日志脱敏通过。真实 TLS 验证受信 CA 成功、未知 CA/主机名不符/错误密码/生产明文拒绝；定位并修正 MySQL Charset 接入及握手排序规则问题。最终专用容器、卷与网络只读检查均为零。
 
 - 2026-10-11 01:21 D2 最终验收：`make check`、`make race build`、`make template-container` 通过；独立项目全部使用 readonly 且清单未变化，文档链接、Swagger 2.0 本地引用、直接依赖与镜像摘要核对通过。真实进程验证未知配置/秘密缺失/未迁移/TLS 无效/端口占用/生产开发命令拒绝，可信证书链与精确 CORS 通过；复现 TLS 失败绕过 JSON 日志后修复，所有 TLS 日志可解析为 JSON。最终实际容器验证非 root、显式迁移重放、JWT/CRUD 和重启持久化；专用标签只读检查容器、卷及测试镜像均为零。
 - 2026-10-11 01:10 D2 错误与请求边界：`make check` 通过；独立项目测试、vet、race、lint 与实际 HTTP 全链路通过。cause 可追溯且 Error 文本脱敏，请求预算返回 504，已有无效配置及符号链接均拒绝覆盖。

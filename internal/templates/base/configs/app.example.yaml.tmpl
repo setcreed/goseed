@@ -17,10 +17,23 @@ log:
   level: info
   format: json
 database:
+[[if eq .Database "sqlite"]]
   path: data/app.db
+  busy_timeout: 5s
+[[else]]
+  host: 127.0.0.1
+  port: [[if eq .Database "mysql"]]3306[[else]]5432[[end]]
+  user: [[.Name]]
+  password: ""
+  name: [[.Name]]
+  tls: true
+  ca_file: ""
+  connect_timeout: 5s
+  conn_max_lifetime: 30m
+  conn_max_idle_time: 5m
+[[end]]
   max_open: 4
   max_idle: 2
-  busy_timeout: 5s
   slow_threshold: 200ms
 jwt:
   secret: ""

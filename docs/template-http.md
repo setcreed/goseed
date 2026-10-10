@@ -20,7 +20,7 @@ make build
 
 - 默认命令为 `serve`；各服务命令接受 `--config`，默认路径为 `configs/app.yaml`。`serve` 支持显式 `--address` 和 `--env`，覆盖配置值。
 - `dev init` 创建权限为 0600 的开发配置和密码学随机 32 字节 JWT 密钥。已有有效开发配置保留原密钥；生产配置、符号链接及无效配置报错，不覆盖。生成模板本身仅包含无密钥的配置示例。
-- `dev token` 仅在有效开发配置下向标准输出返回 Token，主体必填且不含首尾空白；TTL 至少 1s 且不超过配置的 JWT TTL，JWT 时间精度为秒。不提供 HTTP 签发接口。
+- `dev token` 仅在有效开发配置下向标准输出返回 Token，主体为 1 至 128 个 Unicode 字符且不含首尾空白或控制字符；TTL 至少 1s 且不超过配置的 JWT TTL，JWT 时间精度为秒。不提供 HTTP 签发接口。
 - `migrate up` 显式应用嵌入的 SQLite SQL 迁移；`migrate status` 读取当前迁移版本。迁移失败返回非零退出码，不记录 SQL 参数或密钥。
 - `make dev` 依次执行开发初始化、迁移和启动；生产环境禁用开发初始化及开发签发。服务启动验证 schema 已就绪，不自动建表或执行迁移。
 
@@ -50,7 +50,7 @@ JWT 解析前限制长度并校验三段 Base64URL 字符；要求有效签名�
 
 ## 示例 CRUD
 
-资源字段为自增 `id`、服务端决定的 `owner`、`name`、`description`、`enabled`、UTC `created_at` 与 `updated_at`。名称为 1 至 80 个 Unicode 字符，不允许纯空白或首尾空白；描述最多 1000 个字符；enabled 创建时默认 true。唯一约束为 `(owner, name)`。
+资源字段为自增 `id`、服务端决定的 `owner`、`name`、`description`、`enabled`、UTC `created_at` 与 `updated_at`。名称为 1 至 80 个 Unicode 字符，不允许纯空白或首尾空白；描述最多 1000 个字符，文本拒绝 NUL；enabled 创建时默认 true。唯一约束为 `(owner, name)`，区分大小写。
 
 - `POST /v1/examples`：创建，成功为 201。
 - `GET /v1/examples/{id}`：读取当前主体资源。

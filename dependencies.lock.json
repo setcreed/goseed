@@ -28,6 +28,10 @@
     "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway": "v2.31.0",
     "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2": "v2.31.0"
   },
+  "sql_connectors": {
+    "github.com/go-sql-driver/mysql": "v1.10.0",
+    "github.com/jackc/pgx/v5": "v5.10.0"
+  },
   "protoc": {
     "version": "36.2",
     "release": "https://github.com/protocolbuffers/protobuf/releases/tag/v36.2",

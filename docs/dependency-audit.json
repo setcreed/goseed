@@ -2199,5 +2199,221 @@
         ]
       }
     }
+  },
+  "sql_connector_supplement": {
+    "checked_date": "2026-10-11",
+    "method": "Official GitHub GraphQL repository metadata, recent three commits and two updated issues with first three comment metadata; pinned module source for license/API checks. Versions retained from D1 compatibility baseline, not latest releases.",
+    "repositories": {
+      "mysql": {
+        "nameWithOwner": "go-sql-driver/mysql",
+        "url": "https://github.com/go-sql-driver/mysql",
+        "isArchived": false,
+        "licenseInfo": {
+          "spdxId": "MPL-2.0"
+        },
+        "latestRelease": {
+          "tagName": "v1.10.1",
+          "publishedAt": "2026-09-02T09:24:06Z",
+          "url": "https://github.com/go-sql-driver/mysql/releases/tag/v1.10.1"
+        },
+        "refs": {
+          "nodes": [
+            {
+              "name": "v1.10.1"
+            },
+            {
+              "name": "v1.10.0"
+            },
+            {
+              "name": "v1.9.3"
+            }
+          ]
+        },
+        "defaultBranchRef": {
+          "target": {
+            "history": {
+              "nodes": [
+                {
+                  "committedDate": "2026-10-09T23:23:11Z",
+                  "messageHeadline": "action: Pin lint toolchain for Staticcheck compatibility (#1824)",
+                  "url": "https://github.com/go-sql-driver/mysql/commit/cac656f386d90128f33461e27993af1699049fe6",
+                  "author": {
+                    "user": {
+                      "login": "methane"
+                    }
+                  }
+                },
+                {
+                  "committedDate": "2026-10-08T21:41:18Z",
+                  "messageHeadline": "Bump the all-dependencies group with 2 updates (#1822)",
+                  "url": "https://github.com/go-sql-driver/mysql/commit/a9e08b3c50547afe3ec20a843b14973b6553cd07",
+                  "author": {
+                    "user": {
+                      "login": "dependabot[bot]"
+                    }
+                  }
+                },
+                {
+                  "committedDate": "2026-10-07T00:51:09Z",
+                  "messageHeadline": "auth: add OIDC token auth (#1820)",
+                  "url": "https://github.com/go-sql-driver/mysql/commit/032a8495ea26c75d51bc9d8e0df7adfb6440cbdb",
+                  "author": {
+                    "user": {
+                      "login": "methane"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "issues": {
+          "nodes": [
+            {
+              "number": 1226,
+              "title": "Commit() function can not distinguish whether the transaction has been sent",
+              "url": "https://github.com/go-sql-driver/mysql/issues/1226",
+              "updatedAt": "2026-10-07T02:47:22Z",
+              "state": "CLOSED",
+              "comments": {
+                "nodes": [
+                  {
+                    "author": {
+                      "login": "syuanyuan708"
+                    },
+                    "authorAssociation": "NONE",
+                    "createdAt": "2021-06-21T13:30:51Z",
+                    "url": "https://github.com/go-sql-driver/mysql/issues/1226#issuecomment-865035332"
+                  },
+                  {
+                    "author": {
+                      "login": "zihengCat"
+                    },
+                    "authorAssociation": "CONTRIBUTOR",
+                    "createdAt": "2021-07-13T08:49:25Z",
+                    "url": "https://github.com/go-sql-driver/mysql/issues/1226#issuecomment-878901106"
+                  },
+                  {
+                    "author": {
+                      "login": "zihengCat"
+                    },
+                    "authorAssociation": "CONTRIBUTOR",
+                    "createdAt": "2021-07-14T15:36:01Z",
+                    "url": "https://github.com/go-sql-driver/mysql/issues/1226#issuecomment-879996291"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 803,
+              "title": "Implement dialog auth plugin",
+              "url": "https://github.com/go-sql-driver/mysql/issues/803",
+              "updatedAt": "2026-10-07T01:26:38Z",
+              "state": "OPEN",
+              "comments": {
+                "nodes": [
+                  {
+                    "author": {
+                      "login": "buphmin"
+                    },
+                    "authorAssociation": "NONE",
+                    "createdAt": "2020-01-14T16:21:27Z",
+                    "url": "https://github.com/go-sql-driver/mysql/issues/803#issuecomment-574254734"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "pgx": {
+        "nameWithOwner": "jackc/pgx",
+        "url": "https://github.com/jackc/pgx",
+        "isArchived": false,
+        "licenseInfo": {
+          "spdxId": "MIT"
+        },
+        "latestRelease": {
+          "tagName": "v5.11.0",
+          "publishedAt": "2026-09-07T23:46:37Z",
+          "url": "https://github.com/jackc/pgx/releases/tag/v5.11.0"
+        },
+        "refs": {
+          "nodes": [
+            {
+              "name": "v5.11.0"
+            },
+            {
+              "name": "v5.10.0"
+            },
+            {
+              "name": "v5.9.2"
+            }
+          ]
+        },
+        "defaultBranchRef": {
+          "target": {
+            "history": {
+              "nodes": [
+                {
+                  "committedDate": "2026-10-05T13:32:35Z",
+                  "messageHeadline": "Update puddle to v2.2.3",
+                  "url": "https://github.com/jackc/pgx/commit/288ef0884623dfddbea3848ebda9e61c5e8979d9",
+                  "author": {
+                    "user": {
+                      "login": "jackc"
+                    }
+                  }
+                },
+                {
+                  "committedDate": "2026-10-05T11:41:20Z",
+                  "messageHeadline": "Fix double close when OnPgError closes the connection",
+                  "url": "https://github.com/jackc/pgx/commit/3a84369ef796ce81fef379d9c129a3f693ea8f2f",
+                  "author": {
+                    "user": {
+                      "login": "jackc"
+                    }
+                  }
+                },
+                {
+                  "committedDate": "2026-10-03T22:06:55Z",
+                  "messageHeadline": "Merge pull request #2670 from lazerg/update-x-text",
+                  "url": "https://github.com/jackc/pgx/commit/e40c08b446e82f047a73ece6b61991930104344f",
+                  "author": {
+                    "user": {
+                      "login": "jackc"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "issues": {
+          "nodes": [
+            {
+              "number": 2673,
+              "title": "Context cancelled mid-query can fail the next query with a deadline error, while allowing the current one to succeed.",
+              "url": "https://github.com/jackc/pgx/issues/2673",
+              "updatedAt": "2026-10-08T20:48:47Z",
+              "state": "OPEN",
+              "comments": {
+                "nodes": []
+              }
+            },
+            {
+              "number": 2671,
+              "title": "Add pgxotel to \"Adapters for 3rd Party Tracers\"",
+              "url": "https://github.com/jackc/pgx/issues/2671",
+              "updatedAt": "2026-10-06T07:31:24Z",
+              "state": "OPEN",
+              "comments": {
+                "nodes": []
+              }
+            }
+          ]
+        }
+      }
+    }
   }
 }

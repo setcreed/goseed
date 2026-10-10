@@ -1,0 +1,48 @@
+package database_test
+
+import (
+ "bytes"
+ "context"
+ "errors"
+ "strings"
+ "testing"
+ "time"
+
+ "[[.Module]]/internal/pkg/database"
+ "[[.Module]]/internal/testutil"
+ "go.uber.org/zap"
+ "go.uber.org/zap/zapcore"
+)
+
+func TestExternalMigrationPersistenceAndPrivacy(t *testing.T){
+ settings:=testutil.Configuration(t);ctx:=context.Background()
+ var logs bytes.Buffer
+ logging:=zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),zapcore.AddSync(&logs),zap.DebugLevel))
+ settings.Database.SlowThreshold=time.Nanosecond
+ db,err:=database.Open(ctx,settings.Database,logging);if err!=nil{t.Fatal(err)}
+ defer func(){_ = db.Close()}()
+ if err:=db.CheckSchema(ctx);err==nil{t.Fatal("missing schema accepted")}
+ version,err:=db.Version(ctx);if err!=nil||version!=0{t.Fatal("initial version")}
+ var tables int
+ if err:=db.Pool.QueryRowContext(ctx,[[if eq .Database "mysql"]]"SELECT count(*) FROM information_schema.tables WHERE table_schema=DATABASE()"[[else]]"SELECT count(*) FROM information_schema.tables WHERE table_schema=current_schema()"[[end]]).Scan(&tables);err!=nil||tables!=0{t.Fatal("status or startup wrote schema")}
+ for range 2 {if err:=db.Migrate(ctx);err!=nil{t.Fatal(err)}}
+ version,err=db.Version(ctx);if err!=nil||version!=1{t.Fatal("applied version")}
+ if err:=db.DB.Exec("INSERT INTO examples(owner,name,description,enabled,created_at,updated_at) VALUES(?,?,?,?,?,?)","subject-private","sql-private","",false,time.Now().UTC(),time.Now().UTC()).Error;err!=nil{t.Fatal(err)}
+ result,err:=db.Pool.ExecContext(ctx,"UPDATE examples SET enabled=enabled WHERE owner='subject-private'");if err!=nil{t.Fatal(err)}
+ affected,err:=result.RowsAffected();if err!=nil||affected!=1{t.Fatal("unchanged update must count the matched row")}
+ if err:=db.DB.Exec("SELECT * FROM missing_private_table WHERE value=?","private-parameter").Error;err==nil{t.Fatal("invalid query succeeded")}
+ if strings.Contains(logs.String(),"private")||strings.Contains(logs.String(),"SELECT")||strings.Contains(logs.String(),settings.Database.Password){t.Fatal("query or credentials disclosed")}
+ canceled,cancel:=context.WithCancel(ctx);cancel();if err:=db.DB.WithContext(canceled).Exec("SELECT 1").Error;err==nil{t.Fatal("cancellation ignored")}
+ db.Pool.SetMaxOpenConns(1)
+ for range 3 {
+  deadline,stop:=context.WithTimeout(ctx,30*time.Millisecond)
+  _,err:=db.Pool.ExecContext(deadline,[[if eq .Database "mysql"]]"SELECT SLEEP(2)"[[else]]"SELECT pg_sleep(2)"[[end]])
+  stop();if !errors.Is(err,context.DeadlineExceeded){t.Fatal("running query deadline was not propagated")}
+  next,stop:=context.WithTimeout(ctx,time.Second);_,err=db.Pool.ExecContext(next,"SELECT 1");stop();if err!=nil{t.Fatal("canceled query poisoned next pooled query")}
+ }
+ if err:=db.Close();err!=nil{t.Fatal(err)}
+ reopened,err:=database.Open(ctx,settings.Database,zap.NewNop());if err!=nil{t.Fatal(err)};defer func(){_ = reopened.Close()}()
+ var count int64;if err:=reopened.DB.Table("examples").Count(&count).Error;err!=nil||count!=1{t.Fatal("persistence failed")}
+ if err:=reopened.DB.Exec("ALTER TABLE examples [[if eq .Database "mysql"]]CHANGE description missing_description VARCHAR(1000) NOT NULL[[else]]RENAME COLUMN description TO missing_description[[end]]").Error;err!=nil{t.Fatal(err)}
+ if err:=reopened.CheckSchema(ctx);err==nil{t.Fatal("incompatible actual schema accepted")}
+}

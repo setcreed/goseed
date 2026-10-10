@@ -9,11 +9,12 @@ import (
 	"io/fs"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 	"text/template"
 )
 
-//go:embed base
+//go:embed base variants
 var sources embed.FS
 
 type File struct {
@@ -26,11 +27,26 @@ type Project struct {
 	Module string
 }
 
+// Options selects source at generation time, never at service runtime.
+type Options struct {
+	Database string
+}
+
+type templateData struct {
+	Project
+	Options
+}
+
 var namePattern = regexp.MustCompile(`^[a-z][a-z0-9]*$`)
 var modulePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]*(/[A-Za-z0-9._~-]+)+$`)
 
 // Default builds the entire HTTP/SQLite/JWT file plan before a caller writes it.
 func Default(project Project) ([]File, error) {
+	return Render(project, Options{})
+}
+
+// Render prepares a standalone HTTP/JWT project with the selected SQL backend.
+func Render(project Project, options Options) ([]File, error) {
 	if !namePattern.MatchString(project.Name) {
 		return nil, fmt.Errorf("invalid project name")
 	}
@@ -42,12 +58,50 @@ func Default(project Project) ([]File, error) {
 			return nil, fmt.Errorf("invalid module path segment")
 		}
 	}
-	return render(sources, project)
+	if options.Database == "" {
+		options.Database = "sqlite"
+	}
+	if options.Database != "sqlite" && options.Database != "mysql" && options.Database != "postgres" {
+		return nil, fmt.Errorf("unsupported database")
+	}
+	data := templateData{Project: project, Options: options}
+	base, err := renderTree(sources, "base", data)
+	if err != nil {
+		return nil, err
+	}
+	if options.Database == "sqlite" {
+		return base, nil
+	}
+	// Variant directories intentionally replace matching base files, and add
+	// backend-specific fixtures. Sorting keeps the complete plan deterministic.
+	files := make(map[string]File, len(base))
+	for _, file := range base {
+		files[file.Path] = file
+	}
+	for _, directory := range []string{"variants/sql", "variants/" + options.Database} {
+		variant, err := renderTree(sources, directory, data)
+		if err != nil {
+			return nil, err
+		}
+		for _, file := range variant {
+			files[file.Path] = file
+		}
+	}
+	result := make([]File, 0, len(files))
+	for _, file := range files {
+		result = append(result, file)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
+	return result, nil
 }
 
 func render(source fs.FS, project Project) ([]File, error) {
+	return renderTree(source, "base", templateData{Project: project, Options: Options{Database: "sqlite"}})
+}
+
+func renderTree(source fs.FS, root string, data templateData) ([]File, error) {
 	var files []File
-	err := fs.WalkDir(source, "base", func(filename string, entry fs.DirEntry, walkError error) error {
+	err := fs.WalkDir(source, root, func(filename string, entry fs.DirEntry, walkError error) error {
 		if walkError != nil {
 			return walkError
 		}
@@ -60,7 +114,7 @@ func render(source fs.FS, project Project) ([]File, error) {
 		if !strings.HasSuffix(filename, ".tmpl") {
 			return fmt.Errorf("unrecognized template: %s", filename)
 		}
-		relative := strings.TrimSuffix(strings.TrimPrefix(filename, "base/"), ".tmpl")
+		relative := strings.TrimSuffix(strings.TrimPrefix(filename, root+"/"), ".tmpl")
 		if name := path.Base(relative); strings.HasPrefix(name, "dot.") {
 			relative = path.Join(path.Dir(relative), "."+strings.TrimPrefix(name, "dot."))
 		}
@@ -76,7 +130,7 @@ func render(source fs.FS, project Project) ([]File, error) {
 			return fmt.Errorf("parse %s: %w", relative, err)
 		}
 		var output bytes.Buffer
-		if err := parsed.Execute(&output, project); err != nil {
+		if err := parsed.Execute(&output, data); err != nil {
 			return fmt.Errorf("render %s: %w", relative, err)
 		}
 		content = output.Bytes()

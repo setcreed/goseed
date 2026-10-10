@@ -20,10 +20,13 @@ func TestJWTBoundaries(t *testing.T){
   "missing-iat":func(c *jwt.RegisteredClaims){c.IssuedAt=nil},"missing-nbf":func(c *jwt.RegisteredClaims){c.NotBefore=nil},"missing-exp":func(c *jwt.RegisteredClaims){c.ExpiresAt=nil},
   "expired":func(c *jwt.RegisteredClaims){c.ExpiresAt=jwt.NewNumericDate(now.Add(-time.Second))},"future-iat":func(c *jwt.RegisteredClaims){c.IssuedAt=jwt.NewNumericDate(now.Add(time.Second))},"future-nbf":func(c *jwt.RegisteredClaims){c.NotBefore=jwt.NewNumericDate(now.Add(time.Second))},
   "excess-lifetime":func(c *jwt.RegisteredClaims){c.ExpiresAt=jwt.NewNumericDate(now.Add(time.Hour))},
+  "long-subject":func(c *jwt.RegisteredClaims){c.Subject=strings.Repeat("中",129)},"control-subject":func(c *jwt.RegisteredClaims){c.Subject="alice\x00"},
  }
  for name,mutate:=range cases{t.Run(name,func(t *testing.T){c:=claims();mutate(&c);raw,err:=jwt.NewWithClaims(jwt.SigningMethodHS256,c).SignedString(service.key);if err!=nil{t.Fatal(err)};if _,err:=service.Parse(raw);err==nil{t.Fatal("invalid claims accepted")}})}
  for _,method:=range []jwt.SigningMethod{jwt.SigningMethodHS384,jwt.SigningMethodNone}{key:=any(service.key);if method==jwt.SigningMethodNone{key=jwt.UnsafeAllowNoneSignatureType};bad,err:=jwt.NewWithClaims(method,claims()).SignedString(key);if err!=nil{t.Fatal(err)};if _,err:=service.Parse(bad);err==nil{t.Fatal("invalid algorithm accepted")}}
  forged,err:=jwt.NewWithClaims(jwt.SigningMethodHS256,claims()).SignedString([]byte(strings.Repeat("b",32)));if err!=nil{t.Fatal(err)};if _,err:=service.Parse(forged);err==nil{t.Fatal("invalid signature accepted")}
  for _,ttl:=range []time.Duration{0,-time.Second,time.Hour}{if _,err:=service.Issue("alice",ttl);err==nil{t.Fatal("invalid issue lifetime")}}
+ for _,subject:=range []string{"", " alice", "alice\n", "a\x00b",strings.Repeat("中",129)}{if _,err:=service.Issue(subject,time.Minute);err==nil{t.Fatal("invalid subject issued")}}
+ if _,err:=service.Issue(strings.Repeat("中",128),time.Minute);err!=nil{t.Fatal("valid subject boundary rejected")}
  service.now=func()time.Time{return now.Add(time.Minute)};if _,err:=service.Parse(raw);err==nil{t.Fatal("token accepted at expiration")}
 }

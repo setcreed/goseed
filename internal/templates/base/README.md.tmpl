@@ -1,6 +1,6 @@
 # [[.Name]]
 
-独立 Go 后端服务，模块 `[[.Module]]`，Go 1.26.4。包含 HTTP、文件 SQLite、JWT、示例 CRUD、配置与日志、显式迁移和优雅退出。项目规范见 [AGENTS.md](AGENTS.md) ，开发状态见 [ROADMAP.md](ROADMAP.md) 。
+独立 Go 后端服务，模块 `[[.Module]]`，Go 1.26.4。包含 HTTP、[[if eq .Database "sqlite"]]文件 SQLite[[else if eq .Database "mysql"]]MySQL[[else]]PostgreSQL[[end]]、JWT、示例 CRUD、配置与日志、显式迁移和优雅退出。项目规范见 [AGENTS.md](AGENTS.md) ，开发状态见 [ROADMAP.md](ROADMAP.md) 。
 
 ## 开发启动
 
@@ -12,7 +12,7 @@ make build
 ./bin/apiserver serve
 ```
 
-开发初始化创建私有配置 `configs/app.yaml`，生成密码学随机密钥，并保留已有有效开发配置。默认地址 `127.0.0.1:8080`，SQLite 文件 `data/app.db`。`make dev` 依次初始化、迁移、启动；服务自身不建表。
+开发初始化创建私有配置 `configs/app.yaml`，生成密码学随机密钥，并保留已有有效开发配置。默认地址 `127.0.0.1:8080`。[[if eq .Database "sqlite"]]SQLite 文件为 `data/app.db`。[[else]]运行上述命令前，先启动专用开发数据库，并安全设置 `APP_DATABASE_PASSWORD`，按环境设置 `APP_DATABASE_HOST/PORT/USER/NAME`；user/name 默认 `[[.Name]]`，端口默认 [[if eq .Database "mysql"]]3306[[else]]5432[[end]]。`dev init` 设置开发环境并允许开发明文连接，不部署数据库或创建账号。[[end]]`make dev` 依次初始化、迁移、启动；服务自身不建表。
 
 ```sh
 ./bin/apiserver migrate status
@@ -24,24 +24,24 @@ curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/v1/examples
 ```
 
-Token 命令仅限开发配置；主体必填，无首尾空白。TTL 默认配置值，至少 1s 且不超过配置上限。不提供 HTTP 登录、刷新或 Token 签发；接入真实账户认证后在受控流程中使用 JWT 签发包。
+Token 命令仅限开发配置；主体为 1 至 128 个 Unicode 字符，无首尾空白及控制字符。TTL 默认配置值，至少 1s 且不超过配置上限。不提供 HTTP 登录、刷新或 Token 签发；接入真实账户认证后在受控流程中使用 JWT 签发包。
 
 ## 配置与生产启动
 
-配置示例为 [configs/app.example.yaml](configs/app.example.yaml) 。顺序：默认值 < YAML 文件 < `APP_*` 环境变量 < 显式服务参数。环境变量根据完整字段路径大写并将点改为下划线，例如 `APP_DATABASE_PATH`、`APP_HTTP_REQUEST_TIMEOUT`。Duration 必须含单位，例如 `5s`。
+配置示例为 [configs/app.example.yaml](configs/app.example.yaml) 。顺序：默认值 < YAML 文件 < `APP_*` 环境变量 < 显式服务参数。环境变量根据完整字段路径大写并将点改为下划线，例如 `APP_DATABASE_[[if eq .Database "sqlite"]]PATH[[else]]HOST[[end]]`、`APP_HTTP_REQUEST_TIMEOUT`。Duration 必须含单位，例如 `5s`。
 
 默认环境 `production`，日志为 JSON。JWT 固定 HS256；`APP_JWT_SECRET` 为 Base64 编码且原始随机密钥至少 32 字节，issuer 默认 `[[.Name]]`，audience 默认 `[[.Name]]-api`，TTL 默认 15m、最多 1h。没有内置生产密钥；生产禁用 `dev init/token`。
 
 由部署环境安全提供 `APP_JWT_SECRET` 等配置后，可不使用配置文件：
 
 ```sh
-APP_ENV=production APP_DATABASE_PATH=data/app.db ./bin/apiserver migrate up
+APP_ENV=production [[if eq .Database "sqlite"]]APP_DATABASE_PATH=data/app.db[[else]]APP_DATABASE_TLS=true[[end]] ./bin/apiserver migrate up
 APP_ENV=production APP_HTTP_ADDRESS=0.0.0.0:8080 ./bin/apiserver serve
 ```
 
 显式 `--config` 缺失会报错。若已有开发配置，生产启动还需设置 `APP_LOG_FORMAT=json`，并提供生产密钥。`serve --env production` 只覆盖环境，不替换密钥或日志配置。
 
-数据库启动检查迁移版本与 schema，就绪检查 Ping；文件默认以 0600 创建，目录以 0750 创建，每连接启用 WAL、外键与 busy timeout。SQLite 默认用于单实例，应为数据目录提供持久化存储和匹配的写入权限，备份恢复、容量及业务上线标准由部署方验证。
+数据库启动检查迁移版本与 schema，就绪检查 Ping；[[if eq .Database "sqlite"]]文件默认以 0600 创建，目录以 0750 创建，每连接启用 WAL、外键与 busy timeout。SQLite 默认用于单实例，应为数据目录提供持久化存储和匹配的写入权限。[[else]]连接池、连接预算、连接寿命、空闲寿命和慢查询阈值见配置示例。默认 TLS 至少 1.2，校验服务端证书与 host，可用 `APP_DATABASE_CA_FILE` 增加私有 CA；生产拒绝关闭 TLS，开发关闭 TLS 时不能配置 CA。不接受自由 DSN，不记录凭据或原始连接错误。[[if eq .Database "mysql"]]使用 MySQL 8.4 的 utf8mb4 二进制排序规则；DDL 不能事务回滚，迁移失败须核对实际 schema 后处理。[[else]]文本使用 C 排序规则，迁移支持事务。[[end]][[end]]备份恢复、容量、账号权限及业务上线标准由部署方验证。
 
 HTTP 有请求体/Header 大小限制及超时预算。TLS 证书/私钥通过 `http.tls_cert/tls_key` 成对提供；CORS 仅接受 `http.allowed_origins` 中的确切来源；pprof 默认关闭，仅允许开发环境回环监听。
 
@@ -57,7 +57,7 @@ HTTP 有请求体/Header 大小限制及超时预算。TLS 证书/私钥通过 `
 | PATCH | `/v1/examples/{id}` | 按存在字段更新，支持空描述与 false |
 | DELETE | `/v1/examples/{id}` | 删除，204；缺失资源为 404 |
 
-名称为 1 至 80 个 Unicode 字符且无首尾空白，描述最多 1000 个字符。同主体名称唯一。写入拒绝保留/未知/重复字段、null、额外 JSON 值、非法 UTF-8 和超限正文；PATCH 至少一个字段。客户端不能指定 owner、id 或时间戳。
+名称为 1 至 80 个 Unicode 字符且无首尾空白，描述最多 1000 个字符，文本拒绝 NUL。同主体名称唯一且区分大小写。写入拒绝保留/未知/重复字段、null、额外 JSON 值、非法 UTF-8 和超限正文；PATCH 至少一个字段。客户端不能指定 owner、id 或时间戳。
 
 错误 JSON 为 `code`、`message`、`request_id`，认证失败 401、输入错误 400、资源缺失或跨主体 404、唯一冲突 409、超时 504、内部错误 500。响应头含 `X-Request-ID`；合法客户端 ID 会保留。日志使用 UTC，不输出请求正文、查询参数、Token、配置秘密或 SQL 参数。
 
@@ -74,4 +74,10 @@ docker build -f build/docker/Dockerfile -t [[.Name]]:local .
 
 依赖清单已包含完整间接依赖和校验和，常规构建/测试使用 `-mod=readonly`。linter 固定版本 2.14.0，仅显式安装到项目 `.tools/bin/`。缓存位于 `.tmp/`。
 
-容器以 UID/GID 10001 运行，构建使用固定摘要的官方 Go 1.26.4 镜像，运行镜像为 scratch。挂载持久化目录至 `/app/data` 并安全注入 `APP_JWT_SECRET`；部署前先用相同配置/数据卷运行镜像的 `migrate up` 命令，再启动服务。默认容器监听 `0.0.0.0:8080`；SIGTERM 开始关闭时停止就绪，等待请求排空，超过关闭预算后强制取消。
+容器以 UID/GID 10001 运行，构建使用固定摘要的官方 Go 1.26.4 镜像，运行镜像为 scratch。[[if eq .Database "sqlite"]]挂载持久化目录至 `/app/data` 并安全注入 `APP_JWT_SECRET`[[else]]提供可访问的数据库、安全注入数据库密码及 `APP_JWT_SECRET`，私有 CA 需挂载并配置路径[[end]]；部署前先用相同配置运行镜像的 `migrate up` 命令，再启动服务。默认容器监听 `0.0.0.0:8080`；SIGTERM 开始关闭时停止就绪，等待请求排空，超过关闭预算后强制取消。
+[[if ne .Database "sqlite"]]
+
+## 真实数据库测试
+
+普通检查明确跳过需要外部数据库的测试。使用专用测试服务及有建库权限的测试账号，提供 `GOSEED_TEST_DATABASE_HOST/PORT/USER/PASSWORD`，设置 `GOSEED_TEST_EXTERNAL=1` 后执行 `make test` 或 `make race`。测试创建随机 `goseed_test_*` 数据库，结束仅删除本次创建的库；禁止使用生产凭据。生产应用账号无需具有建库或删库权限。服务验证另需真实 TLS 与部署配置。
+[[end]]

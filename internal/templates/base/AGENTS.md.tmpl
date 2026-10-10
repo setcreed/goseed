@@ -2,7 +2,7 @@
 
 ## 定位与入口
 
-本项目为独立的 Go 业务服务，模块为 `[[.Module]]`，工具链固定 Go 1.26.4。默认能力为 HTTP、文件 SQLite、JWT 和示例 CRUD。无需依赖生成器运行。
+本项目为独立的 Go 业务服务，模块为 `[[.Module]]`，工具链固定 Go 1.26.4。当前能力为 HTTP、[[if eq .Database "sqlite"]]文件 SQLite[[else if eq .Database "mysql"]]MySQL[[else]]PostgreSQL[[end]]、JWT 和示例 CRUD。无需依赖生成器运行。
 
 开始工作先读本文件及 ROADMAP；当前使用入口与配置说明见 README。项目规则仅在本文件维护。
 
@@ -29,7 +29,7 @@
 
 默认生产环境，无默认 JWT 密钥。开发初始化及签发在生产禁用；不增加公开的临时 Token 接口。所有业务路由都需明确认证，资源归属由业务与带主体条件的 SQL 共同约束。
 
-生产启动不执行迁移或 AutoMigrate。修改 schema 需明确授权并增加迁移，更新期望版本和验收测试，避免改写已应用迁移。默认 SQLite 适合单实例；多实例需重新选择存储方案。
+生产启动不执行迁移或 AutoMigrate。修改 schema 需明确授权并增加迁移，更新期望版本和验收测试，避免改写已应用迁移。[[if eq .Database "sqlite"]]SQLite 适合单实例；多实例需重新选择存储方案。[[else]]使用所选 SQL 方言维护迁移；生产数据库必须验证 TLS，应用账号与有建库权限的测试账号分开。[[end]]
 
 日志和错误不包含秘密、Token、请求正文、SQL/参数或堆栈；保持稳定错误码与请求 ID。保留请求 Context、输入边界、零值更新和退出排空行为。
 
@@ -37,6 +37,6 @@
 
 代码、配置、文档保持一致，ROADMAP 记录当前状态，不把未实现功能写成 README 当前能力。依赖变化同时维护 `go.mod` 与 `go.sum`，常规构建使用 readonly，不引入重复能力。
 
-先 `make tools` 显式安装本地固定版本 linter，再执行 `make check`；并发与生命周期修改执行 `make race`。数据库相关修改使用真实 SQLite 文件验证，认证修改验证失败路径。交付前确认 `make build`，不提交 `.tmp/`、`.tools/`、`bin/`、真实配置、密钥或数据库文件。
+先 `make tools` 显式安装本地固定版本 linter，再执行 `make check`；并发与生命周期修改执行 `make race`。数据库相关修改使用真实 [[if eq .Database "sqlite"]]SQLite 文件[[else]][[.Database]] 服务[[end]]验证，认证修改验证失败路径。交付前确认 `make build`，不提交 `.tmp/`、`.tools/`、`bin/`、真实配置、密钥或数据库文件。
 
 提交、推送、迁移生产数据库及公开部署均遵循当前用户授权，授权未明确时先确认。

@@ -23,6 +23,10 @@ def main():
             if actual.get(module) != version:
                 raise SystemExit("Pinned dependency mismatch: " + module)
     makefile = (root / "Makefile").read_text()
+    compatibility_manifest = (root / "tests/compatibility/go.mod").read_text()
+    for module, version in lock["sql_connectors"].items():
+        if not re.search(r"^\s*" + re.escape(module) + r"\s+" + re.escape(version) + r"(?:\s|$)", compatibility_manifest, re.MULTILINE):
+            raise SystemExit("SQL connector differs from compatibility baseline: " + module)
     lint_version = lock["tools"]["github.com/golangci/golangci-lint/v2/cmd/golangci-lint"]
     if "LINT_VERSION := " + lint_version not in makefile or "GOTOOLCHAIN := go" + lock["go"] not in makefile:
         raise SystemExit("Makefile tool version mismatch")

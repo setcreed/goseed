@@ -28,6 +28,36 @@ func TestDefaultPlan(t *testing.T) {
 	}
 }
 
+func TestSQLPlansAndInvalidOptions(t *testing.T) {
+	project := Project{Name: "demo", Module: "example.com/demo"}
+	for _, backend := range []string{"mysql", "postgres"} {
+		first, err := Render(project, Options{Database: backend})
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := Render(project, Options{Database: backend})
+		if err != nil || len(first) != len(second) {
+			t.Fatal("inconsistent SQL plan")
+		}
+		for i, file := range first {
+			if file.Path != second[i].Path || !bytes.Equal(file.Content, second[i].Content) {
+				t.Fatal("non-deterministic SQL plan")
+			}
+			if i > 0 && first[i-1].Path >= file.Path {
+				t.Fatal("plan order or duplicate path")
+			}
+			if file.Path == "configs/app.example.yaml" && bytes.Contains(file.Content, []byte("busy_timeout")) {
+				t.Fatal("SQLite configuration leaked into SQL project")
+			}
+		}
+	}
+	for _, invalid := range []string{"none", "MYSQL", "../mysql", "mysql\n"} {
+		if files, err := Render(project, Options{Database: invalid}); err == nil || files != nil {
+			t.Fatal("invalid option returned a file plan")
+		}
+	}
+}
+
 func TestInvalidProject(t *testing.T) {
 	for _, project := range []Project{{Name: "../demo", Module: "example.com/demo"}, {Name: "demo", Module: "example.com/../demo"}, {Name: "demo", Module: "example.com/demo\";panic(1)"}, {Name: "demo", Module: ""}} {
 		if files, err := Default(project); err == nil || files != nil {

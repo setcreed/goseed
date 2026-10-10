@@ -22,12 +22,6 @@ type serviceProcess struct {
 	log     string
 }
 
-func startService(t *testing.T, directory, binary string) *serviceProcess {
-	client := &http.Client{Timeout: time.Second}
-	t.Cleanup(client.CloseIdleConnections)
-	return startServiceWith(t, directory, binary, client, "http", nil)
-}
-
 func startServiceWith(t *testing.T, directory, binary string, client *http.Client, scheme string, overrides []string) *serviceProcess {
 	t.Helper()
 	log, err := os.CreateTemp(directory, "service-*.log")
@@ -166,12 +160,16 @@ func resource(t *testing.T, data []byte) exampleResource {
 	return item
 }
 func verifyHTTP(t *testing.T, directory, binary string) {
+	verifyHTTPWith(t, directory, binary, nil)
+}
+
+func verifyHTTPWith(t *testing.T, directory, binary string, overrides []string) {
 	t.Helper()
-	alice := strings.TrimSpace(string(run(t, directory, binary, "dev", "token", "--subject", "alice", "--ttl", "15m")))
-	bob := strings.TrimSpace(string(run(t, directory, binary, "dev", "token", "--subject", "bob")))
-	process := startService(t, directory, binary)
+	alice := strings.TrimSpace(string(runWith(t, directory, overrides, binary, "dev", "token", "--subject", "alice", "--ttl", "15m")))
+	bob := strings.TrimSpace(string(runWith(t, directory, overrides, binary, "dev", "token", "--subject", "bob")))
 	client := &http.Client{Timeout: 3 * time.Second}
 	defer client.CloseIdleConnections()
+	process := startServiceWith(t, directory, binary, client, "http", overrides)
 	request(t, client, process.url, "GET", "/healthz", "", "", 200)
 	request(t, client, process.url, "GET", "/debug/pprof/", "", "", 404)
 	_, headers := request(t, client, process.url, "GET", "/v1/examples", "", "", 401)
@@ -221,6 +219,9 @@ func verifyHTTP(t *testing.T, directory, binary string) {
 	for _, body := range []string{`{}`, `{"description":null}`, `{"enabled":null}`, `{"enabled":"false"}`} {
 		request(t, client, process.url, "PATCH", path, body, alice, 400)
 	}
+	for _, body := range []string{`{"name":"bad\u0000name"}`, `{"name":"ok","description":"bad\u0000value"}`} {
+		request(t, client, process.url, "POST", "/v1/examples", body, alice, 400)
+	}
 	for _, query := range []string{"page=0", "page=100001", "page_size=101", "page=1&page=2", "page=no", "unknown=1"} {
 		request(t, client, process.url, "GET", "/v1/examples?"+query, "", alice, 400)
 	}
@@ -228,6 +229,8 @@ func verifyHTTP(t *testing.T, directory, binary string) {
 		request(t, client, process.url, "GET", "/v1/examples/"+id, "", alice, 400)
 	}
 	request(t, client, process.url, "PUT", path, `{"name":"ok"}`, alice, 405)
+	request(t, client, process.url, "POST", "/v1/examples", `{"name":"SQL-private"}`, alice, 201)
+	request(t, client, process.url, "POST", "/v1/examples", `{"name":"`+strings.Repeat("中", 80)+`"}`, alice, 201)
 	process.stop(t)
 	logs, err := os.ReadFile(process.log)
 	if err != nil {
@@ -242,6 +245,12 @@ func verifyHTTP(t *testing.T, directory, binary string) {
 			t.Fatal("runtime logs contain private data")
 		}
 	}
+	for _, variable := range overrides {
+		key, value, _ := strings.Cut(variable, "=")
+		if (key == "APP_DATABASE_PASSWORD" || key == "APP_JWT_SECRET") && value != "" && strings.Contains(string(logs), value) {
+			t.Fatal("database credentials disclosed")
+		}
+	}
 	for _, line := range strings.Split(string(config), "\n") {
 		if strings.Contains(line, "secret:") {
 			_, value, _ := strings.Cut(line, ":")
@@ -251,7 +260,7 @@ func verifyHTTP(t *testing.T, directory, binary string) {
 			}
 		}
 	}
-	restarted := startService(t, directory, binary)
+	restarted := startServiceWith(t, directory, binary, client, "http", overrides)
 	data, _ = request(t, client, restarted.url, "GET", path, "", alice, 200)
 	if got := resource(t, data); got.ID != first.ID || got.Enabled || got.Description != "" {
 		t.Fatal("restart persistence")

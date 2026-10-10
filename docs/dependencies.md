@@ -47,6 +47,18 @@
 
 标准库没有 GORM 的方言适配、Casbin 的权限模型、SQL 迁移版本机制或 Gateway 代码生成能力，因此这些库用于对应能力；不再引入同类框架。Zap 与 Viper 用于已确定的日志和配置方案。
 
+## SQL Connector 补充核验
+
+2026-10-11 通过官方 GitHub GraphQL 核对 `go-sql-driver/mysql` 与 `jackc/pgx` 的归档、许可证、发布、最近三次提交及两个 issue 样本，精简响应保存在 `dependency-audit.json` 的 `sql_connector_supplement`。两仓库均未归档；MySQL 为 MPL-2.0，pgx 为 MIT，与固定模块内许可证一致。
+
+模板固定 `mysql v1.10.0`、`pgx v5.10.0`，沿用 D1 已验证的兼容性基线；它们不是查询时最新版本。最新发布分别为 [MySQL v1.10.1](https://github.com/go-sql-driver/mysql/releases/tag/v1.10.1) 和 [pgx v5.11.0](https://github.com/jackc/pgx/releases/tag/v5.11.0) 。最近人工提交为 MySQL [2026-10-09](https://github.com/go-sql-driver/mysql/commit/cac656f386d90128f33461e27993af1699049fe6) 、pgx [2026-10-05](https://github.com/jackc/pgx/commit/3a84369ef796ce81fef379d9c129a3f693ea8f2f) ；issue 首批评论样本不足以声称近期响应及时。版本升级需要独立变更与对应真实服务回归。
+
+这两项已经是 GORM 方言的底层依赖，直接使用是为了构造独立 SQL 连接池、隔离 TLS 配置、禁止明文回退以及确定 UTC 编解码，不再引入另一套连接库。标准库 `database/sql` 本身不提供 MySQL/PostgreSQL 协议驱动。固定版本在 `dependencies.lock.json` 的 `sql_connectors`；生成清单只包含所选 Connector。
+
+MySQL 默认配置不保证 TLS，见 [TLS 默认值 issue](https://github.com/go-sql-driver/mysql/issues/1728) ；模板显式提供 TLS 配置，不使用全局注册。真实验证发现连接握手不支持 309 号 `utf8mb4_0900_bin`，因此连接仅设置 utf8mb4，唯一约束的二进制语义由迁移中的表列决定。驱动协议日志统一为脱敏 JSON 事件。
+
+pgx 存在未解决的 [缓冲响应与取消竞争报告](https://github.com/jackc/pgx/issues/2673) ，报告涉及 v5.11.0 及 v5.8.0，不能认为升级即可解决。模板使用请求 Context 和无语句缓存执行模式；实际验证覆盖运行中 deadline 及随后复用连接，尚未复现该报告的人工延迟 Write 调度场景。后续驱动维护与上线负载验证须继续核对该问题，基础回归不证明所有取消竞争已消除。
+
 ## 协议工具及产物
 
 `protoc 36.2`、`protoc-gen-go v1.36.12`、`protoc-gen-go-grpc v1.6.2` 和 Gateway/OpenAPI 插件 `v2.31.0` 全部固定。gRPC 插件独立发布，版本不能与 gRPC 运行库混用；其 [固定标签 go.mod](https://github.com/grpc/grpc-go/blob/cmd/protoc-gen-go-grpc/v1.6.2/cmd/protoc-gen-go-grpc/go.mod) 要求 Go 1.25.0。golangci-lint v2.14.0 的 [go.mod](https://github.com/golangci/golangci-lint/blob/v2.14.0/go.mod) 要求 Go 1.26.0。

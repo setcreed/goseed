@@ -13,6 +13,10 @@ import (
 )
 
 func renderProject(t *testing.T) string {
+	return renderProjectWith(t, templates.Options{})
+}
+
+func renderProjectWith(t *testing.T, options templates.Options) string {
 	t.Helper()
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -31,7 +35,7 @@ func renderProject(t *testing.T) string {
 			t.Error(err)
 		}
 	})
-	files, err := templates.Default(templates.Project{Name: "demo", Module: "example.com/demo"})
+	files, err := templates.Render(templates.Project{Name: "demo", Module: "example.com/demo"}, options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,12 +52,16 @@ func renderProject(t *testing.T) string {
 }
 
 func run(t *testing.T, directory string, arguments ...string) []byte {
+	return runWith(t, directory, nil, arguments...)
+}
+
+func runWith(t *testing.T, directory string, overrides []string, arguments ...string) []byte {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	command := exec.CommandContext(ctx, arguments[0], arguments[1:]...)
 	command.Dir = directory
-	command.Env = environment(t)
+	command.Env = append(environment(t), overrides...)
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("%v: %v\n%s", arguments, err, output)

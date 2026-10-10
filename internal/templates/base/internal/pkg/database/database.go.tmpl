@@ -4,16 +4,18 @@ import (
  "context"
  "database/sql"
  "errors"
+ [[if eq .Database "sqlite"]]
  "fmt"
  "net/url"
  "os"
  "path/filepath"
+ [[end]]
  "time"
 
- "[[.Module]]/internal/pkg/config"
+ [[if eq .Database "sqlite"]]"[[.Module]]/internal/pkg/config"[[end]]
  "[[.Module]]/internal/pkg/contextx"
  "[[.Module]]/migrations"
- "github.com/libtnb/sqlite"
+ [[if eq .Database "sqlite"]]"github.com/libtnb/sqlite"[[end]]
  "github.com/pressly/goose/v3"
  "go.uber.org/zap"
  "gorm.io/gorm"
@@ -22,7 +24,7 @@ import (
 
 type Database struct { DB *gorm.DB; Pool *sql.DB }
 
-func Open(ctx context.Context, settings config.Database, logging *zap.Logger) (*Database,error) {
+[[if eq .Database "sqlite"]]func Open(ctx context.Context, settings config.Database, logging *zap.Logger) (*Database,error) {
  filename,err:=filepath.Abs(settings.Path); if err!=nil {return nil,errors.New("invalid database path")}
  if err:=os.MkdirAll(filepath.Dir(filename),0750);err!=nil{return nil,errors.New("cannot create database directory")}
  if info,err:=os.Lstat(filename);err==nil {if !info.Mode().IsRegular(){return nil,errors.New("database must be a regular file")}} else if !errors.Is(err,os.ErrNotExist){return nil,errors.New("cannot inspect database file")}
@@ -36,16 +38,17 @@ func Open(ctx context.Context, settings config.Database, logging *zap.Logger) (*
  if err:=pool.PingContext(ctx);err!=nil{_ = pool.Close();return nil,errors.New("database ping failed")}
  return &Database{DB:db,Pool:pool},nil
 }
+[[end]]
 
 func (d *Database) Close() error {return d.Pool.Close()}
 
 // Version only reads: it must not create Goose's bookkeeping table.
 func (d *Database) Version(ctx context.Context)(int64,error){
  var exists int
- if err:=d.Pool.QueryRowContext(ctx,"SELECT count(*) FROM sqlite_master WHERE type='table' AND name='goose_db_version'").Scan(&exists);err!=nil{return 0,errors.New("cannot read migration status")}
+ if err:=d.Pool.QueryRowContext(ctx,[[if eq .Database "sqlite"]]"SELECT count(*) FROM sqlite_master WHERE type='table' AND name='goose_db_version'"[[else if eq .Database "mysql"]]"SELECT count(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='goose_db_version'"[[else]]"SELECT count(*) FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='goose_db_version'"[[end]]).Scan(&exists);err!=nil{return 0,errors.New("cannot read migration status")}
  if exists==0{return 0,nil}
  var version int64
- if err:=d.Pool.QueryRowContext(ctx,"SELECT COALESCE(MAX(version_id),0) FROM goose_db_version WHERE is_applied=1").Scan(&version);err!=nil{return 0,errors.New("cannot read migration version")}
+ if err:=d.Pool.QueryRowContext(ctx,"SELECT COALESCE(MAX(version_id),0) FROM goose_db_version WHERE is_applied="+[[if eq .Database "postgres"]]"TRUE"[[else]]"1"[[end]]).Scan(&version);err!=nil{return 0,errors.New("cannot read migration version")}
  return version,nil
 }
 func (d *Database) CheckSchema(ctx context.Context)error{
@@ -55,7 +58,7 @@ func (d *Database) CheckSchema(ctx context.Context)error{
  return nil
 }
 func (d *Database) Migrate(ctx context.Context)error{
- provider,err:=goose.NewProvider(goose.DialectSQLite3,d.Pool,migrations.Files,goose.WithDisableGlobalRegistry(true),goose.WithLogger(quietLogger{}));if err!=nil{return errors.New("cannot initialize migrations")}
+ provider,err:=goose.NewProvider(goose.[[if eq .Database "sqlite"]]DialectSQLite3[[else if eq .Database "mysql"]]DialectMySQL[[else]]DialectPostgres[[end]],d.Pool,migrations.Files,goose.WithDisableGlobalRegistry(true),goose.WithLogger(quietLogger{}));if err!=nil{return errors.New("cannot initialize migrations")}
  if _,err:=provider.Up(ctx);err!=nil{return errors.New("database migration failed")};return d.CheckSchema(ctx)
 }
 

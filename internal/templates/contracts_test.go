@@ -10,7 +10,14 @@ import (
 )
 
 func TestDeliveredContracts(t *testing.T) {
-	plan, err := Default(Project{Name: "demo", Module: "example.com/demo"})
+	for _, backend := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(backend, func(t *testing.T) { checkDeliveredContracts(t, backend) })
+	}
+}
+
+func checkDeliveredContracts(t *testing.T, backend string) {
+	t.Helper()
+	plan, err := Render(Project{Name: "demo", Module: "example.com/demo"}, Options{Database: backend})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,14 +30,23 @@ func TestDeliveredContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	var lock struct {
-		Go      string            `json:"go"`
-		Runtime map[string]string `json:"runtime"`
-		Builder string            `json:"service_builder_image"`
+		Go         string            `json:"go"`
+		Runtime    map[string]string `json:"runtime"`
+		Builder    string            `json:"service_builder_image"`
+		Connectors map[string]string `json:"sql_connectors"`
 	}
 	if err := json.Unmarshal(data, &lock); err != nil {
 		t.Fatal(err)
 	}
+	for name, version := range lock.Connectors {
+		lock.Runtime[name] = version
+	}
 	manifest := string(files["go.mod"])
+	for driver, selected := range map[string]bool{"github.com/libtnb/sqlite": backend == "sqlite", "modernc.org/sqlite": backend == "sqlite", "gorm.io/driver/mysql": backend == "mysql", "github.com/go-sql-driver/mysql": backend == "mysql", "gorm.io/driver/postgres": backend == "postgres", "github.com/jackc/pgx/v5": backend == "postgres"} {
+		if strings.Contains(manifest, driver+" ") != selected {
+			t.Fatalf("incorrect driver composition for %s: %s", backend, driver)
+		}
+	}
 	if !strings.Contains(manifest, "go "+lock.Go+"\n") {
 		t.Fatal("template toolchain differs from lock")
 	}

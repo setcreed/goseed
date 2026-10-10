@@ -6,6 +6,7 @@ import (
  "regexp"
  "strings"
  "time"
+ "unicode"
  "unicode/utf8"
 
  "[[.Module]]/internal/pkg/config"
@@ -21,7 +22,10 @@ func New(settings config.JWT)(*JWT,error){
  if err!=nil||len(key)<32||strings.TrimSpace(settings.Issuer)==""||strings.TrimSpace(settings.Audience)==""||settings.TTL<time.Second||settings.TTL>time.Hour{return nil,errors.New("invalid JWT configuration")}
  return &JWT{key:key,settings:settings,now:time.Now},nil
 }
-func validSubject(subject string)bool{return utf8.ValidString(subject)&&strings.TrimSpace(subject)!=""&&strings.TrimSpace(subject)==subject}
+func validSubject(subject string)bool{
+ if !utf8.ValidString(subject)||utf8.RuneCountInString(subject)<1||utf8.RuneCountInString(subject)>128||strings.TrimSpace(subject)!=subject{return false}
+ for _,r:=range subject{if unicode.IsControl(r){return false}};return true
+}
 func (j *JWT) Issue(subject string,ttl time.Duration)(string,error){
  if !validSubject(subject)||ttl<time.Second||ttl>j.settings.TTL{return "",errors.New("subject and token lifetime are invalid")}
  now:=j.now().UTC().Truncate(time.Second)

@@ -1,0 +1,85 @@
+package database
+
+import (
+ "context"
+ "crypto/tls"
+ "crypto/x509"
+ "errors"
+ "net"
+ "os"
+ "strconv"
+ "time"
+ [[if eq .Database "postgres"]]"net/url"
+ "github.com/jackc/pgx/v5"
+ "github.com/jackc/pgx/v5/pgtype"
+ "github.com/jackc/pgx/v5/stdlib"
+ "gorm.io/driver/postgres"[[else]]
+ "database/sql"
+ mysqldriver "github.com/go-sql-driver/mysql"
+ "gorm.io/driver/mysql"[[end]]
+
+ "[[.Module]]/internal/pkg/config"
+ "go.uber.org/zap"
+ "gorm.io/gorm"
+)
+
+func connectionTLS(settings config.Database)(*tls.Config,error){
+ if !settings.TLS {if settings.CAFile!="" {return nil,errors.New("CA requires database TLS")};return nil,nil}
+ roots,err:=x509.SystemCertPool();if err!=nil{return nil,errors.New("cannot load database CA roots")}
+ if settings.CAFile!="" {pem,err:=os.ReadFile(settings.CAFile);if err!=nil||!roots.AppendCertsFromPEM(pem){return nil,errors.New("cannot load database CA file")}}
+ return &tls.Config{MinVersion:tls.VersionTLS12,ServerName:settings.Host,RootCAs:roots},nil
+}
+
+[[if eq .Database "mysql"]]
+func connectionConfig(settings config.Database)(*mysqldriver.Config,error){
+ secure,err:=connectionTLS(settings);if err!=nil{return nil,err}
+ cfg:=mysqldriver.NewConfig();cfg.User=settings.User;cfg.Passwd=settings.Password;cfg.DBName=settings.Name
+ cfg.Net="tcp";cfg.Addr=net.JoinHostPort(settings.Host,strconv.Itoa(settings.Port));cfg.TLS=secure
+ cfg.Timeout=settings.ConnectTimeout;cfg.ParseTime=true;cfg.Loc=time.UTC
+ // Match PostgreSQL/SQLite: an existing row remains an existing row when an
+ // UPDATE writes the same values (including a rounded timestamp).
+ cfg.ClientFoundRows=true
+ // Table columns own the binary comparison semantics. The connector's
+ // handshake collation registry does not support utf8mb4_0900_bin (ID 309).
+ if err:=cfg.Apply(mysqldriver.Charset("utf8mb4",""));err!=nil{return nil,errors.New("cannot configure database charset")}
+ cfg.Params=map[string]string{"time_zone":"'+00:00'"}
+ return cfg,nil
+}
+[[else]]
+func connectionConfig(settings config.Database)(*pgx.ConnConfig,error){
+ // Explicit URL fields avoid DSN injection and environment TLS preferences.
+ uri:=url.URL{Scheme:"postgres",Host:net.JoinHostPort(settings.Host,strconv.Itoa(settings.Port)),User:url.UserPassword(settings.User,settings.Password),Path:"/"+settings.Name}
+ query:=url.Values{"sslmode":{"disable"},"connect_timeout":{strconv.FormatInt(int64(settings.ConnectTimeout/time.Second),10)}};uri.RawQuery=query.Encode()
+ cfg,err:=pgx.ParseConfig(uri.String());if err!=nil{return nil,errors.New("invalid database connection configuration")}
+ secure,err:=connectionTLS(settings);if err!=nil{return nil,err}
+ cfg.TLSConfig=secure;cfg.Fallbacks=nil;cfg.RuntimeParams=map[string]string{"timezone":"UTC"}
+ cfg.DefaultQueryExecMode=pgx.QueryExecModeExec
+ cfg.ConnectTimeout=settings.ConnectTimeout;cfg.DialFunc=(&net.Dialer{Timeout:settings.ConnectTimeout}).DialContext
+ return cfg,nil
+}
+[[end]]
+
+func Open(ctx context.Context,settings config.Database,logging *zap.Logger)(*Database,error){
+ cfg,err:=connectionConfig(settings);if err!=nil{return nil,err}
+ [[if eq .Database "mysql"]]
+ cfg.Logger=driverLogger{logging}
+ connector,err:=mysqldriver.NewConnector(cfg);if err!=nil{return nil,errors.New("invalid database connection configuration")}
+ pool:=sql.OpenDB(connector)
+ dialector:=mysql.New(mysql.Config{Conn:pool,SkipInitializeWithVersion:true})
+ [[else]]
+ pool:=stdlib.OpenDB(*cfg,stdlib.OptionAfterConnect(func(_ context.Context,conn *pgx.Conn)error{
+  conn.TypeMap().RegisterType(&pgtype.Type{Name:"timestamptz",OID:pgtype.TimestamptzOID,Codec:&pgtype.TimestamptzCodec{ScanLocation:time.UTC}});return nil
+ }))
+ dialector:=postgres.New(postgres.Config{Conn:pool})
+ [[end]]
+ pool.SetMaxOpenConns(settings.MaxOpen);pool.SetMaxIdleConns(settings.MaxIdle)
+ pool.SetConnMaxLifetime(settings.ConnMaxLifetime);pool.SetConnMaxIdleTime(settings.ConnMaxIdleTime)
+ db,err:=gorm.Open(dialector,&gorm.Config{TranslateError:true,DisableAutomaticPing:true,Logger:queryLogger{logging,settings.SlowThreshold},NowFunc:func()time.Time{return time.Now().UTC()}})
+ if err!=nil{_ = pool.Close();return nil,errors.New("cannot initialize database")}
+ if err:=pool.PingContext(ctx);err!=nil{_ = pool.Close();return nil,errors.New("database ping failed")}
+ return &Database{DB:db,Pool:pool},nil
+}
+[[if eq .Database "mysql"]]
+type driverLogger struct{ logging *zap.Logger }
+func(d driverLogger)Print(...any){d.logging.Warn("database protocol error")}
+[[end]]
