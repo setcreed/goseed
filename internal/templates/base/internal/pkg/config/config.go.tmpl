@@ -66,12 +66,24 @@ func Load(filename string, explicit bool, overrides Overrides) (Config, error) {
 	}
 	for key, value := range defaults {
 		v.SetDefault(key, value)
-		if err := v.BindEnv(key, "APP_"+strings.ToUpper(strings.ReplaceAll(key, ".", "_"))); err != nil { return Config{}, errors.New("cannot bind configuration environment") }
 	}
 	if err := v.ReadInConfig(); err != nil {
 		if explicit || !errors.Is(err, os.ErrNotExist) { return Config{}, fmt.Errorf("cannot read configuration file %q", filename) }
 	}
 	for _, key := range v.AllKeys() { if _, exists := defaults[key]; !exists { return Config{}, fmt.Errorf("unknown configuration key %q", key) } }
+	// Validate YAML before binding environment strings: weak decoding must not silently change file types.
+	for key, expected := range defaults {
+		value:=v.Get(key);valid:=false
+		switch expected.(type){
+		case string:_,valid=value.(string)
+		case int:_,valid=value.(int)
+		case bool:_,valid=value.(bool)
+		case []string:
+			switch entries:=value.(type){case []string:valid=true;case []any:valid=true;for _,entry:=range entries{if _,ok:=entry.(string);!ok{valid=false;break}}}
+		}
+		if !valid{return Config{},fmt.Errorf("invalid configuration type for %s",key)}
+	}
+	for key:=range defaults {if err:=v.BindEnv(key,"APP_"+strings.ToUpper(strings.ReplaceAll(key,".","_")));err!=nil{return Config{},errors.New("cannot bind configuration environment")}}
 	for _, key := range []string{"http.read_header_timeout","http.read_timeout","http.write_timeout","http.idle_timeout","http.request_timeout","http.shutdown_timeout","database.busy_timeout","database.slow_threshold","jwt.ttl"} {
 		value, ok := v.Get(key).(string)
 		if !ok { return Config{}, fmt.Errorf("%s requires a duration string with units",key) }
