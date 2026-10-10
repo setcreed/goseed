@@ -15,6 +15,7 @@ goseed 是面向中小型 Go 后端业务的项目与业务代码生成器。生
 - `docs/cli.md`：命令、参数、生成行为和组合约束。
 - `docs/implementation.md`：按依赖顺序执行的开发与验证计划。
 - `docs/dependencies.md`：维护与许可证证据、依赖决策、协议工具和验证边界；固定版本见 `dependencies.lock.json`。
+- `docs/template-http.md`：默认 HTTP 模板的配置、服务命令、认证、示例业务与验收契约。
 
 项目规则只维护在本文件；若增加 `CLAUDE.md`，它仅作为指向本文件的兼容入口。详细约定维护在对应文档，避免复制成多个独立来源。
 
