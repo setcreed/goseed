@@ -1,0 +1,40 @@
+package auth
+
+import (
+ "encoding/base64"
+ "errors"
+ "regexp"
+ "strings"
+ "time"
+ "unicode/utf8"
+
+ "[[.Module]]/internal/pkg/config"
+ "[[.Module]]/internal/pkg/errno"
+ "github.com/golang-jwt/jwt/v5"
+)
+
+var tokenPattern=regexp.MustCompile(`^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$`)
+
+type JWT struct {key []byte;settings config.JWT;now func()time.Time}
+func New(settings config.JWT)(*JWT,error){
+ key,err:=base64.StdEncoding.Strict().DecodeString(settings.Secret)
+ if err!=nil||len(key)<32||strings.TrimSpace(settings.Issuer)==""||strings.TrimSpace(settings.Audience)==""||settings.TTL<time.Second||settings.TTL>time.Hour{return nil,errors.New("invalid JWT configuration")}
+ return &JWT{key:key,settings:settings,now:time.Now},nil
+}
+func validSubject(subject string)bool{return utf8.ValidString(subject)&&strings.TrimSpace(subject)!=""&&strings.TrimSpace(subject)==subject}
+func (j *JWT) Issue(subject string,ttl time.Duration)(string,error){
+ if !validSubject(subject)||ttl<time.Second||ttl>j.settings.TTL{return "",errors.New("subject and token lifetime are invalid")}
+ now:=j.now().UTC().Truncate(time.Second)
+ claims:=jwt.RegisteredClaims{Issuer:j.settings.Issuer,Audience:jwt.ClaimStrings{j.settings.Audience},Subject:subject,IssuedAt:jwt.NewNumericDate(now),NotBefore:jwt.NewNumericDate(now),ExpiresAt:jwt.NewNumericDate(now.Add(ttl))}
+ token,err:=jwt.NewWithClaims(jwt.SigningMethodHS256,claims).SignedString(j.key)
+ if err!=nil||len(token)>4096{return "",errors.New("cannot issue token")};return token,nil
+}
+func(j *JWT) Parse(raw string)(string,error){
+ if len(raw)>4096||!tokenPattern.MatchString(raw){return "",errno.Unauthorized}
+ claims:=new(jwt.RegisteredClaims)
+ token,err:=jwt.ParseWithClaims(raw,claims,func(token *jwt.Token)(any,error){if token.Method!=jwt.SigningMethodHS256{return nil,errno.Unauthorized};return j.key,nil},jwt.WithValidMethods([]string{"HS256"}),jwt.WithIssuer(j.settings.Issuer),jwt.WithAudience(j.settings.Audience),jwt.WithExpirationRequired(),jwt.WithNotBeforeRequired(),jwt.WithIssuedAt(),jwt.WithStrictDecoding(),jwt.WithTimeFunc(j.now))
+ if err!=nil||!token.Valid||!validSubject(claims.Subject)||claims.IssuedAt==nil||claims.NotBefore==nil||claims.ExpiresAt==nil{return "",errno.Unauthorized}
+ lifetime:=claims.ExpiresAt.Sub(claims.IssuedAt.Time)
+ if lifetime<=0||lifetime>j.settings.TTL||!claims.NotBefore.Before(claims.ExpiresAt.Time){return "",errno.Unauthorized}
+ return claims.Subject,nil
+}

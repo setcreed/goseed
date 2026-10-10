@@ -3,8 +3,10 @@ package app
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -19,4 +21,15 @@ func TestDevelopmentInitPreservesKeysAndRejectsProduction(t *testing.T) {
 	t.Setenv("APP_ENV","production")
 	if err:=Init(filepath.Join(t.TempDir(),"app.yaml"),&output); err==nil { t.Fatal("production init allowed") }
 	if err:=Run(context.Background(),[]string{""},&output,"test"); err==nil { t.Fatal("empty command accepted") }
+}
+
+func TestDevTokenRequiresDevelopmentConfig(t *testing.T){
+ directory:=t.TempDir();filename:=filepath.Join(directory,"app.yaml")
+ if err:=Init(filename,io.Discard);err!=nil{t.Fatal(err)}
+ var output bytes.Buffer
+ if err:=Run(context.Background(),[]string{"dev","token","--config",filename,"--subject","alice","--ttl","1m"},&output,"test");err!=nil{t.Fatal(err)}
+ if len(strings.Split(strings.TrimSpace(output.String()),"."))!=3{t.Fatal("token output")}
+ for _,args:=range [][]string{{"dev","token","--config",filename},{"dev","token","--config",filename,"--subject","alice","--ttl","2h"}}{if err:=Run(context.Background(),args,io.Discard,"test");err==nil{t.Fatal("invalid token arguments accepted")}}
+ t.Setenv("APP_ENV","production");t.Setenv("APP_LOG_FORMAT","json")
+ if err:=Run(context.Background(),[]string{"dev","token","--config",filename,"--subject","alice"},io.Discard,"test");err==nil{t.Fatal("production issued development token")}
 }

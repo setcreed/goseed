@@ -1,0 +1,29 @@
+package auth
+
+import (
+ "encoding/base64"
+ "strings"
+ "testing"
+ "time"
+
+ "[[.Module]]/internal/pkg/config"
+ "github.com/golang-jwt/jwt/v5"
+)
+func TestJWTBoundaries(t *testing.T){
+ settings:=config.JWT{Secret:base64.StdEncoding.EncodeToString([]byte(strings.Repeat("a",32))),Issuer:"demo",Audience:"demo-api",TTL:15*time.Minute}
+ service,err:=New(settings);if err!=nil{t.Fatal(err)};now:=time.Unix(1800000000,0);service.now=func()time.Time{return now}
+ raw,err:=service.Issue("alice",time.Minute);if err!=nil{t.Fatal(err)};if subject,err:=service.Parse(raw);err!=nil||subject!="alice"{t.Fatal("valid token rejected")}
+ for _,invalid:=range []string{"",raw+"=",raw[:5]+"\n"+raw[5:],strings.Repeat("a",4097),"a.b.c"}{if _,err:=service.Parse(invalid);err==nil{t.Fatal("invalid token syntax accepted")}}
+ claims:=func()jwt.RegisteredClaims{return jwt.RegisteredClaims{Issuer:settings.Issuer,Audience:jwt.ClaimStrings{settings.Audience},Subject:"alice",IssuedAt:jwt.NewNumericDate(now),NotBefore:jwt.NewNumericDate(now),ExpiresAt:jwt.NewNumericDate(now.Add(time.Minute))}}
+ cases:=map[string]func(*jwt.RegisteredClaims){
+  "issuer":func(c *jwt.RegisteredClaims){c.Issuer="wrong"},"audience":func(c *jwt.RegisteredClaims){c.Audience=jwt.ClaimStrings{"wrong"}},"subject":func(c *jwt.RegisteredClaims){c.Subject=""},
+  "missing-iat":func(c *jwt.RegisteredClaims){c.IssuedAt=nil},"missing-nbf":func(c *jwt.RegisteredClaims){c.NotBefore=nil},"missing-exp":func(c *jwt.RegisteredClaims){c.ExpiresAt=nil},
+  "expired":func(c *jwt.RegisteredClaims){c.ExpiresAt=jwt.NewNumericDate(now.Add(-time.Second))},"future-iat":func(c *jwt.RegisteredClaims){c.IssuedAt=jwt.NewNumericDate(now.Add(time.Second))},"future-nbf":func(c *jwt.RegisteredClaims){c.NotBefore=jwt.NewNumericDate(now.Add(time.Second))},
+  "excess-lifetime":func(c *jwt.RegisteredClaims){c.ExpiresAt=jwt.NewNumericDate(now.Add(time.Hour))},
+ }
+ for name,mutate:=range cases{t.Run(name,func(t *testing.T){c:=claims();mutate(&c);raw,err:=jwt.NewWithClaims(jwt.SigningMethodHS256,c).SignedString(service.key);if err!=nil{t.Fatal(err)};if _,err:=service.Parse(raw);err==nil{t.Fatal("invalid claims accepted")}})}
+ for _,method:=range []jwt.SigningMethod{jwt.SigningMethodHS384,jwt.SigningMethodNone}{key:=any(service.key);if method==jwt.SigningMethodNone{key=jwt.UnsafeAllowNoneSignatureType};bad,err:=jwt.NewWithClaims(method,claims()).SignedString(key);if err!=nil{t.Fatal(err)};if _,err:=service.Parse(bad);err==nil{t.Fatal("invalid algorithm accepted")}}
+ forged,err:=jwt.NewWithClaims(jwt.SigningMethodHS256,claims()).SignedString([]byte(strings.Repeat("b",32)));if err!=nil{t.Fatal(err)};if _,err:=service.Parse(forged);err==nil{t.Fatal("invalid signature accepted")}
+ for _,ttl:=range []time.Duration{0,-time.Second,time.Hour}{if _,err:=service.Issue("alice",ttl);err==nil{t.Fatal("invalid issue lifetime")}}
+ service.now=func()time.Time{return now.Add(time.Minute)};if _,err:=service.Parse(raw);err==nil{t.Fatal("token accepted at expiration")}
+}

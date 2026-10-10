@@ -20,7 +20,7 @@ make build
 
 - 默认命令为 `serve`；各服务命令接受 `--config`，默认路径为 `configs/app.yaml`。`serve` 支持显式 `--address` 和 `--env`，覆盖配置值。
 - `dev init` 创建权限为 0600 的开发配置和密码学随机 32 字节 JWT 密钥。已有有效开发配置保留原密钥；生产配置、符号链接及无效配置报错，不覆盖。生成模板本身仅包含无密钥的配置示例。
-- `dev token` 仅在有效开发配置下向标准输出返回 Token，主体必填；TTL 必须大于零且不超过配置的 JWT TTL。不提供 HTTP 签发接口。
+- `dev token` 仅在有效开发配置下向标准输出返回 Token，主体必填且不含首尾空白；TTL 至少 1s 且不超过配置的 JWT TTL，JWT 时间精度为秒。不提供 HTTP 签发接口。
 - `migrate up` 显式应用嵌入的 SQLite SQL 迁移；`migrate status` 读取当前迁移版本。迁移失败返回非零退出码，不记录 SQL 参数或密钥。
 - `make dev` 依次执行开发初始化、迁移和启动；生产环境禁用开发初始化及开发签发。服务启动验证 schema 已就绪，不自动建表或执行迁移。
 
