@@ -26,7 +26,7 @@ make race
 
 ## 技术兼容性验证
 
-候选业务运行依赖在 `tests/compatibility/` 的独立模块中核验。主模块只依赖 CLI 库。
+固定版本的业务运行依赖在 `tests/compatibility/` 的独立模块中核验。主模块只依赖 CLI 库。
 
 ```sh
 make compatibility
@@ -40,6 +40,18 @@ make protocol-check
 兼容性测试需要本机回环监听；`compatibility` 在没有外部数据库配置时明确跳过 MySQL/PostgreSQL。`compatibility-cross` 以纯 Go 方式交叉编译 Linux amd64/arm64 和 Windows amd64 测试程序。检查脚本需要 Python 3.9+；`compatibility-db` 还需要 Docker 与 Compose，会启动本次专用数据库、随机回环端口和全新卷，退出时清理本次容器与卷；不使用已有数据库。
 
 协议测试使用已生成源码，无需 protoc。`protocol-tools` 显式安装固定版本工具到 `.tools/`；`protocol-check` 校验版本并重新生成到临时目录，比对提交范围内的验证产物。依赖选型、许可证、维护证据与测试边界见 [依赖核验](docs/dependencies.md) 。
+
+验证程序覆盖以下范围，验证结果统一记录在 ROADMAP：
+
+| 对象 | 环境与检查范围 |
+|---|---|
+| SQLite | 真实磁盘文件；多连接 PRAGMA、迁移、约束错误、事务回滚、Context、锁等待和关闭连接后读取 |
+| MySQL 8.4.11、PostgreSQL 18.6 | 固定镜像摘要的真实数据库服务；显式迁移、Casbin 策略保存与重载、权限判定、删除和保存失败回滚 |
+| Casbin 适配原型 | 三种数据库共用现有 GORM 连接；缺表报错且不隐式建表，原型仅用于技术验证 |
+| gRPC、Gateway | 本机回环服务的实际调用和转发、Swagger 2.0 产物解析、固定工具重新生成比对 |
+| 其他运行依赖 | 配置读取、日志与 DI 组装、JWT 签发与解析、Redis 客户端构造与关闭 |
+
+纯文档改动可使用 `make contract-check` 检查模块、工具版本、本地链接与文件格式。项目开发及功能完成后的 Git 提交流程见 [项目规范](AGENTS.md) 。
 
 ## 文档入口
 
