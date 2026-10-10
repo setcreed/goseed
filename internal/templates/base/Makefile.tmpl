@@ -8,7 +8,7 @@ export GOTOOLCHAIN := go1.26.4
 export GOWORK := off
 
 .DEFAULT_GOAL := check
-.PHONY: build test race vet lint fmt-check check tools dev-init serve
+.PHONY: build test race vet lint fmt-check check tools dev-init serve migrate migration-status dev
 build:
 	CGO_ENABLED=0 $(GO) build -mod=readonly -trimpath -ldflags '-X main.version=$(VERSION)' -o bin/apiserver ./cmd/apiserver
 test:
@@ -29,4 +29,11 @@ tools:
 dev-init:
 	$(GO) run ./cmd/apiserver dev init
 serve:
+	$(GO) run ./cmd/apiserver serve
+migrate:
+	$(GO) run ./cmd/apiserver migrate up
+migration-status:
+	$(GO) run ./cmd/apiserver migrate status
+dev: dev-init
+	$(GO) run ./cmd/apiserver migrate up
 	$(GO) run ./cmd/apiserver serve

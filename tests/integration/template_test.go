@@ -82,4 +82,26 @@ func TestDefaultProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	run(t, directory, filepath.Join(root, ".tools/bin/golangci-lint"), "run", "./...")
+	binary := filepath.Join(directory, "bin/apiserver")
+	run(t, directory, "go", "build", "-mod=readonly", "-o", binary, "./cmd/apiserver")
+	run(t, directory, binary, "dev", "init")
+	configuration := filepath.Join(directory, "configs/app.yaml")
+	before, err := os.ReadFile(configuration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run(t, directory, binary, "dev", "init")
+	after, err := os.ReadFile(configuration)
+	if err != nil || string(before) != string(after) {
+		t.Fatal("development initialization replaced configuration")
+	}
+	if output := run(t, directory, binary, "migrate", "status"); !strings.Contains(string(output), "schema version: 0") {
+		t.Fatal("initial migration status")
+	}
+	for range 2 {
+		run(t, directory, binary, "migrate", "up")
+	}
+	if output := run(t, directory, binary, "migrate", "status"); !strings.Contains(string(output), "schema version: 1") {
+		t.Fatal("applied migration status")
+	}
 }

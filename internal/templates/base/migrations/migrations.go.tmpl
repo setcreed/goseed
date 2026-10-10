@@ -1,0 +1,9 @@
+package migrations
+
+import "embed"
+
+// Files is the sole source for explicitly applied schema changes.
+//go:embed *.sql
+var Files embed.FS
+
+const Version int64 = 1

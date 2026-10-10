@@ -12,6 +12,8 @@ Go 工具链固定为 **1.26.4**，主模块为 **`github.com/setcreed/goseed`**
 
 默认模板已提供配置、日志、HTTP 服务与开发初始化；包含请求 ID、错误响应、CORS、请求预算、TLS、开发环境 pprof 和优雅退出。服务契约见 [默认 HTTP 模板](docs/template-http.md) 。`make test` 会实际渲染独立项目并执行测试、vet、race 与 lint；需要先运行 `make tools`。验证覆盖配置优先级、秘密校验、开发密钥保留、panic 日志脱敏、关闭时请求排空和超时取消。
 
+SQLite 模板使用纯 Go 驱动、真实磁盘文件、每连接 PRAGMA 和脱敏查询日志。`apiserver migrate up/status` 提供显式迁移与只读版本查询；服务启动验证 schema，就绪检查包含数据库 Ping。集成测试实际构建独立二进制并运行初始化、迁移及重复迁移命令。
+
 ## 构建与检查
 
 需要 Go；首次构建会下载 Go 1.26.4 工具链及固定依赖。以下命令在仓库根目录执行：

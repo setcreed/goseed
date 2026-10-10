@@ -1,0 +1,28 @@
+package bootstrap
+
+import (
+ "context"
+ "encoding/base64"
+ "net"
+ "path/filepath"
+ "testing"
+
+ "[[.Module]]/internal/pkg/config"
+ "[[.Module]]/internal/pkg/database"
+ "go.uber.org/zap"
+)
+
+func TestStartupSchemaAndListenFailureClosePool(t *testing.T){
+ t.Setenv("APP_JWT_SECRET",base64.StdEncoding.EncodeToString(make([]byte,32)))
+ settings,err:=config.Load(filepath.Join(t.TempDir(),"missing.yaml"),false,config.Overrides{});if err!=nil{t.Fatal(err)}
+ settings.Database.Path=filepath.Join(t.TempDir(),"app.db")
+ if _,err:=New(settings,"test");err==nil{t.Fatal("missing schema accepted")}
+ db,err:=database.Open(context.Background(),settings.Database,zap.NewNop());if err!=nil{t.Fatal(err)};if err:=db.Migrate(context.Background());err!=nil{t.Fatal(err)};_ = db.Close()
+ settings.HTTP.TLSCert="missing-cert";settings.HTTP.TLSKey="missing-key"
+ if _,err:=New(settings,"test");err==nil{t.Fatal("invalid TLS accepted")}
+ settings.HTTP.TLSCert="";settings.HTTP.TLSKey=""
+ occupied,err:=net.Listen("tcp","127.0.0.1:0");if err!=nil{t.Fatal(err)};defer func(){_ = occupied.Close()}();settings.HTTP.Address=occupied.Addr().String()
+ application,err:=New(settings,"test");if err!=nil{t.Fatal(err)}
+ if err:=application.Run(context.Background());err==nil{t.Fatal("occupied port accepted")}
+ if err:=application.Database.Pool.Ping();err==nil{t.Fatal("failed startup leaked a live pool")}
+}

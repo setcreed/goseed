@@ -2,24 +2,31 @@ package bootstrap
 
 import (
 	"context"
+	"time"
 
 	"[[.Module]]/internal/apiserver"
 	"[[.Module]]/internal/pkg/config"
+	"[[.Module]]/internal/pkg/database"
 	logx "[[.Module]]/internal/pkg/log"
 	"[[.Module]]/internal/pkg/server"
 	"github.com/samber/do/v2"
 	"go.uber.org/zap"
 )
 
-type App struct { Server *server.Server; Logger *zap.Logger }
+type App struct { Server *server.Server; Logger *zap.Logger; Database *database.Database }
 
 func New(settings config.Config, version string) (*App,error) {
 	logger,err := logx.New(settings.Log,version)
 	if err != nil { return nil,err }
+	startup,cancel:=context.WithTimeout(context.Background(),10*time.Second);defer cancel()
+	db,err:=database.Open(startup,settings.Database,logger)
+	if err!=nil { _ = logger.Sync(); return nil,err }
+	if err:=db.CheckSchema(startup);err!=nil {_ = db.Close(); _ = logger.Sync(); return nil,err}
 	injector := do.New()
 	do.ProvideValue(injector,settings)
 	do.ProvideValue(injector,logger)
-	do.ProvideValue(injector,&server.Readiness{})
+	do.ProvideValue(injector,db)
+	do.ProvideValue(injector,&server.Readiness{CheckDependency:db.Pool.PingContext})
 	do.Provide(injector,func(i do.Injector)(*server.Server,error){
 		configuration,err := do.Invoke[config.Config](i); if err != nil { return nil,err }
 		logging,err := do.Invoke[*zap.Logger](i); if err != nil { return nil,err }
@@ -27,8 +34,8 @@ func New(settings config.Config, version string) (*App,error) {
 		return server.New(apiserver.NewRouter(configuration.HTTP,ready,logging),configuration.HTTP,ready,logging)
 	})
 	httpServer,err := do.Invoke[*server.Server](injector)
-	if err != nil { _ = logger.Sync(); return nil,err }
-	return &App{Server:httpServer,Logger:logger},nil
+	if err != nil { _ = db.Close(); _ = logger.Sync(); return nil,err }
+	return &App{Server:httpServer,Logger:logger,Database:db},nil
 }
 
-func (a *App) Run(ctx context.Context) error { defer func(){ _ = a.Logger.Sync() }(); return a.Server.Run(ctx) }
+func (a *App) Run(ctx context.Context) error { defer func(){ _ = a.Database.Close(); _ = a.Logger.Sync() }(); return a.Server.Run(ctx) }

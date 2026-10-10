@@ -1,0 +1,73 @@
+package database
+
+import (
+ "context"
+ "database/sql"
+ "errors"
+ "fmt"
+ "net/url"
+ "os"
+ "path/filepath"
+ "time"
+
+ "[[.Module]]/internal/pkg/config"
+ "[[.Module]]/migrations"
+ "github.com/libtnb/sqlite"
+ "github.com/pressly/goose/v3"
+ "go.uber.org/zap"
+ "gorm.io/gorm"
+ "gorm.io/gorm/logger"
+)
+
+type Database struct { DB *gorm.DB; Pool *sql.DB }
+
+func Open(ctx context.Context, settings config.Database, logging *zap.Logger) (*Database,error) {
+ filename,err:=filepath.Abs(settings.Path); if err!=nil {return nil,errors.New("invalid database path")}
+ if err:=os.MkdirAll(filepath.Dir(filename),0750);err!=nil{return nil,errors.New("cannot create database directory")}
+ if info,err:=os.Lstat(filename);err==nil {if !info.Mode().IsRegular(){return nil,errors.New("database must be a regular file")}} else if !errors.Is(err,os.ErrNotExist){return nil,errors.New("cannot inspect database file")}
+ file,err:=os.OpenFile(filename,os.O_CREATE|os.O_RDWR,0600);if err!=nil{return nil,errors.New("cannot open database file")};if err:=file.Close();err!=nil{return nil,errors.New("cannot close database file")}
+ uri:=url.URL{Scheme:"file",Path:filename};query:=url.Values{}
+ query.Add("_pragma","foreign_keys(1)");query.Add("_pragma",fmt.Sprintf("busy_timeout(%d)",settings.BusyTimeout.Milliseconds()));query.Add("_pragma","journal_mode(WAL)");uri.RawQuery=query.Encode()
+ db,err:=gorm.Open(sqlite.Open(uri.String()),&gorm.Config{TranslateError:true,Logger:queryLogger{logging,settings.SlowThreshold},NowFunc:func()time.Time{return time.Now().UTC()}})
+ if err!=nil{return nil,errors.New("cannot initialize SQLite")}
+ pool,err:=db.DB();if err!=nil{return nil,errors.New("cannot obtain database pool")}
+ pool.SetMaxOpenConns(settings.MaxOpen);pool.SetMaxIdleConns(settings.MaxIdle)
+ if err:=pool.PingContext(ctx);err!=nil{_ = pool.Close();return nil,errors.New("database ping failed")}
+ return &Database{DB:db,Pool:pool},nil
+}
+
+func (d *Database) Close() error {return d.Pool.Close()}
+
+// Version only reads: it must not create Goose's bookkeeping table.
+func (d *Database) Version(ctx context.Context)(int64,error){
+ var exists int
+ if err:=d.Pool.QueryRowContext(ctx,"SELECT count(*) FROM sqlite_master WHERE type='table' AND name='goose_db_version'").Scan(&exists);err!=nil{return 0,errors.New("cannot read migration status")}
+ if exists==0{return 0,nil}
+ var version int64
+ if err:=d.Pool.QueryRowContext(ctx,"SELECT COALESCE(MAX(version_id),0) FROM goose_db_version WHERE is_applied=1").Scan(&version);err!=nil{return 0,errors.New("cannot read migration version")}
+ return version,nil
+}
+func (d *Database) CheckSchema(ctx context.Context)error{
+ version,err:=d.Version(ctx);if err!=nil{return err};if version!=migrations.Version{return errors.New("database schema is not ready; run migrate up")}
+ // Check the actual schema as well as its recorded version without writing.
+ if err:=d.DB.WithContext(ctx).Exec("SELECT id,owner,name,description,enabled,created_at,updated_at FROM examples LIMIT 0").Error;err!=nil{return errors.New("database schema is not ready; run migrate up")}
+ return nil
+}
+func (d *Database) Migrate(ctx context.Context)error{
+ provider,err:=goose.NewProvider(goose.DialectSQLite3,d.Pool,migrations.Files,goose.WithDisableGlobalRegistry(true),goose.WithLogger(quietLogger{}));if err!=nil{return errors.New("cannot initialize migrations")}
+ if _,err:=provider.Up(ctx);err!=nil{return errors.New("database migration failed")};return d.CheckSchema(ctx)
+}
+
+type quietLogger struct{}
+func (quietLogger) Printf(string,...any){}
+func (quietLogger) Fatalf(string,...any){}
+
+type queryLogger struct{logging *zap.Logger;slow time.Duration}
+func(q queryLogger)LogMode(logger.LogLevel)logger.Interface{return q}
+func(q queryLogger)Info(context.Context,string,...any){}
+func(q queryLogger)Warn(context.Context,string,...any){}
+func(q queryLogger)Error(context.Context,string,...any){}
+func(q queryLogger)Trace(_ context.Context,begin time.Time,_ func()(string,int64),err error){
+ elapsed:=time.Since(begin)
+ if err!=nil && !errors.Is(err,gorm.ErrRecordNotFound){q.logging.Error("database query failed",zap.Duration("duration",elapsed))}else if elapsed>=q.slow{q.logging.Warn("slow database query",zap.Duration("duration",elapsed))}
+}

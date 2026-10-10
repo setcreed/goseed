@@ -1,0 +1,14 @@
+-- +goose Up
+CREATE TABLE examples (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT examples_owner_name UNIQUE (owner, name)
+);
+
+-- +goose Down
+DROP TABLE examples;

@@ -1,0 +1,42 @@
+package database
+
+import (
+ "bytes"
+ "context"
+ "database/sql"
+ "os"
+ "path/filepath"
+ "strings"
+ "testing"
+ "time"
+
+ "[[.Module]]/internal/pkg/config"
+ "go.uber.org/zap"
+ "go.uber.org/zap/zapcore"
+)
+
+func TestFileDatabaseMigrationAndPrivacy(t *testing.T){
+ ctx:=context.Background();path:=filepath.Join(t.TempDir(),"a? b#中文.db")
+ settings:=config.Database{Path:path,MaxOpen:4,MaxIdle:2,BusyTimeout:150*time.Millisecond,SlowThreshold:time.Nanosecond}
+ var logs bytes.Buffer;logging:=zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),zapcore.AddSync(&logs),zap.DebugLevel))
+ db,err:=Open(ctx,settings,logging);if err!=nil{t.Fatal(err)};defer func(){_ = db.Close()}()
+ info,err:=os.Stat(path);if err!=nil{t.Fatal(err)};if info.Mode().Perm()!=0600{t.Fatal("database permission")}
+ if err:=db.CheckSchema(ctx);err==nil{t.Fatal("missing schema accepted")};version,err:=db.Version(ctx);if err!=nil||version!=0{t.Fatalf("version %d %v",version,err)}
+ var tableCount int; if err:=db.Pool.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table'").Scan(&tableCount);err!=nil||tableCount!=0{t.Fatalf("status/startup created tables: %d %v",tableCount,err)}
+ for range 2{if err:=db.Migrate(ctx);err!=nil{t.Fatal(err)}}
+ var conns []*sql.Conn
+ defer func(){for _,connection:=range conns{_ = connection.Close()}}()
+ for range 3{connection,err:=db.Pool.Conn(ctx);if err!=nil{t.Fatal(err)};conns=append(conns,connection);var foreign,busy int;var journal string
+  if err:=connection.QueryRowContext(ctx,"PRAGMA foreign_keys").Scan(&foreign);err!=nil{t.Fatal(err)}
+  if err:=connection.QueryRowContext(ctx,"PRAGMA busy_timeout").Scan(&busy);err!=nil{t.Fatal(err)}
+  if err:=connection.QueryRowContext(ctx,"PRAGMA journal_mode").Scan(&journal);err!=nil{t.Fatal(err)}
+  if foreign!=1||busy!=150||journal!="wal"{t.Fatalf("PRAGMA %d %d %s",foreign,busy,journal)}
+ }
+ for _,connection:=range conns{_ = connection.Close()};conns=nil
+ if err:=db.DB.Exec("INSERT INTO examples(owner,name,created_at,updated_at) VALUES(?,?,?,?)","subject-private","sql-private",time.Now().UTC(),time.Now().UTC()).Error;err!=nil{t.Fatal(err)}
+ if err:=db.DB.Exec("SELECT * FROM missing_private_table WHERE value = ?","secret-parameter").Error;err==nil{t.Fatal("invalid query succeeded")}
+ if strings.Contains(logs.String(),"private")||strings.Contains(logs.String(),"SELECT")||strings.Contains(logs.String(),"secret-parameter"){t.Fatalf("query details leaked: %s",logs.String())}
+ canceled,cancel:=context.WithCancel(ctx);cancel();if err:=db.DB.WithContext(canceled).Exec("SELECT 1").Error;err==nil{t.Fatal("canceled query succeeded")}
+ if err:=db.Close();err!=nil{t.Fatal(err)};reopened,err:=Open(ctx,settings,zap.NewNop());if err!=nil{t.Fatal(err)};defer func(){_ = reopened.Close()}()
+ var count int64;if err:=reopened.DB.Table("examples").Count(&count).Error;err!=nil||count!=1{t.Fatalf("persistence %d %v",count,err)}
+}
