@@ -1,0 +1,21 @@
+package log
+
+import (
+	"os"
+	"time"
+
+	"[[.Module]]/internal/pkg/config"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+)
+
+func New(settings config.Log, version string) (*zap.Logger,error) {
+	var level zapcore.Level
+	if err := level.UnmarshalText([]byte(settings.Level)); err != nil { return nil,err }
+	encoderConfig := zap.NewProductionEncoderConfig()
+	encoderConfig.TimeKey = "time"
+	encoderConfig.EncodeTime = func(t time.Time, encoder zapcore.PrimitiveArrayEncoder) { encoder.AppendString(t.UTC().Format(time.RFC3339Nano)) }
+	var encoder zapcore.Encoder = zapcore.NewJSONEncoder(encoderConfig)
+	if settings.Format == "console" { encoder = zapcore.NewConsoleEncoder(encoderConfig) }
+	return zap.New(zapcore.NewCore(encoder,zapcore.AddSync(os.Stdout),level)).With(zap.String("service","[[.Name]]"),zap.String("version",version)),nil
+}

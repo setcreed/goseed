@@ -27,10 +27,10 @@ vet:
 	$(GO) vet -mod=readonly $(GO_PACKAGES)
 
 fmt:
-	gofmt -w cmd internal tests/compatibility
+	gofmt -w cmd internal tests/compatibility tests/integration
 
 fmt-check:
-	@files="$$(gofmt -l cmd internal tests/compatibility)"; if [ -n "$$files" ]; then printf '%s\n' "$$files"; exit 1; fi
+	@files="$$(gofmt -l cmd internal tests/compatibility tests/integration)"; if [ -n "$$files" ]; then printf '%s\n' "$$files"; exit 1; fi
 
 lint:
 	@test -x $(LINT) || { printf '%s\n' 'Run make tools to install the pinned project-local linter.'; exit 1; }

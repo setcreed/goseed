@@ -1,0 +1,28 @@
+package config
+
+import (
+	"encoding/base64"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestConfigurationBoundary(t *testing.T) {
+	t.Setenv("APP_JWT_SECRET", base64.StdEncoding.EncodeToString([]byte(strings.Repeat("s",32))))
+	filename := filepath.Join(t.TempDir(), "app.yaml")
+	if err := os.WriteFile(filename, []byte("http:\n  address: 127.0.0.1:8001\n"), 0600); err != nil { t.Fatal(err) }
+	t.Setenv("APP_HTTP_ADDRESS", "127.0.0.1:8002")
+	config, err := Load(filename, true, Overrides{Address:"127.0.0.1:8003"})
+	if err != nil || config.HTTP.Address != "127.0.0.1:8003" { t.Fatalf("override precedence: %v",err) }
+	config, err = Load(filepath.Join(t.TempDir(),"absent.yaml"), false, Overrides{})
+	if err != nil || config.HTTP.Address != "127.0.0.1:8002" { t.Fatalf("environment-only: %v",err) }
+	if _, err := Load(filepath.Join(t.TempDir(),"absent.yaml"), true, Overrides{}); err == nil { t.Fatal("explicit absent config accepted") }
+	for _, input := range []string{"unknown: value\n", "http:\n  request_timeout: 5\n", "http:\n  pprof: true\n", "jwt:\n  ttl: 2h\n", "env: invalid\n"} {
+		if err := os.WriteFile(filename, []byte(input),0600); err != nil { t.Fatal(err) }
+		if _, err := Load(filename,true,Overrides{}); err == nil { t.Fatalf("invalid configuration accepted: %s",input) }
+	}
+	t.Setenv("APP_JWT_SECRET", "test-secret-must-not-appear")
+	if err := os.WriteFile(filename,[]byte("{}\n"),0600); err != nil { t.Fatal(err) }
+	if _, err := Load(filename,true,Overrides{}); err == nil || strings.Contains(err.Error(),"test-secret-must-not-appear") { t.Fatal("missing validation or secret disclosure") }
+}

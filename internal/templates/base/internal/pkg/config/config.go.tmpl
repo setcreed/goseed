@@ -1,0 +1,111 @@
+package config
+
+import (
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"net"
+	"net/url"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/spf13/viper"
+)
+
+const DefaultPath = "configs/app.yaml"
+
+type Config struct {
+	Env string
+	HTTP HTTP
+	Log Log
+	Database Database
+	JWT JWT
+}
+
+type HTTP struct {
+	Address string
+	ReadHeaderTimeout time.Duration `mapstructure:"read_header_timeout"`
+	ReadTimeout time.Duration `mapstructure:"read_timeout"`
+	WriteTimeout time.Duration `mapstructure:"write_timeout"`
+	IdleTimeout time.Duration `mapstructure:"idle_timeout"`
+	RequestTimeout time.Duration `mapstructure:"request_timeout"`
+	ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout"`
+	MaxBodyBytes int64 `mapstructure:"max_body_bytes"`
+	MaxHeaderBytes int `mapstructure:"max_header_bytes"`
+	AllowedOrigins []string `mapstructure:"allowed_origins"`
+	TLSCert string `mapstructure:"tls_cert"`
+	TLSKey string `mapstructure:"tls_key"`
+	Pprof bool
+}
+
+type Log struct { Level string; Format string }
+type Database struct {
+	Path string
+	MaxOpen int `mapstructure:"max_open"`
+	MaxIdle int `mapstructure:"max_idle"`
+	BusyTimeout time.Duration `mapstructure:"busy_timeout"`
+	SlowThreshold time.Duration `mapstructure:"slow_threshold"`
+}
+type JWT struct { Secret string; Issuer string; Audience string; TTL time.Duration }
+type Overrides struct { Address string; Env string }
+
+func Load(filename string, explicit bool, overrides Overrides) (Config, error) {
+	v := viper.New()
+	v.SetConfigFile(filename)
+	v.SetConfigType("yaml")
+	defaults := map[string]any{
+		"env": "production", "http.address": "127.0.0.1:8080",
+		"http.read_header_timeout": "5s", "http.read_timeout": "15s", "http.write_timeout": "15s",
+		"http.idle_timeout": "60s", "http.request_timeout": "5s", "http.shutdown_timeout": "10s",
+		"http.max_body_bytes": 1048576, "http.max_header_bytes": 1048576,
+		"http.allowed_origins": []string{}, "http.tls_cert": "", "http.tls_key": "", "http.pprof": false,
+		"log.level": "info", "log.format": "json", "database.path": "data/app.db",
+		"database.max_open": 4, "database.max_idle": 2, "database.busy_timeout": "5s", "database.slow_threshold": "200ms",
+		"jwt.secret": "", "jwt.issuer": "[[.Name]]", "jwt.audience": "[[.Name]]-api", "jwt.ttl": "15m",
+	}
+	for key, value := range defaults {
+		v.SetDefault(key, value)
+		if err := v.BindEnv(key, "APP_"+strings.ToUpper(strings.ReplaceAll(key, ".", "_"))); err != nil { return Config{}, errors.New("cannot bind configuration environment") }
+	}
+	if err := v.ReadInConfig(); err != nil {
+		if explicit || !errors.Is(err, os.ErrNotExist) { return Config{}, fmt.Errorf("cannot read configuration file %q", filename) }
+	}
+	for _, key := range v.AllKeys() { if _, exists := defaults[key]; !exists { return Config{}, fmt.Errorf("unknown configuration key %q", key) } }
+	for _, key := range []string{"http.read_header_timeout","http.read_timeout","http.write_timeout","http.idle_timeout","http.request_timeout","http.shutdown_timeout","database.busy_timeout","database.slow_threshold","jwt.ttl"} {
+		value, ok := v.Get(key).(string)
+		if !ok { return Config{}, fmt.Errorf("%s requires a duration string with units",key) }
+		if _, err := time.ParseDuration(value); err != nil { return Config{}, fmt.Errorf("invalid duration for %s",key) }
+	}
+	if overrides.Address != "" { v.Set("http.address", overrides.Address) }
+	if overrides.Env != "" { v.Set("env", overrides.Env) }
+	var config Config
+	if err := v.UnmarshalExact(&config); err != nil { return Config{}, errors.New("invalid configuration field types; durations require units") }
+	if err := config.Validate(); err != nil { return Config{}, err }
+	return config, nil
+}
+
+func (c Config) Validate() error {
+	if c.Env != "development" && c.Env != "production" { return errors.New("env must be development or production") }
+	host, port, err := net.SplitHostPort(c.HTTP.Address)
+	if err != nil || host == "" || port == "" { return errors.New("http.address requires host and port") }
+	if _, err := net.LookupPort("tcp", port); err != nil { return errors.New("invalid http.address port") }
+	if c.HTTP.ReadHeaderTimeout <= 0 || c.HTTP.ReadTimeout < c.HTTP.ReadHeaderTimeout || c.HTTP.RequestTimeout <= 0 || c.HTTP.WriteTimeout <= c.HTTP.RequestTimeout || c.HTTP.IdleTimeout <= 0 || c.HTTP.ShutdownTimeout <= 0 { return errors.New("invalid HTTP timeouts; write timeout must exceed request timeout") }
+	for _, duration := range []time.Duration{c.HTTP.ReadHeaderTimeout,c.HTTP.ReadTimeout,c.HTTP.WriteTimeout,c.HTTP.RequestTimeout,c.HTTP.IdleTimeout,c.HTTP.ShutdownTimeout} { if duration > 10*time.Minute { return errors.New("HTTP timeouts must not exceed 10m") } }
+	if c.HTTP.MaxBodyBytes < 1 || c.HTTP.MaxBodyBytes > 16<<20 || c.HTTP.MaxHeaderBytes < 1024 || c.HTTP.MaxHeaderBytes > 4<<20 { return errors.New("invalid HTTP body/header limits") }
+	if (c.HTTP.TLSCert == "") != (c.HTTP.TLSKey == "") { return errors.New("TLS cert and key must be supplied together") }
+	if c.HTTP.Pprof && (c.Env != "development" || (host != "localhost" && !net.ParseIP(host).IsLoopback())) { return errors.New("pprof requires development and a loopback address") }
+	for _, origin := range c.HTTP.AllowedOrigins {
+		u, err := url.Parse(origin)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" { return errors.New("allowed_origins requires exact HTTP origins") }
+	}
+	if c.Log.Level != "debug" && c.Log.Level != "info" && c.Log.Level != "warn" && c.Log.Level != "error" { return errors.New("invalid log.level") }
+	if c.Log.Format != "json" && c.Log.Format != "console" { return errors.New("invalid log.format") }
+	if c.Env == "production" && c.Log.Format != "json" { return errors.New("production requires JSON logs") }
+	if c.Database.Path == "" || strings.ContainsAny(c.Database.Path, "\x00\r\n") || c.Database.Path == ":memory:" { return errors.New("database.path requires a persistent file") }
+	if c.Database.MaxOpen < 1 || c.Database.MaxOpen > 64 || c.Database.MaxIdle < 0 || c.Database.MaxIdle > c.Database.MaxOpen || c.Database.BusyTimeout < time.Millisecond || c.Database.BusyTimeout > 30*time.Second || c.Database.SlowThreshold <= 0 { return errors.New("invalid database connection settings") }
+	key, err := base64.StdEncoding.Strict().DecodeString(c.JWT.Secret)
+	if err != nil || len(key) < 32 { return errors.New("jwt.secret requires Base64 encoding of at least 32 bytes") }
+	if strings.TrimSpace(c.JWT.Issuer) == "" || strings.TrimSpace(c.JWT.Audience) == "" || c.JWT.TTL < time.Second || c.JWT.TTL > time.Hour { return errors.New("invalid jwt issuer, audience or ttl") }
+	return nil
+}
