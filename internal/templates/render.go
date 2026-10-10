@@ -13,7 +13,7 @@ import (
 	"text/template"
 )
 
-//go:embed all:base
+//go:embed base
 var sources embed.FS
 
 type File struct {
@@ -54,10 +54,16 @@ func render(source fs.FS, project Project) ([]File, error) {
 		if entry.IsDir() {
 			return nil
 		}
+		if entry.Name() == ".DS_Store" || entry.Name() == "Thumbs.db" {
+			return nil
+		}
 		if !strings.HasSuffix(filename, ".tmpl") {
 			return fmt.Errorf("unrecognized template: %s", filename)
 		}
 		relative := strings.TrimSuffix(strings.TrimPrefix(filename, "base/"), ".tmpl")
+		if name := path.Base(relative); strings.HasPrefix(name, "dot.") {
+			relative = path.Join(path.Dir(relative), "."+strings.TrimPrefix(name, "dot."))
+		}
 		if !fs.ValidPath(relative) || path.Clean(relative) != relative {
 			return fmt.Errorf("invalid template path")
 		}

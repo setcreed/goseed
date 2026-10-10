@@ -44,3 +44,15 @@ func TestRenderFailuresReturnNoPartialPlan(t *testing.T) {
 		}
 	}
 }
+
+func TestSystemMetadataAndDotFiles(t *testing.T) {
+	source := fstest.MapFS{
+		"base/.DS_Store":          &fstest.MapFile{Data: []byte("OS metadata")},
+		"base/Thumbs.db":          &fstest.MapFile{Data: []byte("OS metadata")},
+		"base/dot.gitignore.tmpl": &fstest.MapFile{Data: []byte("/data/\n")},
+	}
+	files, err := render(source, Project{})
+	if err != nil || len(files) != 1 || files[0].Path != ".gitignore" {
+		t.Fatalf("metadata/dot file handling: %v %+v", err, files)
+	}
+}
