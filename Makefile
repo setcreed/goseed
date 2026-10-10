@@ -12,7 +12,7 @@ export GOWORK := off
 export GOTOOLCHAIN := go1.26.4
 
 .DEFAULT_GOAL := check
-.PHONY: build test race vet lint fmt fmt-check check contract-check tools compatibility compatibility-cross compatibility-db protocol-tools protocol-check
+.PHONY: build test race vet lint fmt fmt-check check contract-check tools compatibility compatibility-cross compatibility-db protocol-tools protocol-check template-container
 
 build:
 	$(GO) build -mod=readonly -trimpath -ldflags '-X main.version=$(VERSION)' -o bin/goseed ./cmd/goseed
@@ -59,6 +59,9 @@ protocol-tools:
 
 protocol-check:
 	python3 scripts/protocol-check.py
+
+template-container:
+	GOSEED_TEST_DOCKER=1 $(GO) test -mod=readonly -count=1 -timeout=15m -v ./tests/integration -run '^TestDefaultProject$$'
 
 # Explicit installation only; build/test/check never install global tools.
 tools:

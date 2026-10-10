@@ -38,6 +38,7 @@
       "linux/amd64": {"name": "protoc-36.2-linux-x86_64.zip", "sha256": "121f6c7afe1d4d0e3ea6aab9432038599250134cbf4474cb1167d2c7decd4278"}
     }
   },
+  "service_builder_image": "golang:1.26.4-alpine@sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648",
   "api_document": "Swagger 2.0",
   "database_images": {
     "mysql": "mysql:8.4.11@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242",

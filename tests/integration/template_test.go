@@ -79,7 +79,22 @@ func environment(t *testing.T) []string {
 
 func TestDefaultProject(t *testing.T) {
 	directory := renderProject(t)
-	run(t, directory, "go", "mod", "tidy")
+	manifests := map[string][]byte{}
+	for _, name := range []string{"go.mod", "go.sum"} {
+		data, err := os.ReadFile(filepath.Join(directory, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		manifests[name] = data
+	}
+	t.Cleanup(func() {
+		for name, original := range manifests {
+			current, err := os.ReadFile(filepath.Join(directory, name))
+			if err != nil || string(original) != string(current) {
+				t.Errorf("generated %s changed during readonly verification", name)
+			}
+		}
+	})
 	run(t, directory, "go", "test", "-mod=readonly", "./...")
 	run(t, directory, "go", "vet", "-mod=readonly", "./...")
 	run(t, directory, "go", "test", "-mod=readonly", "-race", "./...")
@@ -111,4 +126,9 @@ func TestDefaultProject(t *testing.T) {
 		t.Fatal("applied migration status")
 	}
 	verifyHTTP(t, directory, binary)
+	verifyStartupFailures(t, directory, binary)
+	verifyTLS(t, directory, binary)
+	if os.Getenv("GOSEED_TEST_DOCKER") == "1" {
+		verifyContainer(t, directory, binary)
+	}
 }

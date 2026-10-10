@@ -1,0 +1,42 @@
+# [[.Name]] 项目规范
+
+## 定位与入口
+
+本项目为独立的 Go 业务服务，模块为 `[[.Module]]`，工具链固定 Go 1.26.4。默认能力为 HTTP、文件 SQLite、JWT 和示例 CRUD。无需依赖生成器运行。
+
+开始工作先读本文件及 ROADMAP；当前使用入口与配置说明见 README。项目规则仅在本文件维护。
+
+## 目录与分层
+
+- `cmd/apiserver/`：进程入口、服务与开发/迁移命令。
+- `internal/apiserver/bootstrap/`：配置后的依赖组装及资源生命周期；do 容器仅在这里使用。
+- `internal/apiserver/router.go`：HTTP 路由及通用中间件。
+- `internal/apiserver/handler/http/<module>/`：协议解析、严格输入校验与响应映射。
+- `internal/apiserver/biz/<module>/`：业务规则及其实际需要的仓储接口，不导入 Gin、GORM 或 DI。
+- `internal/apiserver/store/<module>/`：Context 贯穿的数据库操作与稳定错误转换。
+- `internal/apiserver/model/`：共享资源结构及按字段存在性定义的更新类型。
+- `internal/pkg/`：配置、认证、日志、错误、中间件及 HTTP 生命周期；业务逻辑不放这里。
+- `migrations/`：嵌入的显式 SQL 迁移及当前期望版本。
+- `configs/app.example.yaml`：可提交的无密钥示例；真实配置不提交。
+- `api/openapi/`：Swagger 2.0 接口契约；接口变化时同步。
+- `build/docker/`：容器构建；`.tmp/<task>/`：本次任务临时文件，不作为运行输入。
+
+调用方向为 Handler → Biz → Store，通过显式构造函数传递依赖。数据库对象限于 Store 与初始化/迁移边界，不暴露给 Biz。需要跨仓储事务时，在 Store 内对同一事务连接构造仓储，不在回调内混用原始连接；参考 Store 回滚测试。
+
+## 工程边界
+
+配置顺序为默认值、文件、已绑定 `APP_*` 环境变量、显式服务参数。新增配置同步默认值、环境绑定、文件类型与业务校验、示例及 README。
+
+默认生产环境，无默认 JWT 密钥。开发初始化及签发在生产禁用；不增加公开的临时 Token 接口。所有业务路由都需明确认证，资源归属由业务与带主体条件的 SQL 共同约束。
+
+生产启动不执行迁移或 AutoMigrate。修改 schema 需明确授权并增加迁移，更新期望版本和验收测试，避免改写已应用迁移。默认 SQLite 适合单实例；多实例需重新选择存储方案。
+
+日志和错误不包含秘密、Token、请求正文、SQL/参数或堆栈；保持稳定错误码与请求 ID。保留请求 Context、输入边界、零值更新和退出排空行为。
+
+## 工作流与验证
+
+代码、配置、文档保持一致，ROADMAP 记录当前状态，不把未实现功能写成 README 当前能力。依赖变化同时维护 `go.mod` 与 `go.sum`，常规构建使用 readonly，不引入重复能力。
+
+先 `make tools` 显式安装本地固定版本 linter，再执行 `make check`；并发与生命周期修改执行 `make race`。数据库相关修改使用真实 SQLite 文件验证，认证修改验证失败路径。交付前确认 `make build`，不提交 `.tmp/`、`.tools/`、`bin/`、真实配置、密钥或数据库文件。
+
+提交、推送、迁移生产数据库及公开部署均遵循当前用户授权，授权未明确时先确认。

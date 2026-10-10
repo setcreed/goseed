@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	stdlog "log"
 	"net"
 	"net/http"
 	"sync/atomic"
@@ -23,7 +24,7 @@ func (r *Readiness) Stop() { r.stopping.Store(true) }
 type Server struct { http *http.Server; settings config.HTTP; ready *Readiness; logger *zap.Logger }
 
 func New(handler http.Handler, settings config.HTTP, ready *Readiness, logger *zap.Logger) (*Server,error) {
-	s := &http.Server{Addr:settings.Address,Handler:handler,ReadHeaderTimeout:settings.ReadHeaderTimeout,ReadTimeout:settings.ReadTimeout,WriteTimeout:settings.WriteTimeout,IdleTimeout:settings.IdleTimeout,MaxHeaderBytes:settings.MaxHeaderBytes}
+	s := &http.Server{Addr:settings.Address,Handler:handler,ReadHeaderTimeout:settings.ReadHeaderTimeout,ReadTimeout:settings.ReadTimeout,WriteTimeout:settings.WriteTimeout,IdleTimeout:settings.IdleTimeout,MaxHeaderBytes:settings.MaxHeaderBytes,ErrorLog:stdlog.New(protocolLog{logger},"",0)}
 	if settings.TLSCert != "" {
 		certificate,err := tls.LoadX509KeyPair(settings.TLSCert,settings.TLSKey)
 		if err != nil { return nil,errors.New("invalid TLS certificate or private key") }
@@ -31,6 +32,11 @@ func New(handler http.Handler, settings config.HTTP, ready *Readiness, logger *z
 	}
 	return &Server{http:s,settings:settings,ready:ready,logger:logger},nil
 }
+
+// The standard HTTP logger may include peer details, panic values or stacks.
+// Route it through the configured encoder without forwarding uncontrolled text.
+type protocolLog struct{logger *zap.Logger}
+func(p protocolLog)Write(message []byte)(int,error){p.logger.Warn("HTTP protocol error");return len(message),nil}
 
 func (s *Server) Run(ctx context.Context) error {
 	listener,err := net.Listen("tcp",s.settings.Address)

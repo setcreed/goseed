@@ -23,6 +23,12 @@ type serviceProcess struct {
 }
 
 func startService(t *testing.T, directory, binary string) *serviceProcess {
+	client := &http.Client{Timeout: time.Second}
+	t.Cleanup(client.CloseIdleConnections)
+	return startServiceWith(t, directory, binary, client, "http", nil)
+}
+
+func startServiceWith(t *testing.T, directory, binary string, client *http.Client, scheme string, overrides []string) *serviceProcess {
 	t.Helper()
 	log, err := os.CreateTemp(directory, "service-*.log")
 	if err != nil {
@@ -31,6 +37,7 @@ func startService(t *testing.T, directory, binary string) *serviceProcess {
 	process := &serviceProcess{command: exec.Command(binary, "serve", "--address", "127.0.0.1:0"), done: make(chan struct{}), log: log.Name()}
 	process.command.Dir = directory
 	process.command.Env = append(environment(t), "APP_LOG_FORMAT=json")
+	process.command.Env = append(process.command.Env, overrides...)
 	process.command.Stdout = log
 	process.command.Stderr = log
 	if err := process.command.Start(); err != nil {
@@ -52,7 +59,6 @@ func startService(t *testing.T, directory, binary string) *serviceProcess {
 		_ = log.Close()
 	})
 	deadline := time.Now().Add(10 * time.Second)
-	client := &http.Client{Timeout: time.Second}
 	for time.Now().Before(deadline) {
 		select {
 		case <-process.done:
@@ -69,7 +75,7 @@ func startService(t *testing.T, directory, binary string) *serviceProcess {
 				Address string `json:"address"`
 			}
 			if json.Unmarshal([]byte(line), &entry) == nil && entry.Message == "HTTP server started" {
-				process.url = "http://" + entry.Address
+				process.url = scheme + "://" + entry.Address
 			}
 		}
 		if process.url != "" {

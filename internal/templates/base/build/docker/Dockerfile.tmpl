@@ -1,0 +1,18 @@
+FROM golang:1.26.4-alpine@sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648 AS builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+ARG VERSION=dev
+RUN CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/apiserver ./cmd/apiserver \
+    && mkdir -p /out/data && chown 10001:10001 /out/data
+
+FROM scratch
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /out/apiserver /app/apiserver
+COPY --from=builder --chown=10001:10001 /out/data /app/data
+WORKDIR /app
+USER 10001:10001
+ENV APP_ENV=production APP_HTTP_ADDRESS=0.0.0.0:8080 APP_DATABASE_PATH=/app/data/app.db
+EXPOSE 8080
+ENTRYPOINT ["/app/apiserver"]

@@ -10,13 +10,11 @@ Go 工具链固定为 **1.26.4**，主模块为 **`github.com/setcreed/goseed`**
 
 内部模板渲染入口为 `internal/templates.Default`，返回校验后的文件计划，展开项目名称及模块路径，并格式化 Go 源码。渲染不直接写入文件。
 
-默认模板已提供配置、日志、HTTP 服务与开发初始化；包含请求 ID、错误响应、CORS、请求预算、TLS、开发环境 pprof 和优雅退出。服务契约见 [默认 HTTP 模板](docs/template-http.md) 。`make test` 会实际渲染独立项目并执行测试、vet、race 与 lint；需要先运行 `make tools`。验证覆盖配置优先级、秘密校验、开发密钥保留、panic 日志脱敏、关闭时请求排空和超时取消。
+默认 HTTP 模板包含 Handler → Biz → Store 分层、SQLite、JWT、示例 CRUD、配置与日志、健康检查和优雅退出。提供开发密钥初始化、开发 Token 签发、显式迁移、严格输入校验、资源主体隔离、TLS 与 CORS；没有公开的临时签发接口。服务命令与验收边界见 [默认 HTTP 模板](docs/template-http.md) 。
 
-SQLite 模板使用纯 Go 驱动、真实磁盘文件、每连接 PRAGMA 和脱敏查询日志。`apiserver migrate up/status` 提供显式迁移与只读版本查询；服务启动验证 schema，就绪检查包含数据库 Ping。集成测试实际构建独立二进制并运行初始化、迁移及重复迁移命令。
+渲染项目包含完整 `go.mod` / `go.sum`、AGENTS/README/ROADMAP、Makefile、配置示例、SQL 迁移、Swagger 2.0 和非 root Dockerfile，可以独立构建及运行。
 
-JWT 包固定 HS256，校验三段 Base64URL、签名、主体、issuer、audience 及完整时间声明；认证中间件将主体传入请求 Context。`apiserver dev token --subject alice --ttl 15m` 仅在开发配置下签发 Token，生产环境禁用。
-
-示例 `/v1/examples` 提供受 JWT 保护的创建、读取、分页、部分更新与删除。Handler → Biz → Store 实现输入校验、主体隔离、唯一冲突和显式零值更新。集成测试通过独立服务进程实际调用 HTTP，并验证重启后 SQLite 数据持久化及运行日志隐私。
+`make test` 实际渲染独立项目，执行 readonly 测试、vet、race、lint 与构建，并通过实际服务进程验证初始化、迁移、JWT/CRUD、资源隔离、非法输入、TLS/CORS、启动失败、日志脱敏和重启持久化。需先 `make tools`，同时需要本机回环监听。
 
 ## 构建与检查
 
@@ -30,9 +28,12 @@ make build
 make tools
 make check
 make race
+
+# 显式启动本次专用容器验证，需要 Docker
+make template-container
 ```
 
-`make tools` 显式安装固定版本 linter 到 `.tools/bin/`。构建与检查使用项目 `.tmp/` 缓存，不安装全局工具，不自动生成源码或修改依赖清单。
+`make tools` 显式安装固定版本 linter 到 `.tools/bin/`。构建与检查使用项目 `.tmp/` 缓存，不安装全局工具，不自动生成源码或修改依赖清单。`template-container` 实际构建独立业务镜像，使用随机回环端口和全新数据卷验证生产禁用开发签发、显式迁移、CRUD 与重启持久化；结束清理本次容器、卷及测试镜像，普通检查不启动 Docker。
 
 ## 技术兼容性验证
 

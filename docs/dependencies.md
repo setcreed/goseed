@@ -1,8 +1,8 @@
 # 依赖与工具核验
 
-核验日期：2026-10-10。版本清单以 [dependencies.lock.json](../dependencies.lock.json) 为准；原始官方仓库响应快照见 [dependency-audit.json](dependency-audit.json) 。固定版本的直接依赖、间接依赖及校验和分别保存在两个 Go 模块的 `go.mod` 与 `go.sum` 中。
+运行库维护核验日期：2026-10-10。版本清单以 [dependencies.lock.json](../dependencies.lock.json) 为准；原始官方仓库响应快照见 [dependency-audit.json](dependency-audit.json) 。固定直接依赖、间接依赖与校验和保存在主模块、兼容性模块及独立业务模板的依赖清单中。
 
-这是 D1 技术核验结果；业务模板尚未实现，运行验证记录以 ROADMAP 为准。主模块只引入 Cobra，其他运行依赖在独立兼容性模块验证，不代表默认项目将包含全部依赖。
+依赖维护证据来自 D1，模板运行验证记录以 ROADMAP 为准。主模块只引入 Cobra，默认业务模板只包含 HTTP、SQLite、JWT 与实际需要的配置/日志/DI/ORM/迁移依赖；独立兼容性模块核验的其他能力不自动进入默认项目。
 
 ## 核验方法
 
@@ -73,3 +73,11 @@
 交叉编译使用 `CGO_ENABLED=0`，验证测试程序可为 Linux amd64、Linux arm64 和 Windows amd64 构建；本机 darwin/arm64 实际运行。交叉编译不代表已在其他平台运行。完整运行结果与尚未完成项统一记入 [ROADMAP](../ROADMAP.md) 。
 
 数据库测试使用 [MySQL 官方镜像](https://hub.docker.com/_/mysql) 的 8.4.11 和 [PostgreSQL 官方镜像](https://hub.docker.com/_/postgres) 的 18.6；实际拉取并测试后，将 RepoDigest 写入版本清单与 Compose 文件，避免 tag 后续变化影响复现。首版业务模板的多版本数据库支持范围留到 D3 验证，D1 不据此声明支持所有服务器版本。
+
+## 默认模板与容器
+
+默认业务模板保存完整 `go.mod` 与 `go.sum`；集成检查直接 readonly 构建、测试、vet、race 和 lint，并核对运行后清单未变化。模板直接依赖及工具链与根目录锁定清单比对，不在普通检查中自动 tidy。
+
+2026-10-11 通过官方 Registry API 与 `docker manifest inspect` 核对 `golang:1.26.4-alpine` 多架构摘要，固定为 `sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648`。镜像的 [官方固定提交 Dockerfile](https://github.com/docker-library/golang/blob/34bfa3703c98a3f4e7dcc808a5b0a754faecb5ef/1.26/alpine3.24/Dockerfile) 明确 Go 1.26.4、平台下载校验和与 CA 证书；模板使用该构建镜像和纯 Go 二进制，运行阶段为 scratch、UID/GID 10001。
+
+实际容器验证通过 `make template-container` 复现，使用专用标签、全新数据卷与随机回环端口；不推送镜像、不操作现有数据库，测试结束清理本次容器、卷与镜像。镜像摘要升级需重新核验并同时更新锁定清单和模板。
