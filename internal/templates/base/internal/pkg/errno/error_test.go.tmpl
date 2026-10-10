@@ -1,0 +1,12 @@
+package errno
+
+import (
+ "errors"
+ "strings"
+ "testing"
+)
+func TestCausesAreRetainedWithoutDisclosure(t *testing.T){
+ cause:=errors.New("secret SQL parameter");wrapped:=WithCause(Internal,cause)
+ if !errors.Is(wrapped,Internal)||!errors.Is(wrapped,cause){t.Fatal("error identity or cause lost")}
+ if strings.Contains(wrapped.Error(),"secret"){t.Fatal("cause disclosed by Error")}
+}

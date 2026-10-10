@@ -11,6 +11,7 @@ import (
  "time"
 
  "[[.Module]]/internal/pkg/config"
+ "[[.Module]]/internal/pkg/contextx"
  "[[.Module]]/migrations"
  "github.com/libtnb/sqlite"
  "github.com/pressly/goose/v3"
@@ -67,7 +68,8 @@ func(q queryLogger)LogMode(logger.LogLevel)logger.Interface{return q}
 func(q queryLogger)Info(context.Context,string,...any){}
 func(q queryLogger)Warn(context.Context,string,...any){}
 func(q queryLogger)Error(context.Context,string,...any){}
-func(q queryLogger)Trace(_ context.Context,begin time.Time,_ func()(string,int64),err error){
+func(q queryLogger)Trace(ctx context.Context,begin time.Time,_ func()(string,int64),err error){
  elapsed:=time.Since(begin)
- if err!=nil && !errors.Is(err,gorm.ErrRecordNotFound){q.logging.Error("database query failed",zap.Duration("duration",elapsed))}else if elapsed>=q.slow{q.logging.Warn("slow database query",zap.Duration("duration",elapsed))}
+ fields:=[]zap.Field{zap.Duration("duration",elapsed),zap.String("request_id",contextx.RequestID(ctx))}
+ if err!=nil && !errors.Is(err,gorm.ErrRecordNotFound){q.logging.Error("database query failed",fields...)}else if elapsed>=q.slow{q.logging.Warn("slow database query",fields...)}
 }

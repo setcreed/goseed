@@ -33,3 +33,13 @@ func TestDevTokenRequiresDevelopmentConfig(t *testing.T){
  t.Setenv("APP_ENV","production");t.Setenv("APP_LOG_FORMAT","json")
  if err:=Run(context.Background(),[]string{"dev","token","--config",filename,"--subject","alice"},io.Discard,"test");err==nil{t.Fatal("production issued development token")}
 }
+
+func TestDevelopmentInitDoesNotOverwriteInvalidFileOrSymlink(t *testing.T){
+ directory:=t.TempDir();filename:=filepath.Join(directory,"app.yaml")
+ content:=[]byte("env: production\njwt:\n  secret: invalid\n")
+ if err:=os.WriteFile(filename,content,0600);err!=nil{t.Fatal(err)}
+ if err:=Init(filename,io.Discard);err==nil{t.Fatal("invalid production config accepted")}
+ after,err:=os.ReadFile(filename);if err!=nil||!bytes.Equal(content,after){t.Fatal("existing invalid config overwritten")}
+ link:=filepath.Join(directory,"linked.yaml");if err:=os.Symlink(filename,link);err!=nil{t.Fatal(err)}
+ if err:=Init(link,io.Discard);err==nil{t.Fatal("symlink accepted")}
+}

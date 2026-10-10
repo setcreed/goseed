@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+	"[[.Module]]/internal/pkg/config"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -24,4 +26,10 @@ func TestRecoveryAndAccessDoNotLogSecrets(t *testing.T) {
 	writer:=httptest.NewRecorder(); router.ServeHTTP(writer,request)
 	if writer.Code!=500 || len(writer.Header().Get("X-Request-ID"))!=32 { t.Fatal("recovery or request ID failed") }
 	for _,secret:=range []string{"test-password-do-not-log","test-token-do-not-log"} { if strings.Contains(logs.String(),secret)||strings.Contains(writer.Body.String(),secret) { t.Fatal("secret leaked") } }
+}
+
+func TestRequestBudgetPropagatesTimeout(t *testing.T){
+ gin.SetMode(gin.ReleaseMode);router:=gin.New();router.Use(RequestID(),Limits(config.HTTP{RequestTimeout:10*time.Millisecond,MaxBodyBytes:1024}));router.GET("/",func(c *gin.Context){<-c.Request.Context().Done();Failure(c,c.Request.Context().Err())})
+ request:=httptest.NewRequest("GET","/",nil);response:=httptest.NewRecorder();started:=time.Now();router.ServeHTTP(response,request)
+ if response.Code!=504||time.Since(started)>time.Second{t.Fatal("request budget was not propagated")}
 }

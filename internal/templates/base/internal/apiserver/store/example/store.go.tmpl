@@ -17,9 +17,10 @@ func translate(err error)error{
  switch {
  case err==nil:return nil
  case errors.Is(err,context.Canceled)||errors.Is(err,context.DeadlineExceeded):return err
- case errors.Is(err,gorm.ErrRecordNotFound):return errno.NotFound
- case errors.Is(err,gorm.ErrDuplicatedKey):return errno.Conflict
- default:return errno.Internal
+ case errors.Is(err,errno.NotFound)||errors.Is(err,errno.Conflict)||errors.Is(err,errno.Internal):return err
+ case errors.Is(err,gorm.ErrRecordNotFound):return errno.WithCause(errno.NotFound,err)
+ case errors.Is(err,gorm.ErrDuplicatedKey):return errno.WithCause(errno.Conflict,err)
+ default:return errno.WithCause(errno.Internal,err)
  }
 }
 func(s *Store)Create(ctx context.Context,item *model.Example)error{return translate(s.db.WithContext(ctx).Create(item).Error)}
