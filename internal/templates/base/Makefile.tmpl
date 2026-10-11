@@ -22,7 +22,7 @@ lint:
 	@.tools/bin/golangci-lint version | grep -F 'version 2.14.0 ' >/dev/null
 	.tools/bin/golangci-lint run ./...
 fmt-check:
-	@files="$$(gofmt -l cmd internal[[if ne .Database "none"]] migrations[[end]])"; test -z "$$files" || { printf '%s\n' "$$files"; exit 1; }
+	@files="$$(gofmt -l cmd internal[[if eq .Transport "grpc"]] pkg[[end]][[if ne .Database "none"]] migrations[[end]])"; test -z "$$files" || { printf '%s\n' "$$files"; exit 1; }
 check: fmt-check test vet lint
 tools:
 	GOBIN=$(CURDIR)/.tools/bin $(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
@@ -38,3 +38,11 @@ migration-status:
 dev: dev-init
 	[[if ne .Database "none"]]$(GO) run ./cmd/apiserver migrate up
 	[[end]]$(GO) run ./cmd/apiserver serve
+
+[[if eq .Transport "grpc"]].PHONY: proto-tools proto-generate
+proto-tools:
+	GOBIN=$(CURDIR)/.tools/bin $(GO) install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+	GOBIN=$(CURDIR)/.tools/bin $(GO) install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
+proto-generate:
+	python3 scripts/proto.py
+[[end]]

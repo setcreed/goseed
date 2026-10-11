@@ -1,0 +1,14 @@
+package example
+import (
+ "context"
+ api "[[.Module]]/pkg/api/example/v1"
+ biz "[[.Module]]/internal/apiserver/biz/example"
+ "[[.Module]]/internal/pkg/errno"
+ "[[.Module]]/internal/pkg/rpc"
+ "google.golang.org/grpc"
+)
+var Permissions=map[string]string{api.ExampleService_Greet_FullMethodName:"read"}
+type Handler struct{api.UnimplementedExampleServiceServer;biz *biz.Biz}
+func New(business *biz.Biz)*Handler{return &Handler{biz:business}}
+func(h *Handler)Register(registrar grpc.ServiceRegistrar){api.RegisterExampleServiceServer(registrar,h)}
+func(h *Handler)Greet(ctx context.Context,request *api.GreetRequest)(*api.Greeting,error){if request==nil||len(request.ProtoReflect().GetUnknown())!=0{return nil,rpc.Status(ctx,errno.Invalid("unknown or missing request fields"))};name:="world";if request.Name!=nil{name=*request.Name};value,err:=h.biz.Greet(ctx,name);if err!=nil{return nil,rpc.Status(ctx,err)};return &api.Greeting{Message:value.Message,Subject:value.Subject},nil}

@@ -1,0 +1,11 @@
+# gRPC 使用与边界
+
+服务默认 `127.0.0.1:9090`，仅 gRPC，无业务 HTTP。强类型配置见 [示例](../configs/app.example.yaml) ，`APP_GRPC_*` 覆盖文件，`serve --address` 覆盖监听。生产必须 TLS，最低 1.2；Reflection 默认关闭，仅开发回环可开启，调用需 JWT。没有公开 Token 签发接口，生产禁用开发签发。
+
+[Proto](../api/proto/example/v1/example.proto) 与已生成代码分开；更新字段使用 optional 保留 false／空字符串，分页省略为 1/20，显式零无效；未知字段拒绝，ID 限 int64 正数。业务校验及资源归属由 Biz 负责。[[if eq .Database "none"]]Greet 省略 name 为 world，显式空字符串拒绝。[[end]]业务 unary 通过 metadata 的单个 authorization 传递 Bearer Token；x-request-id 限 1 至 64 个字母、数字、点号、下划线或连字符，响应回传。取消／更短 deadline 贯穿请求。
+
+标准 Health Check／Watch 公共开放；空服务名和 example.v1.ExampleService 表示就绪，liveness 表示存活。依赖故障在 Check 当次反映，Watch 每 500ms 刷新；关闭通知 NOT_SERVING，Watch 结束。业务流不开放；Reflection 流须认证。
+
+业务错误转换为标准 Status，内部 cause 和 panic 脱敏，不记录 Token、请求、metadata 或主体。优雅关闭等待请求，超过默认 10s 强制 Stop，数据库／缓存在服务返回后关闭。通过 make check 与 make race 验证；外部数据库／Redis 测试需要明确的隔离凭据。
+
+普通构建使用已生成代码。需要更新 Proto 时，先在项目 `.tools/protoc/` 安装固定 protoc 36.2（bin 和 include），执行 `make proto-tools` 安装固定 Go 插件，再 `make proto-generate`；不使用全局工具。生成入口按当前 Go 模块显式映射 Proto 的 Go 导入路径，保持普通构建无需生成工具。详细入口见 [README](../README.md) 。

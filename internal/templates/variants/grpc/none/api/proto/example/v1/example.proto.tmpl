@@ -1,0 +1,6 @@
+syntax = "proto3";
+package example.v1;
+option go_package = "example/v1;examplev1";
+service ExampleService { rpc Greet(GreetRequest) returns (Greeting); }
+message GreetRequest { optional string name=1; }
+message Greeting { string message=1; string subject=2; }

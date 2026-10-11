@@ -1,0 +1,55 @@
+package rpc
+
+import (
+ "context"
+ "crypto/tls"
+ "errors"
+ "net"
+ "sync/atomic"
+ "time"
+ "[[.Module]]/internal/pkg/auth"
+ "[[.Module]]/internal/pkg/config"
+ "go.uber.org/zap"
+ "google.golang.org/grpc"
+ "google.golang.org/grpc/codes"
+ "google.golang.org/grpc/credentials"
+ "google.golang.org/grpc/health"
+ healthpb "google.golang.org/grpc/health/grpc_health_v1"
+ "google.golang.org/grpc/reflection"
+ "google.golang.org/grpc/status"
+)
+const ExampleService="example.v1.ExampleService"
+type Readiness struct{stopping atomic.Bool;CheckDependency func(context.Context)error}
+func(r *Readiness)Check(ctx context.Context)error{if r.stopping.Load(){return errors.New("service is stopping")};if r.CheckDependency!=nil{return r.CheckDependency(ctx)};return ctx.Err()}
+func(r *Readiness)Stop(){r.stopping.Store(true)}
+type Server struct{grpc *grpc.Server;settings config.GRPC;ready *Readiness;health *health.Server;logger *zap.Logger;running atomic.Bool;watchStop context.CancelFunc}
+func New(settings config.GRPC,ready *Readiness,logger *zap.Logger,jwt *auth.JWT,permissions map[string]string,register func(grpc.ServiceRegistrar)[[if eq .Authz "casbin"]],authorization Authorizer[[end]])(*Server,error){
+ [[if eq .Authz "casbin"]]if authorization==nil{return nil,errors.New("authorization is required")}[[end]]
+ watchContext,watchStop:=context.WithCancel(context.Background())
+ options:=[]grpc.ServerOption{grpc.MaxRecvMsgSize(settings.MaxRecvBytes),grpc.MaxSendMsgSize(settings.MaxSendBytes),grpc.MaxHeaderListSize(uint32(settings.MaxHeaderBytes)),grpc.MaxConcurrentStreams(uint32(settings.MaxConcurrentStreams)),grpc.ChainUnaryInterceptor(Unary(jwt,[[if eq .Authz "casbin"]]authorization[[else]]nil[[end]],permissions,settings.RequestTimeout,logger)),grpc.ChainStreamInterceptor(Streams(jwt,settings.Reflection,watchContext))}
+ if settings.TLSCert!=""{certificate,err:=tls.LoadX509KeyPair(settings.TLSCert,settings.TLSKey);if err!=nil{watchStop();return nil,errors.New("invalid TLS certificate or private key")};options=append(options,grpc.Creds(credentials.NewTLS(&tls.Config{MinVersion:tls.VersionTLS12,Certificates:[]tls.Certificate{certificate}})))}
+ server:=grpc.NewServer(options...);register(server);healthy:=health.NewServer();healthy.SetServingStatus("",healthpb.HealthCheckResponse_NOT_SERVING);healthy.SetServingStatus(ExampleService,healthpb.HealthCheckResponse_NOT_SERVING);healthy.SetServingStatus("liveness",healthpb.HealthCheckResponse_NOT_SERVING)
+ healthpb.RegisterHealthServer(server,&healthService{Server:healthy,ready:ready});if settings.Reflection{reflection.Register(server)}
+ return &Server{grpc:server,settings:settings,ready:ready,health:healthy,logger:logger,watchStop:watchStop},nil
+}
+type healthService struct{*health.Server;ready *Readiness}
+func(h *healthService)Watch(request *healthpb.HealthCheckRequest,stream grpc.ServerStreamingServer[healthpb.HealthCheckResponse])error{if len(request.ProtoReflect().GetUnknown())!=0{return status.Error(codes.InvalidArgument,"unknown request field")};if request.Service!=""&&request.Service!=ExampleService&&request.Service!="liveness"{return status.Error(codes.NotFound,"unknown service")};return h.Server.Watch(request,stream)}
+func(h *healthService)Check(ctx context.Context,request *healthpb.HealthCheckRequest)(*healthpb.HealthCheckResponse,error){
+ if len(request.ProtoReflect().GetUnknown())!=0{return nil,status.Error(codes.InvalidArgument,"unknown request field")}
+ if request.Service!=""&&request.Service!=ExampleService&&request.Service!="liveness"{return nil,status.Error(codes.NotFound,"unknown service")}
+ state:=healthpb.HealthCheckResponse_SERVING
+ if request.Service=="liveness"{if h.ready.stopping.Load(){state=healthpb.HealthCheckResponse_NOT_SERVING}}else{budget,cancel:=context.WithTimeout(ctx,200*time.Millisecond);defer cancel();if h.ready.Check(budget)!=nil{state=healthpb.HealthCheckResponse_NOT_SERVING}}
+ return &healthpb.HealthCheckResponse{Status:state},nil
+}
+func(s *Server)Run(ctx context.Context)error{listener,err:=net.Listen("tcp",s.settings.Address);if err!=nil{s.watchStop();return errors.New("cannot listen on configured gRPC address")};return s.Serve(ctx,listener)}
+func(s *Server)Serve(ctx context.Context,listener net.Listener)error{
+ defer func(){_ = listener.Close()}();if !s.running.CompareAndSwap(false,true){return errors.New("gRPC server already served")}
+ monitor,end:=context.WithCancel(ctx);defer end();updates:=make(chan struct{});go func(){defer close(updates);ticker:=time.NewTicker(500*time.Millisecond);defer ticker.Stop();for{state:=healthpb.HealthCheckResponse_SERVING;budget,cancel:=context.WithTimeout(monitor,200*time.Millisecond);if s.ready.Check(budget)!=nil{state=healthpb.HealthCheckResponse_NOT_SERVING};cancel();s.health.SetServingStatus("",state);s.health.SetServingStatus(ExampleService,state);s.health.SetServingStatus("liveness",healthpb.HealthCheckResponse_SERVING);select{case <-monitor.Done():return;case <-ticker.C:}}}()
+ finished:=make(chan error,1);go func(){finished<-s.grpc.Serve(listener)}();s.logger.Info("gRPC server started",zap.String("address",listener.Addr().String()))
+ var serveError error;returned:=false
+ select{case serveError=<-finished:returned=true;case <-ctx.Done():}
+ s.ready.Stop();end();<-updates;s.health.Shutdown();s.watchStop()
+ drained:=make(chan struct{});go func(){s.grpc.GracefulStop();close(drained)}();timer:=time.NewTimer(s.settings.ShutdownTimeout);defer timer.Stop();forced:=false
+ select{case <-drained:case <-timer.C:forced=true;s.grpc.Stop();<-drained}
+ if !returned{serveError=<-finished};if forced{return errors.New("gRPC shutdown exceeded its deadline")};if serveError!=nil&&!errors.Is(serveError,grpc.ErrServerStopped){return errors.New("gRPC server stopped unexpectedly")};return nil
+}

@@ -1,0 +1,5 @@
+# 项目进度
+
+当前已生成纯 gRPC／JWT、配置日志、标准健康、TLS 与生命周期。[[if ne .Database "none"]]包含 [[.Database]]、显式迁移与主体隔离 CRUD。[[else]]无数据库，认证问候无持久化。[[end]][[if .Redis]]包含可选缓存与依赖检查。[[end]][[if eq .Authz "casbin"]]包含默认拒绝 RBAC；策略更新后重启实例。[[end]]
+
+开发具体业务前核对 [README](README.md) 与 [协议说明](docs/grpc.md) ，按实际容量、授权、备份恢复需求验证上线配置。

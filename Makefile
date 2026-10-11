@@ -18,10 +18,10 @@ build:
 	$(GO) build -mod=readonly -trimpath -ldflags '-X main.version=$(VERSION)' -o bin/goseed ./cmd/goseed
 
 test:
-	$(GO) test -mod=readonly $(GO_PACKAGES)
+	$(GO) test -mod=readonly -timeout=20m $(GO_PACKAGES)
 
 race:
-	$(GO) test -mod=readonly -race $(GO_PACKAGES)
+	$(GO) test -mod=readonly -race -timeout=20m $(GO_PACKAGES)
 
 vet:
 	$(GO) vet -mod=readonly $(GO_PACKAGES)
@@ -61,7 +61,7 @@ protocol-check:
 	python3 scripts/protocol-check.py
 
 template-container:
-	GOSEED_TEST_DOCKER=1 $(GO) test -mod=readonly -count=1 -timeout=15m -v ./tests/integration -run '^Test(DefaultProject|NoDatabaseProject|CasbinFileContainer)$$'
+	GOSEED_TEST_DOCKER=1 $(GO) test -mod=readonly -count=1 -timeout=15m -v ./tests/integration -run '^Test(DefaultProject|NoDatabaseProject|CasbinFileContainer|GRPCContainer)$$'
 
 template-db:
 	python3 scripts/template-db.py

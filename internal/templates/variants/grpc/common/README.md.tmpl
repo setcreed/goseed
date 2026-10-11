@@ -1,0 +1,21 @@
+# [[.Name]]
+
+Go 1.26.4 独立 gRPC 项目。[[if eq .Database "none"]]提供认证问候，Handler → Biz，无 ORM 或虚假持久化。[[else]]提供认证 CRUD，Handler → Biz → Store，使用 [[.Database]]，迁移显式执行。[[end]]配置与日志、请求预算、标准健康服务、TLS 和有期限关闭已接入。
+
+```sh
+make build
+./bin/apiserver dev init
+[[if ne .Database "none"]]./bin/apiserver migrate up
+[[end]]./bin/apiserver dev token --subject alice
+./bin/apiserver serve
+```
+
+开发环境使用回环明文。另一终端设置开发签发的 `APP_CLIENT_TOKEN`，调用：
+
+```sh
+go run ./cmd/exampleclient --tls=false [[if eq .Database "none"]]--name world[[else]]--action list[[end]]
+```
+
+[[if eq .Authz "casbin"]]默认空策略拒绝业务访问；先按 [授权说明](docs/authz.md) 配置 example 权限，再启动或重启服务。[[end]]配置入口：[配置示例](configs/app.example.yaml) 。生产使用 `APP_ENV=production`、JSON 日志、真实 JWT 密钥与 grpc.tls_cert/tls_key；证书应以只读方式挂载，私钥可由进程 UID 10001 读取。客户端默认验证 TLS，可用 `--ca` 添加私有 CA；不提供跳过证书验证。
+
+详见 [协议说明](docs/grpc.md) 、[项目规范](AGENTS.md) 与 [进度](ROADMAP.md) 。[[if .Redis]]缓存边界见 [Redis 文档](docs/redis.md) 。[[end]]

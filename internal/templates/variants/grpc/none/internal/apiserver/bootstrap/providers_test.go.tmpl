@@ -1,0 +1,22 @@
+package bootstrap
+
+import (
+ "context"
+ "encoding/base64"
+ "net"
+ "path/filepath"
+ [[if eq .Authz "casbin"]]"os"[[end]]
+ "testing"
+ "[[.Module]]/internal/pkg/config"
+)
+
+func TestStartupWithoutDatabaseAndListenFailures(t *testing.T){
+ [[if .Redis]]t.Setenv("APP_REDIS_PASSWORD","unit-test-placeholder");t.Setenv("APP_REDIS_ADDRESS","127.0.0.1:1")[[end]]
+ t.Setenv("APP_JWT_SECRET",base64.StdEncoding.EncodeToString(make([]byte,32)))
+ t.Setenv("APP_ENV","development");settings,err:=config.Load(filepath.Join(t.TempDir(),"absent.yaml"),false,config.Overrides{});if err!=nil{t.Fatal(err)}
+ [[if eq .Authz "casbin"]]settings.Authz.PolicyFile=filepath.Join(t.TempDir(),"policy.csv");if err:=os.WriteFile(settings.Authz.PolicyFile,nil,0600);err!=nil{t.Fatal(err)}[[end]]
+ settings.GRPC.TLSCert="missing-cert";settings.GRPC.TLSKey="missing-key";if _,err:=New(settings,"test");err==nil{t.Fatal("invalid TLS accepted")}
+ settings.GRPC.TLSCert="";settings.GRPC.TLSKey=""
+ occupied,err:=net.Listen("tcp","127.0.0.1:0");if err!=nil{t.Fatal(err)};defer func(){_ = occupied.Close()}();settings.GRPC.Address=occupied.Addr().String()
+ application,err:=New(settings,"test");if err!=nil{t.Fatal(err)};if err:=application.Run(context.Background());err==nil{t.Fatal("occupied port accepted")}
+}

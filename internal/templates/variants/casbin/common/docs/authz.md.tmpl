@@ -1,10 +1,10 @@
 # Casbin 授权
 
-本项目在生成时选择了 Casbin；JWT 识别用户，授权组件判定角色权限，Biz 继续校验资源归属。默认策略为空，所有业务操作返回 403；缺失或无效 Token 返回 401。公共存活/就绪与 CORS 预检保持原有行为。配置入口见 [配置示例](../configs/app.example.yaml) ，命令入口见 [README](../README.md) 。
+本项目在生成时选择了 Casbin；JWT 识别用户，授权组件判定角色权限，Biz 继续校验资源归属。默认策略为空，[[if eq .Transport "grpc"]]所有业务操作返回 PermissionDenied；缺失或无效 Token 返回 Unauthenticated。标准健康服务保持公共入口。[[else]]所有业务操作返回 403；缺失或无效 Token 返回 401。公共存活/就绪与 CORS 预检保持原有行为。[[end]]配置入口见 [配置示例](../configs/app.example.yaml) ，命令入口见 [README](../README.md) 。
 
 ## 权限与策略
 
-固定模型使用用户 → 角色 → 资源/操作，不使用 URL、任意表达式、通配符、角色继承或超级管理员绕过。资源为 `example`，[[if eq .Database "none"]]操作只有 `read`。[[else]]操作为 `read/create/update/delete`，分别对应 GET、POST、PATCH、DELETE；GET 列表和详情共用 read。[[end]]业务协议入口登记同一资源与操作；增加业务时需同步登记权限及验证。
+固定模型使用用户 → 角色 → 资源/操作，不使用 URL、任意表达式、通配符、角色继承或超级管理员绕过。资源为 `example`，[[if eq .Database "none"]]操作只有 `read`。[[else]]操作为 `read/create/update/delete`，[[if eq .Transport "grpc"]]分别对应 List/Get、Create、Update、Delete RPC。[[else]]分别对应 GET、POST、PATCH、DELETE；GET 列表和详情共用 read。[[end]][[end]]业务协议入口登记同一资源与操作；增加业务时需同步登记权限及验证。
 
 策略采用严格 CSV，以下内容明确授予 alice 读取自己的示例：
 

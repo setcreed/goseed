@@ -25,6 +25,18 @@ func TestDeliveredContracts(t *testing.T) {
 	}
 }
 
+func TestGRPCContracts(t *testing.T) {
+	for _, backend := range []string{"sqlite", "mysql", "postgres", "none"} {
+		for _, redis := range []bool{false, true} {
+			for _, authorization := range []string{"none", "casbin"} {
+				t.Run(backend+"-"+authorization+map[bool]string{false: "", true: "-redis"}[redis], func(t *testing.T) {
+					checkDeliveredOptions(t, Options{Database: backend, Redis: redis, Authz: authorization, Transport: "grpc"})
+				})
+			}
+		}
+	}
+}
+
 func checkDeliveredContracts(t *testing.T, backend string) {
 	checkDeliveredOptions(t, Options{Database: backend})
 }
@@ -61,10 +73,13 @@ func checkDeliveredOptions(t *testing.T, options Options) {
 	if strings.Contains(manifest, "github.com/casbin/casbin/v3 ") != casbin {
 		t.Fatal("incorrect Casbin dependency composition")
 	}
-	for _, filename := range []string{"internal/pkg/authz/policy.go", "internal/pkg/middleware/authz.go", "docs/authz.md", "configs/policy.csv"} {
+	for _, filename := range []string{"internal/pkg/authz/policy.go", "docs/authz.md", "configs/policy.csv"} {
 		if _, exists := files[filename]; exists != casbin {
 			t.Fatalf("incorrect Casbin file composition: %s", filename)
 		}
+	}
+	if _, exists := files["internal/pkg/middleware/authz.go"]; exists != (casbin && options.Transport != "grpc") {
+		t.Fatal("incorrect HTTP authorization middleware composition")
 	}
 	for _, filename := range []string{"internal/pkg/authz/database.go", "migrations/00002_casbin.sql"} {
 		if _, exists := files[filename]; exists != (casbin && backend != "none") {
@@ -140,6 +155,30 @@ func checkDeliveredOptions(t *testing.T, options Options) {
 				t.Fatalf("%s links to missing file %s", filename, target)
 			}
 		}
+	}
+	if options.Transport == "grpc" {
+		for _, filename := range []string{"api/proto/example/v1/example.proto", "pkg/api/example/v1/example.pb.go", "pkg/api/example/v1/example_grpc.pb.go", "internal/pkg/rpc/server.go", "internal/pkg/rpc/interceptors.go", "cmd/exampleclient/main.go", "docs/grpc.md", "scripts/proto.py"} {
+			if _, exists := files[filename]; !exists {
+				t.Fatalf("missing gRPC file %s", filename)
+			}
+		}
+		for filename, content := range files {
+			if strings.HasPrefix(filename, "internal/pkg/server/") || strings.HasPrefix(filename, "internal/pkg/middleware/") || strings.HasPrefix(filename, "internal/apiserver/handler/http/") || strings.HasPrefix(filename, "api/openapi/") || filename == "internal/apiserver/router.go" {
+				t.Fatalf("HTTP file leaked %s", filename)
+			}
+			if strings.HasSuffix(filename, ".go") || filename == "go.mod" || filename == "go.sum" {
+				if strings.Contains(string(content), "github.com/gin-gonic/") {
+					t.Fatalf("Gin leaked %s", filename)
+				}
+			}
+		}
+		if strings.Contains(string(files["configs/app.example.yaml"]), "http:") {
+			t.Fatal("HTTP config leaked")
+		}
+		if !strings.Contains(manifest, "google.golang.org/grpc "+lock.Runtime["google.golang.org/grpc"]) {
+			t.Fatal("gRPC lock differs")
+		}
+		return
 	}
 	var swagger map[string]any
 	if err := json.Unmarshal(files["api/openapi/swagger.json"], &swagger); err != nil {

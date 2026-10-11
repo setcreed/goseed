@@ -1,0 +1,10 @@
+# [[.Name]] 项目规范
+
+独立 Go 1.26.4 gRPC 业务项目。运行时不依赖生成器。目录先看 [README](README.md) 与 [ROADMAP](ROADMAP.md) ，协议见 [说明](docs/grpc.md) ，配置见 [示例](configs/app.example.yaml) 。[[if eq .Authz "casbin"]]授权见 [策略说明](docs/authz.md) 。[[end]][[if .Redis]]缓存见 [Redis 说明](docs/redis.md) 。[[end]]
+
+- api/proto/ 保存契约，pkg/api/ 为可供其他 Go 服务导入的生成代码；修改契约后显式生成，勿手工改生成代码。
+- handler/grpc/ 仅做协议转换，biz/ 校验业务及归属，[[if ne .Database "none"]]store/ 持有数据库，[[end]]bootstrap/ 组装依赖，DI 只在此使用。
+- internal/pkg/rpc/ 持有服务、安全链、健康服务与关闭；新增方法必须登记 JWT／授权权限，业务只支持 unary。
+- 公共入口仅标准健康服务；Reflection 开发回环且须 JWT。生产必须验证 TLS，无公开签发或策略管理入口。
+- Context 贯穿调用，错误不披露 cause，日志不记录正文、主体或 metadata。[[if ne .Database "none"]]迁移显式执行，禁止 AutoMigrate。[[end]]
+- 验证入口 make check、make race，协议生成入口 make proto-tools 与 make proto-generate。外部服务测试使用本次随机隔离库，不修改已有业务库。

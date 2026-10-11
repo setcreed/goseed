@@ -1,0 +1,21 @@
+package rpc
+import (
+ "go.uber.org/zap"
+ "google.golang.org/grpc/grpclog"
+)
+// Set once by the process entry before serving; never forward SDK arguments.
+func InstallProtocolLogger(logger *zap.Logger){grpclog.SetLoggerV2(protocolLogger{logger})}
+type protocolLogger struct{logger *zap.Logger}
+func(p protocolLogger)Info(...any){p.logger.Debug("gRPC protocol event")}
+func(p protocolLogger)Infoln(...any){p.Info()}
+func(p protocolLogger)Infof(string,...any){p.Info()}
+func(p protocolLogger)Warning(...any){p.logger.Warn("gRPC protocol warning")}
+func(p protocolLogger)Warningln(...any){p.Warning()}
+func(p protocolLogger)Warningf(string,...any){p.Warning()}
+func(p protocolLogger)Error(...any){p.logger.Error("gRPC protocol error")}
+func(p protocolLogger)Errorln(...any){p.Error()}
+func(p protocolLogger)Errorf(string,...any){p.Error()}
+func(p protocolLogger)Fatal(...any){p.logger.Fatal("gRPC protocol fatal")}
+func(p protocolLogger)Fatalln(...any){p.Fatal()}
+func(p protocolLogger)Fatalf(string,...any){p.Fatal()}
+func(p protocolLogger)V(int)bool{return false}

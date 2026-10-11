@@ -9,6 +9,7 @@ import (
 )
 
 func TestRedisConfiguration(t *testing.T){
+ [[if eq .Transport "grpc"]]t.Setenv("APP_GRPC_TLS_CERT","unit-cert.pem");t.Setenv("APP_GRPC_TLS_KEY","unit-key.pem")[[end]]
  t.Setenv("APP_JWT_SECRET",base64.StdEncoding.EncodeToString(make([]byte,32)))
  [[if or (eq .Database "mysql") (eq .Database "postgres")]]t.Setenv("APP_DATABASE_PASSWORD","unit-placeholder")[[end]]
  t.Setenv("APP_REDIS_PASSWORD","unit-placeholder")

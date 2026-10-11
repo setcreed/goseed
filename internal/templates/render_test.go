@@ -66,6 +66,32 @@ func TestInvalidProject(t *testing.T) {
 	}
 }
 
+func TestGRPCPlanAndInvalidTransport(t *testing.T) {
+	project := Project{Name: "short", Module: "example.com/different-name"}
+	options := Options{Transport: "grpc", Database: "none", Redis: true, Authz: "casbin"}
+	first, err := Render(project, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := Render(project, options)
+	if err != nil || len(first) == 0 || len(first) != len(second) {
+		t.Fatal("inconsistent gRPC plan")
+	}
+	for i, file := range first {
+		if file.Path != second[i].Path || !bytes.Equal(file.Content, second[i].Content) {
+			t.Fatal("non-deterministic gRPC plan")
+		}
+		if i > 0 && first[i-1].Path >= file.Path {
+			t.Fatal("plan order or duplicate")
+		}
+	}
+	for _, invalid := range []string{"GRPC", "dual", "gateway", "../grpc", "grpc\n"} {
+		if files, err := Render(project, Options{Transport: invalid}); err == nil || files != nil {
+			t.Fatal("invalid transport returned a plan")
+		}
+	}
+}
+
 func TestCasbinPlansAndInvalidOptions(t *testing.T) {
 	project := Project{Name: "demo", Module: "example.com/demo"}
 	for _, backend := range []string{"sqlite", "mysql", "postgres", "none"} {

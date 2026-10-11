@@ -1,0 +1,43 @@
+package main
+import (
+ "context"
+ "crypto/tls"
+ "crypto/x509"
+ "errors"
+ "flag"
+ "fmt"
+ "net"
+ "os"
+ "time"
+ api "[[.Module]]/pkg/api/example/v1"
+ "google.golang.org/grpc"
+ "google.golang.org/grpc/credentials"
+ "google.golang.org/grpc/credentials/insecure"
+ "google.golang.org/grpc/metadata"
+ "google.golang.org/grpc/status"
+ "google.golang.org/protobuf/encoding/protojson"
+ "google.golang.org/protobuf/proto"
+ healthpb "google.golang.org/grpc/health/grpc_health_v1"
+)
+func run()error{
+ address:=flag.String("address","127.0.0.1:9090","gRPC address");secure:=flag.Bool("tls",true,"verify TLS; plaintext is loopback development only");ca:=flag.String("ca","","additional trusted CA");serverName:=flag.String("server-name","","verified TLS server name");action:=flag.String("action","[[if eq .Database "none"]]greet[[else]]list[[end]]","operation");name:=flag.String("name","","example name");requestID:=flag.String("request-id","","request ID")
+ [[if ne .Database "none"]]id:=flag.Uint64("id",0,"resource ID");description:=flag.String("description","","description");enabled:=flag.Bool("enabled",true,"enabled");page:=flag.Int("page",1,"page");pageSize:=flag.Int("page-size",20,"page size")[[end]]
+ flag.Parse();if flag.NArg()!=0{return errors.New("unexpected arguments")};provided:=map[string]bool{};flag.Visit(func(f *flag.Flag){provided[f.Name]=true})
+ host,_,err:=net.SplitHostPort(*address);if err!=nil||host==""{return errors.New("invalid address")}
+ var transport credentials.TransportCredentials
+ if *secure{roots,err:=x509.SystemCertPool();if err!=nil{roots=x509.NewCertPool()};if *ca!=""{data,err:=os.ReadFile(*ca);if err!=nil||!roots.AppendCertsFromPEM(data){return errors.New("invalid client CA")}};transport=credentials.NewTLS(&tls.Config{MinVersion:tls.VersionTLS12,RootCAs:roots,ServerName:*serverName})}else{if *ca!=""||*serverName!=""||(host!="localhost"&&!net.ParseIP(host).IsLoopback()){return errors.New("plaintext requires loopback without TLS options")};transport=insecure.NewCredentials()}
+ connection,err:=grpc.NewClient(*address,grpc.WithTransportCredentials(transport),grpc.WithDisableRetry());if err!=nil{return errors.New("cannot create client")};defer func(){_ = connection.Close()}()
+ ctx,cancel:=context.WithTimeout(context.Background(),5*time.Second);defer cancel()
+ if token:=os.Getenv("APP_CLIENT_TOKEN");token!=""{ctx=metadata.AppendToOutgoingContext(ctx,"authorization","Bearer "+token)};if *requestID!=""{ctx=metadata.AppendToOutgoingContext(ctx,"x-request-id",*requestID)}
+ client:=api.NewExampleServiceClient(connection);var response proto.Message
+ switch *action{case "health":response,err=healthpb.NewHealthClient(connection).Check(ctx,&healthpb.HealthCheckRequest{})
+ [[if eq .Database "none"]]case "greet":request:=&api.GreetRequest{};if provided["name"]{request.Name=name};response,err=client.Greet(ctx,request)
+ [[else]]case "list":if *page<0||*page>100000||*pageSize<0||*pageSize>100{return errors.New("invalid pagination")};request:=&api.ListRequest{};if provided["page"]{value:=int32(*page);request.Page=&value};if provided["page-size"]{value:=int32(*pageSize);request.PageSize=&value};response,err=client.List(ctx,request)
+ case "get":response,err=client.Get(ctx,&api.GetRequest{Id:*id})
+ case "create":request:=&api.CreateRequest{Name:*name,Description:*description};if provided["enabled"]{request.Enabled=enabled};response,err=client.Create(ctx,request)
+ case "update":request:=&api.UpdateRequest{Id:*id};if provided["name"]{request.Name=name};if provided["description"]{request.Description=description};if provided["enabled"]{request.Enabled=enabled};response,err=client.Update(ctx,request)
+ case "delete":response,err=client.Delete(ctx,&api.GetRequest{Id:*id})
+ [[end]]default:return errors.New("unknown action")}
+ if err!=nil{return fmt.Errorf("RPC request failed: %s",status.Code(err))};data,err:=protojson.MarshalOptions{UseProtoNames:true,EmitUnpopulated:true}.Marshal(response);if err!=nil{return errors.New("cannot encode response")};_,err=fmt.Fprintln(os.Stdout,string(data));return err
+}
+func main(){if err:=run();err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(1)}}

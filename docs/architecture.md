@@ -93,8 +93,8 @@ shop/
 │       └── server/
 ├── api/
 │   ├── openapi/
-│   └── proto/apiserver/v1/
-├── pkg/api/apiserver/v1/
+│   └── proto/example/v1/
+├── pkg/api/example/v1/
 ├── configs/app.example.yaml
 ├── migrations/
 ├── specs/
@@ -108,7 +108,7 @@ shop/
 
 这是能力全集示意，实际按参数生成：HTTP-only 不生成 gRPC、Proto 与公开 Go 协议包；grpc-only 不生成 Gin 业务 Handler；Gateway 不生成同一业务的 Gin Handler；无数据库不生成 Store、Model 或数据库迁移。只有存在实际内容时才创建目录。
 
-`pkg/api` 只承载供 Go 客户端导入的生成协议类型，不作为公共工具杂物目录。`api/v1` 表达协议版本，Biz 不默认按版本分目录。
+`pkg/api` 只承载供 Go 客户端导入的生成协议类型，不作为公共工具杂物目录。`api/proto/<module>/v1` 保存业务模块的 Proto，`pkg/api/<module>/v1` 保存对应生成代码；`v1` 表达协议版本，Biz 不默认按版本分目录。纯 gRPC 的服务与拦截器位于 `internal/pkg/rpc/`，协议运行约束见 [纯 gRPC 模板](template-grpc.md) 。
 
 `goseed.yaml` 是版本化生成元数据，包含模板版本、模块路径、能力选择和业务登记。它不是服务运行配置，也不能作为容器中的必需文件。
 

@@ -1,0 +1,57 @@
+env: production
+grpc:
+  address: 127.0.0.1:9090
+  request_timeout: 5s
+  shutdown_timeout: 10s
+  max_recv_bytes: 1048576
+  max_send_bytes: 2097152
+  max_header_bytes: 65536
+  max_concurrent_streams: 128
+  tls_cert: ""
+  tls_key: ""
+  reflection: false
+log:
+  level: info
+  format: json
+[[if ne .Database "none"]]database:
+[[if eq .Database "sqlite"]]
+  path: data/app.db
+  busy_timeout: 5s
+[[else]]
+  host: 127.0.0.1
+  port: [[if eq .Database "mysql"]]3306[[else]]5432[[end]]
+  user: [[.Name]]
+  password: ""
+  name: [[.Name]]
+  tls: true
+  ca_file: ""
+  connect_timeout: 5s
+  conn_max_lifetime: 30m
+  conn_max_idle_time: 5m
+[[end]]
+  max_open: 4
+  max_idle: 2
+  slow_threshold: 200ms
+[[end]]
+jwt:
+  secret: ""
+  issuer: [[.Name]]
+  audience: [[.Name]]-api
+  ttl: 15m
+[[if .Redis]]redis:
+  address: 127.0.0.1:6379
+  username: ""
+  password: ""
+  db: 0
+  key_prefix: [[.Name]]
+  ttl: 30s
+  command_timeout: 200ms
+  dial_timeout: 1s
+  pool_size: 4
+  required: false
+  tls: true
+  ca_file: ""
+[[end]]
+[[if and (eq .Authz "casbin") (eq .Database "none")]]authz:
+  policy_file: configs/policy.csv
+[[end]]

@@ -29,9 +29,10 @@ type Project struct {
 
 // Options selects source at generation time, never at service runtime.
 type Options struct {
-	Database string
-	Redis    bool
-	Authz    string
+	Database  string
+	Redis     bool
+	Authz     string
+	Transport string
 }
 
 type templateData struct {
@@ -47,7 +48,7 @@ func Default(project Project) ([]File, error) {
 	return Render(project, Options{})
 }
 
-// Render prepares a standalone HTTP/JWT project with the selected storage.
+// Render prepares a standalone project with the selected transport and storage.
 func Render(project Project, options Options) ([]File, error) {
 	if !namePattern.MatchString(project.Name) {
 		return nil, fmt.Errorf("invalid project name")
@@ -72,12 +73,18 @@ func Render(project Project, options Options) ([]File, error) {
 	if options.Authz != "none" && options.Authz != "casbin" {
 		return nil, fmt.Errorf("unsupported authorization")
 	}
+	if options.Transport == "" {
+		options.Transport = "http"
+	}
+	if options.Transport != "http" && options.Transport != "grpc" {
+		return nil, fmt.Errorf("unsupported transport")
+	}
 	data := templateData{Project: project, Options: options}
 	base, err := renderTree(sources, "base", data)
 	if err != nil {
 		return nil, err
 	}
-	if options.Database == "sqlite" && !options.Redis && options.Authz == "none" {
+	if options.Database == "sqlite" && !options.Redis && options.Authz == "none" && options.Transport == "http" {
 		return base, nil
 	}
 	// Variant directories intentionally replace matching base files, and add
@@ -106,6 +113,20 @@ func Render(project Project, options Options) ([]File, error) {
 			manifest = "redis"
 		}
 		directories = append(directories, "variants/casbin/manifests/"+options.Database+"/"+manifest)
+	}
+	if options.Transport == "grpc" {
+		profile := "plain"
+		if options.Authz == "casbin" {
+			profile = "casbin"
+		}
+		if options.Redis {
+			profile += "-redis"
+		}
+		directories = append(directories, "variants/grpc/common")
+		if options.Database != "none" {
+			directories = append(directories, "variants/grpc/sql")
+		}
+		directories = append(directories, "variants/grpc/"+options.Database, "variants/grpc/manifests/"+options.Database+"/"+profile)
 	}
 	for _, directory := range directories {
 		variant, err := renderTree(sources, directory, data)
@@ -144,6 +165,11 @@ func renderTree(source fs.FS, root string, data templateData) ([]File, error) {
 			return fmt.Errorf("unrecognized template: %s", filename)
 		}
 		relative := strings.TrimSuffix(strings.TrimPrefix(filename, root+"/"), ".tmpl")
+		if data.Transport == "grpc" {
+			if strings.HasPrefix(relative, "internal/apiserver/handler/http/") || strings.HasPrefix(relative, "internal/pkg/middleware/") || strings.HasPrefix(relative, "internal/pkg/server/") || strings.HasPrefix(relative, "api/openapi/") || relative == "internal/apiserver/router.go" || relative == "internal/apiserver/router_test.go" {
+				return nil
+			}
+		}
 		if data.Database == "none" {
 			for _, prefix := range []string{"migrations/", "internal/pkg/database/", "internal/apiserver/model/", "internal/apiserver/store/"} {
 				if strings.HasPrefix(relative, prefix) {

@@ -1,0 +1,52 @@
+package bootstrap
+import (
+ "context"
+ "encoding/base64"
+ "net"
+ [[if and (eq .Authz "casbin") (eq .Database "none")]]"os"[[end]]
+ [[if or (eq .Database "sqlite") (eq .Database "none")]]"path/filepath"[[end]]
+ "testing"
+ "time"
+ api "[[.Module]]/pkg/api/example/v1"
+ "[[.Module]]/internal/pkg/auth"
+ [[if or (eq .Database "sqlite") (eq .Database "none")]]"[[.Module]]/internal/pkg/config"[[end]]
+ [[if ne .Database "none"]]"[[.Module]]/internal/pkg/database"
+ "go.uber.org/zap"[[end]]
+ [[if or (eq .Database "mysql") (eq .Database "postgres")]]"[[.Module]]/internal/testutil"[[end]]
+ "google.golang.org/grpc"
+ "google.golang.org/grpc/codes"
+ "google.golang.org/grpc/credentials/insecure"
+ "google.golang.org/grpc/metadata"
+ "google.golang.org/grpc/status"
+ [[if and (eq .Authz "casbin") (ne .Database "none")]]"[[.Module]]/internal/pkg/authz"[[end]]
+)
+func TestRPCBusinessIdentityAndPolicy(t *testing.T){
+ t.Setenv("APP_ENV","development");t.Setenv("APP_LOG_FORMAT","json");t.Setenv("APP_JWT_SECRET",base64.StdEncoding.EncodeToString(make([]byte,32)))
+ [[if .Redis]]t.Setenv("APP_REDIS_PASSWORD","placeholder");t.Setenv("APP_REDIS_TLS","false");t.Setenv("APP_REDIS_ADDRESS","127.0.0.1:1")[[end]]
+ [[if or (eq .Database "mysql") (eq .Database "postgres")]]settings:=testutil.Configuration(t);db,err:=database.Open(context.Background(),settings.Database,zap.NewNop());if err!=nil{t.Fatal(err)};if err:=db.Migrate(context.Background());err!=nil{t.Fatal(err)};_ = db.Close()
+ [[else]]settings,err:=config.Load(filepath.Join(t.TempDir(),"absent.yaml"),false,config.Overrides{});if err!=nil{t.Fatal(err)}
+ [[if eq .Database "sqlite"]]settings.Database.Path=filepath.Join(t.TempDir(),"app.db");db,err:=database.Open(context.Background(),settings.Database,zap.NewNop());if err!=nil{t.Fatal(err)};if err:=db.Migrate(context.Background());err!=nil{t.Fatal(err)};_ = db.Close()[[end]][[end]]
+ [[if and (eq .Authz "casbin") (eq .Database "none")]]settings.Authz.PolicyFile=filepath.Join(t.TempDir(),"policy.csv");if err:=os.WriteFile(settings.Authz.PolicyFile,[]byte("p, role:reader, example, read\ng, user:alice, role:reader\ng, user:bob, role:reader\n"),0600);err!=nil{t.Fatal(err)}[[end]]
+ application,err:=New(settings,"test");if err!=nil{t.Fatal(err)}
+ [[if ne .Database "none"]]defer func(){_ = application.Database.Close()}();[[end]][[if .Redis]]defer func(){_ = application.Cache.Close()}()[[end]]
+ listener,err:=net.Listen("tcp","127.0.0.1:0");if err!=nil{t.Fatal(err)};ctx,stop:=context.WithCancel(context.Background());done:=make(chan error,1);go func(){done<-application.Server.Serve(ctx,listener)}();defer func(){stop();if err:=<-done;err!=nil{t.Error(err)}}()
+ connection,err:=grpc.NewClient(listener.Addr().String(),grpc.WithTransportCredentials(insecure.NewCredentials()));if err!=nil{t.Fatal(err)};defer func(){_ = connection.Close()}();client:=api.NewExampleServiceClient(connection)
+ jwt,err:=auth.New(settings.JWT);if err!=nil{t.Fatal(err)}
+ caller:=func(subject string)context.Context{token,err:=jwt.Issue(subject,time.Minute);if err!=nil{t.Fatal(err)};return metadata.NewOutgoingContext(context.Background(),metadata.Pairs("authorization","Bearer "+token))};alice,bob,role:=caller("alice"),caller("bob"),caller("role:reader")
+ [[if eq .Database "none"]]greet:=func(ctx context.Context)(*api.Greeting,error){return client.Greet(ctx,&api.GreetRequest{})}
+ value,err:=greet(alice);if err!=nil||value.Message!="hello, world"||value.Subject!="alice"{t.Fatal("greeting",err)};if _,err:=greet(context.Background());status.Code(err)!=codes.Unauthenticated{t.Fatal("missing authentication")};if _,err:=client.Greet(alice,&api.GreetRequest{Name:new(string)});status.Code(err)!=codes.InvalidArgument{t.Fatal("explicit empty became default")}
+ value,err=greet(bob);if err!=nil||value.Subject!="bob"{t.Fatal("identity isolation")};unknown:=&api.GreetRequest{};unknown.ProtoReflect().SetUnknown([]byte{0x98,0x06,0x01});if _,err:=client.Greet(alice,unknown);status.Code(err)!=codes.InvalidArgument{t.Fatal("unknown field accepted")}
+ [[if eq .Authz "casbin"]]if _,err:=greet(role);status.Code(err)!=codes.PermissionDenied{t.Fatal("role namespace bypass")};if err:=os.WriteFile(settings.Authz.PolicyFile,nil,0600);err!=nil{t.Fatal(err)};if err:=application.Authorization.Reload(context.Background());err!=nil{t.Fatal(err)};if _,err:=greet(alice);status.Code(err)!=codes.PermissionDenied{t.Fatal("revocation bypassed cache")}
+ [[else]]_ = role[[end]]
+ [[else]]
+ [[if eq .Authz "casbin"]]if _,err:=client.List(alice,&api.ListRequest{});status.Code(err)!=codes.PermissionDenied{t.Fatal("empty SQL policy allowed")};rules:=[]authz.Rule{{Ptype:"g",V0:"user:alice",V1:"role:writer"},{Ptype:"g",V0:"user:bob",V1:"role:reader"},{Ptype:"p",V0:"role:reader",V1:"example",V2:"read"}};for _,operation:=range []string{"read","create","update","delete"}{rules=append(rules,authz.Rule{Ptype:"p",V0:"role:writer",V1:"example",V2:operation})};if err:=application.Authorization.Replace(context.Background(),rules);err!=nil{t.Fatal(err)}[[else]]_ = role[[end]]
+ item,err:=client.Create(alice,&api.CreateRequest{Name:"rpc-private"});if err!=nil||!item.Enabled{t.Fatal("create default",err)};if _,err:=client.Create(alice,&api.CreateRequest{Name:"rpc-private"});status.Code(err)!=codes.AlreadyExists{t.Fatal("unique conflict")}
+ if _,err:=client.Get(bob,&api.GetRequest{Id:item.Id});status.Code(err)!=codes.NotFound{t.Fatal("cross-subject access")}
+ disabled:=false;empty:="";updated,err:=client.Update(alice,&api.UpdateRequest{Id:item.Id,Enabled:&disabled,Description:&empty});if err!=nil||updated.Enabled||updated.Description!=""{t.Fatal("zero PATCH lost",err)}
+ if _,err:=client.Update(alice,&api.UpdateRequest{Id:item.Id});status.Code(err)!=codes.InvalidArgument{t.Fatal("empty update accepted")};if _,err:=client.Get(alice,&api.GetRequest{Id:^uint64(0)});status.Code(err)!=codes.InvalidArgument{t.Fatal("ID overflow")}
+ zero:=int32(0);if _,err:=client.List(alice,&api.ListRequest{Page:&zero});status.Code(err)!=codes.InvalidArgument{t.Fatal("zero pagination became default")};page,err:=client.List(alice,&api.ListRequest{});if err!=nil||page.Page!=1||page.PageSize!=20{t.Fatal("omitted pagination")}
+ unknown:=&api.GetRequest{Id:item.Id};unknown.ProtoReflect().SetUnknown([]byte{0x98,0x06,0x01});if _,err:=client.Get(alice,unknown);status.Code(err)!=codes.InvalidArgument{t.Fatal("unknown field accepted")}
+ [[if eq .Authz "casbin"]]if _,err:=client.Delete(bob,&api.GetRequest{Id:item.Id});status.Code(err)!=codes.PermissionDenied{t.Fatal("delete permission absent")};if _,err:=client.Get(role,&api.GetRequest{Id:item.Id});status.Code(err)!=codes.PermissionDenied{t.Fatal("role namespace bypass")};for range 2{if _,err:=client.Get(alice,&api.GetRequest{Id:item.Id});err!=nil{t.Fatal(err)}};if err:=application.Authorization.Replace(context.Background(),nil);err!=nil{t.Fatal(err)};if _,err:=client.Get(alice,&api.GetRequest{Id:item.Id});status.Code(err)!=codes.PermissionDenied{t.Fatal("revocation bypassed cache")};if err:=application.Authorization.Replace(context.Background(),rules);err!=nil{t.Fatal(err)}[[end]]
+ if _,err:=client.Delete(alice,&api.GetRequest{Id:item.Id});err!=nil{t.Fatal(err)};if _,err:=client.Get(alice,&api.GetRequest{Id:item.Id});status.Code(err)!=codes.NotFound{t.Fatal("deleted resource remained")}
+ [[end]]
+}

@@ -1,0 +1,68 @@
+package rpc
+
+import (
+ "context"
+ "crypto/rand"
+ "encoding/hex"
+ "errors"
+ "regexp"
+ "strings"
+ "time"
+ "[[.Module]]/internal/pkg/auth"
+ "[[.Module]]/internal/pkg/contextx"
+ "[[.Module]]/internal/pkg/errno"
+ "go.uber.org/zap"
+ "google.golang.org/grpc"
+ "google.golang.org/grpc/codes"
+ "google.golang.org/grpc/metadata"
+ "google.golang.org/grpc/status"
+)
+
+type Authorizer interface {Authorize(context.Context,string,string,string)error}
+var requestPattern=regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+func Status(ctx context.Context,err error)error{
+ if err==nil{return nil}
+ var e *errno.Error;errors.As(err,&e)
+ if errors.Is(ctx.Err(),context.Canceled)||(e==nil||e.Code!="unavailable")&&errors.Is(err,context.Canceled){return status.Error(codes.Canceled,"request canceled")}
+ if errors.Is(ctx.Err(),context.DeadlineExceeded)||(e==nil||e.Code!="unavailable")&&errors.Is(err,context.DeadlineExceeded){return status.Error(codes.DeadlineExceeded,"request timeout")}
+ code:=codes.Internal;message:="internal server error"
+ if errors.As(err,&e){message=e.Message;switch e.Code {case "invalid_argument":code=codes.InvalidArgument;case "unauthorized":code=codes.Unauthenticated;case "forbidden":code=codes.PermissionDenied;case "not_found":code=codes.NotFound;case "conflict":code=codes.AlreadyExists;case "unavailable":code=codes.Unavailable}}
+ return status.Error(code,message)
+}
+func identity(ctx context.Context,jwt *auth.JWT)(context.Context,error){
+ if err:=ctx.Err();err!=nil{return ctx,Status(ctx,err)}
+ values:=metadata.ValueFromIncomingContext(ctx,"authorization");if len(values)!=1{return ctx,Status(ctx,errno.Unauthorized)}
+ parts:=strings.Fields(values[0]);if len(parts)!=2||!strings.EqualFold(parts[0],"Bearer"){return ctx,Status(ctx,errno.Unauthorized)}
+ subject,err:=jwt.Parse(parts[1]);if err!=nil{return ctx,Status(ctx,err)};return contextx.WithSubject(ctx,subject),nil
+}
+func requestContext(ctx context.Context)(context.Context,error){
+ values:=metadata.ValueFromIncomingContext(ctx,"x-request-id");if len(values)>1{return ctx,status.Error(codes.InvalidArgument,"invalid request ID")}
+ id:="";if len(values)==1{if !requestPattern.MatchString(values[0]){return ctx,status.Error(codes.InvalidArgument,"invalid request ID")};id=values[0]}else{var random [16]byte;if _,err:=rand.Read(random[:]);err!=nil{return ctx,status.Error(codes.Internal,"cannot create request ID")};id=hex.EncodeToString(random[:])}
+ return contextx.WithRequestID(ctx,id),nil
+}
+func Unary(jwt *auth.JWT,authorizer Authorizer,permissions map[string]string,budget time.Duration,logging *zap.Logger)grpc.UnaryServerInterceptor{
+ return func(ctx context.Context,request any,info *grpc.UnaryServerInfo,next grpc.UnaryHandler)(response any,err error){
+  started:=time.Now();method:="unknown";if _,known:=permissions[info.FullMethod];known{method=info.FullMethod};if info.FullMethod=="/grpc.health.v1.Health/Check"{method=info.FullMethod}
+  defer func(){if recover()!=nil{response=nil;err=status.Error(codes.Internal,"internal server error")};logging.Info("RPC completed",zap.String("method",method),zap.String("request_id",contextx.RequestID(ctx)),zap.String("code",status.Code(err).String()),zap.Duration("duration",time.Since(started)))}()
+  ctx,err=requestContext(ctx);if err!=nil{return nil,err};_ = grpc.SetHeader(ctx,metadata.Pairs("x-request-id",contextx.RequestID(ctx)))
+  ctx,cancel:=context.WithTimeout(ctx,budget);defer cancel()
+  if info.FullMethod!="/grpc.health.v1.Health/Check" {
+   operation,known:=permissions[info.FullMethod];if !known{return nil,status.Error(codes.PermissionDenied,"unregistered operation")}
+   ctx,err=identity(ctx,jwt);if err!=nil{return nil,err}
+   if authorizer!=nil{if err:=authorizer.Authorize(ctx,contextx.Subject(ctx),"example",operation);err!=nil{return nil,Status(ctx,err)}}
+  }
+  response,err=next(ctx,request);if err==nil&&ctx.Err()!=nil{return nil,Status(ctx,ctx.Err())};if err!=nil{if _,known:=status.FromError(err);!known{err=Status(ctx,err)}};return response,err
+ }
+}
+// Only explicitly registered operational streams may run; business is unary-only.
+func Streams(jwt *auth.JWT,reflection bool,watchContext context.Context)grpc.StreamServerInterceptor{
+ return func(service any,stream grpc.ServerStream,info *grpc.StreamServerInfo,next grpc.StreamHandler)(err error){
+  defer func(){if recover()!=nil{err=status.Error(codes.Internal,"internal server error")}}()
+  ctx,err:=requestContext(stream.Context());if err!=nil{return err};_ = stream.SetHeader(metadata.Pairs("x-request-id",contextx.RequestID(ctx)))
+  if info.FullMethod=="/grpc.health.v1.Health/Watch"{watch,cancel:=context.WithCancel(ctx);defer cancel();stop:=context.AfterFunc(watchContext,cancel);defer stop();return next(service,&contextStream{ServerStream:stream,ctx:watch})}
+  if reflection&&(info.FullMethod=="/grpc.reflection.v1.ServerReflection/ServerReflectionInfo"||info.FullMethod=="/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo"){ctx,err=identity(ctx,jwt);if err!=nil{return err};return next(service,&contextStream{ServerStream:stream,ctx:ctx})}
+  return status.Error(codes.Unimplemented,"business streams are not supported")
+ }
+}
+type contextStream struct{grpc.ServerStream;ctx context.Context}
+func(s *contextStream)Context()context.Context{return s.ctx}

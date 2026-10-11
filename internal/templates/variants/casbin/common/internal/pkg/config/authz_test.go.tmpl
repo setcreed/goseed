@@ -8,6 +8,7 @@ import (
 )
 
 func TestAuthorizationConfiguration(t *testing.T){
+ [[if eq .Transport "grpc"]]t.Setenv("APP_ENV","development")[[end]]
  t.Setenv("APP_JWT_SECRET",base64.StdEncoding.EncodeToString(make([]byte,32)))
  [[if or (eq .Database "mysql") (eq .Database "postgres")]]t.Setenv("APP_DATABASE_PASSWORD","test-placeholder")[[end]]
  [[if .Redis]]t.Setenv("APP_REDIS_PASSWORD","test-placeholder")[[end]]

@@ -6,7 +6,7 @@
 
 通过 `APP_REDIS_ADDRESS/USERNAME/PASSWORD/DB/KEY_PREFIX/TTL/COMMAND_TIMEOUT/DIAL_TIMEOUT/POOL_SIZE/REQUIRED/TLS/CA_FILE` 覆盖相应 YAML 配置。默认地址 `127.0.0.1:6379`，DB 0，namespace `[[.Name]]`，TTL 30s、命令预算 200ms、拨号上限 1s、池大小 4、required false、TLS true。生产必须安全提供密码，并验证 Redis 服务端 TLS 证书；私有 CA 通过 ca_file 加入。不同应用与环境应配置不同 namespace。开发初始化仅设置开发明文 TLS 选项，地址和凭据由环境提供。
 
-TTL 范围 1s 至 5m，命令预算 1ms 至 5s 且小于 HTTP 请求预算，拨号上限 1ms 至 5s；池大小 1 至 64，DB 0 至 15。namespace 为 1 至 64 个 ASCII 字母/数字/冒号/下划线/连字符，以字母或数字开头。配置无效与 CA 文件错误始终拒绝启动；不允许跳过证书校验或明文回退。
+TTL 范围 1s 至 5m，命令预算 1ms 至 5s 且小于业务请求预算，拨号上限 1ms 至 5s；池大小 1 至 64，DB 0 至 15。namespace 为 1 至 64 个 ASCII 字母/数字/冒号/下划线/连字符，以字母或数字开头。配置无效与 CA 文件错误始终拒绝启动；不允许跳过证书校验或明文回退。
 
 ```sh
 # 安全提供 Redis 地址和凭据后执行；生产保持 APP_REDIS_TLS=true。
@@ -17,9 +17,9 @@ TTL 范围 1s 至 5m，命令预算 1ms 至 5s 且小于 HTTP 请求预算，拨
 
 ## 示例与一致性
 
-[[if ne .Database "none"]]`GET /v1/examples/{id}` 按主体及 ID 缓存成功结果；miss 回源数据库并设置 TTL，更新/删除成功后失效。列表、404 与错误不缓存。缓存数据必须匹配当前主体、ID 及文本约束；坏数据视为 miss。[[else]]`GET /v1/examples?name=Go` 按主体及 name 缓存问候计算结果；结果必须匹配当前主体与问候内容。没有持久化或资源 CRUD。[[end]]Key 为 namespace + 格式版本 + 主体/资源的 SHA-256 摘要，不使用原始主体或输入文本。
+[[if ne .Database "none"]][[if eq .Transport "grpc"]]`ExampleService.Get`[[else]]`GET /v1/examples/{id}`[[end]] 按主体及 ID 缓存成功结果；miss 回源数据库并设置 TTL，更新/删除成功后失效。列表、不存在与错误不缓存。缓存数据必须匹配当前主体、ID 及文本约束；坏数据视为 miss。[[else]][[if eq .Transport "grpc"]]`ExampleService.Greet`[[else]]`GET /v1/examples?name=Go`[[end]] 按主体及 name 缓存问候计算结果；结果必须匹配当前主体与问候内容。没有持久化或资源 CRUD。[[end]]Key 为 namespace + 格式版本 + 主体/资源的 SHA-256 摘要，不使用原始主体或输入文本。
 
-默认可选缓存故障记录脱敏事件并回源，不影响就绪；恢复后后续请求重新连接。`required: true` 时，启动失败关闭客户端并退出，就绪依赖 Redis Ping，读取与 SQL 业务写入前检查失败返回 `unavailable`、HTTP 503。调用方取消和 deadline 始终传播，返回 HTTP 504。
+默认可选缓存故障记录脱敏事件并回源，不影响就绪；恢复后后续请求重新连接。`required: true` 时，启动失败关闭客户端并退出，就绪依赖 Redis Ping，读取与 SQL 业务写入前检查失败返回 [[if eq .Transport "grpc"]]Unavailable。调用方取消返回 Canceled，deadline 返回 DeadlineExceeded；内部缓存预算到期仍为 Unavailable。[[else]]`unavailable`、HTTP 503。调用方取消和 deadline 始终传播，返回 HTTP 504。[[end]]
 
 每次命令有独立短 deadline，明确读写/池等待超时并关闭重试。运行中纯取消可能等待至短命令 deadline，未承诺立即打断 I/O；保留调用方取消错误。不开启客户端缓存和实验流水线，不重试可能已经执行的写入。
 

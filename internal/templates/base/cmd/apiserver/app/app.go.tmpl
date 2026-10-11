@@ -32,7 +32,7 @@ func Run(ctx context.Context, args []string, output io.Writer, version string) e
 	} [[end]][[if and (eq .Authz "casbin") (ne .Database "none")]]else if command=="policy" {if len(args)==0||args[0]!="replace"{return errors.New("expected policy replace")};action=args[0];args=args[1:]} [[end]]else if command != "serve" { return errors.New("unknown command") }
 	flags := flag.NewFlagSet(command,flag.ContinueOnError); flags.SetOutput(io.Discard)
 	filename := flags.String("config",config.DefaultPath,"configuration file")
-	address := flags.String("address","","HTTP listen address")
+	address := flags.String("address","","[[if eq .Transport "grpc"]]gRPC[[else]]HTTP[[end]] listen address")
 	environment := flags.String("env","","runtime environment")
  var subject,lifetime string
  [[if and (eq .Authz "casbin") (ne .Database "none")]]var policyFile string;if command=="policy" {flags.StringVar(&policyFile,"file","","validated policy CSV to import")}[[end]]
