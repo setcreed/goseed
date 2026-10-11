@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net"
+	[[if or (eq .Database "mysql") (eq .Database "postgres")]]"net"[[end]]
 	"os"
 	"strings"
 	"time"
@@ -22,19 +22,6 @@ type Config struct {
 	JWT JWT
 	[[if .Redis]]Redis Redis[[end]]
 	[[if and (eq .Authz "casbin") (eq .Database "none")]]Authz Authz[[end]]
-}
-
-type GRPC struct {
- Address string
- RequestTimeout time.Duration `mapstructure:"request_timeout"`
- ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout"`
- MaxRecvBytes int `mapstructure:"max_recv_bytes"`
- MaxSendBytes int `mapstructure:"max_send_bytes"`
- MaxHeaderBytes int `mapstructure:"max_header_bytes"`
- MaxConcurrentStreams int `mapstructure:"max_concurrent_streams"`
- TLSCert string `mapstructure:"tls_cert"`
- TLSKey string `mapstructure:"tls_key"`
- Reflection bool
 }
 
 type Log struct { Level string; Format string }
@@ -132,14 +119,7 @@ func Load(filename string, explicit bool, overrides Overrides) (Config, error) {
 
 func (c Config) Validate() error {
 	if c.Env != "development" && c.Env != "production" { return errors.New("env must be development or production") }
-host,port,err:=net.SplitHostPort(c.GRPC.Address)
- if err!=nil||host==""||port==""{return errors.New("grpc.address requires host and port")}
- if _,err:=net.LookupPort("tcp",port);err!=nil{return errors.New("invalid grpc.address port")}
- for _,d:=range []time.Duration{c.GRPC.RequestTimeout,c.GRPC.ShutdownTimeout}{if d<time.Millisecond||d>10*time.Minute{return errors.New("invalid gRPC timeouts")}}
- if c.GRPC.MaxRecvBytes<1||c.GRPC.MaxRecvBytes>16<<20||c.GRPC.MaxSendBytes<1||c.GRPC.MaxSendBytes>16<<20||c.GRPC.MaxHeaderBytes<1024||c.GRPC.MaxHeaderBytes>4<<20||c.GRPC.MaxConcurrentStreams<1||c.GRPC.MaxConcurrentStreams>1024{return errors.New("invalid gRPC limits")}
- if (c.GRPC.TLSCert=="")!=(c.GRPC.TLSKey==""){return errors.New("TLS cert and key must be supplied together")}
- if c.Env=="production"&&c.GRPC.TLSCert==""{return errors.New("production gRPC requires TLS")}
- if c.GRPC.Reflection&&(c.Env!="development"||(host!="localhost"&&!net.ParseIP(host).IsLoopback())){return errors.New("reflection requires development and a loopback address")}
+ if err:=c.GRPC.Validate(c.Env);err!=nil{return err}
 	if c.Log.Level != "debug" && c.Log.Level != "info" && c.Log.Level != "warn" && c.Log.Level != "error" { return errors.New("invalid log.level") }
 	if c.Log.Format != "json" && c.Log.Format != "console" { return errors.New("invalid log.format") }
 	if c.Env == "production" && c.Log.Format != "json" { return errors.New("production requires JSON logs") }

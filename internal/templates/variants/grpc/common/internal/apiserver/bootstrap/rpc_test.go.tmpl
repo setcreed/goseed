@@ -29,7 +29,7 @@ func TestRPCBusinessIdentityAndPolicy(t *testing.T){
  [[if and (eq .Authz "casbin") (eq .Database "none")]]settings.Authz.PolicyFile=filepath.Join(t.TempDir(),"policy.csv");if err:=os.WriteFile(settings.Authz.PolicyFile,[]byte("p, role:reader, example, read\ng, user:alice, role:reader\ng, user:bob, role:reader\n"),0600);err!=nil{t.Fatal(err)}[[end]]
  application,err:=New(settings,"test");if err!=nil{t.Fatal(err)}
  [[if ne .Database "none"]]defer func(){_ = application.Database.Close()}();[[end]][[if .Redis]]defer func(){_ = application.Cache.Close()}()[[end]]
- listener,err:=net.Listen("tcp","127.0.0.1:0");if err!=nil{t.Fatal(err)};ctx,stop:=context.WithCancel(context.Background());done:=make(chan error,1);go func(){done<-application.Server.Serve(ctx,listener)}();defer func(){stop();if err:=<-done;err!=nil{t.Error(err)}}()
+ listener,err:=net.Listen("tcp","127.0.0.1:0");if err!=nil{t.Fatal(err)};ctx,stop:=context.WithCancel(context.Background());done:=make(chan error,1);go func(){done<-application.[[if eq .Transport "dual"]]RPC[[else]]Server[[end]].Serve(ctx,listener)}();defer func(){stop();if err:=<-done;err!=nil{t.Error(err)}}()
  connection,err:=grpc.NewClient(listener.Addr().String(),grpc.WithTransportCredentials(insecure.NewCredentials()));if err!=nil{t.Fatal(err)};defer func(){_ = connection.Close()}();client:=api.NewExampleServiceClient(connection)
  jwt,err:=auth.New(settings.JWT);if err!=nil{t.Fatal(err)}
  caller:=func(subject string)context.Context{token,err:=jwt.Issue(subject,time.Minute);if err!=nil{t.Fatal(err)};return metadata.NewOutgoingContext(context.Background(),metadata.Pairs("authorization","Bearer "+token))};alice,bob,role:=caller("alice"),caller("bob"),caller("role:reader")

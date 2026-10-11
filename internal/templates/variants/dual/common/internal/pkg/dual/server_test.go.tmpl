@@ -1,0 +1,102 @@
+package dual
+
+import (
+ "context"
+ "encoding/base64"
+ "net"
+ "net/http"
+ "strings"
+ "testing"
+ "time"
+
+ "[[.Module]]/internal/pkg/auth"
+ "[[.Module]]/internal/pkg/config"
+ "[[.Module]]/internal/pkg/rpc"
+ "[[.Module]]/internal/pkg/server"
+ "go.uber.org/zap"
+ "google.golang.org/grpc"
+ "google.golang.org/grpc/credentials/insecure"
+ healthpb "google.golang.org/grpc/health/grpc_health_v1"
+ "google.golang.org/grpc/metadata"
+)
+
+[[if eq .Authz "casbin"]]type allowDual struct{}
+func(allowDual)Authorize(ctx context.Context,subject,resource,operation string)error{return ctx.Err()}[[end]]
+type blockingPort interface{Call(context.Context,*healthpb.HealthCheckRequest)(*healthpb.HealthCheckResponse,error)}
+type blockingHandler struct{entered,aborted chan struct{};release <-chan struct{}}
+func(h *blockingHandler)Call(ctx context.Context,_ *healthpb.HealthCheckRequest)(*healthpb.HealthCheckResponse,error){
+ close(h.entered)
+ select{case <-h.release:return &healthpb.HealthCheckResponse{},nil;case <-ctx.Done():close(h.aborted);return nil,ctx.Err()}
+}
+
+func waitDual(t *testing.T,ch <-chan struct{}){t.Helper();select{case <-ch:case <-time.After(3*time.Second):t.Fatal("dual operation timed out")}}
+func listenDual(t *testing.T)net.Listener{t.Helper();listener,err:=net.Listen("tcp","127.0.0.1:0");if err!=nil{t.Fatal(err)};t.Cleanup(func(){_ = listener.Close()});return listener}
+
+func dualFixture(t *testing.T,release <-chan struct{})(*Server,*blockingHandler,chan struct{},chan struct{},string){
+ t.Helper()
+ jwt,err:=auth.New(config.JWT{Secret:base64.StdEncoding.EncodeToString(make([]byte,32)),Issuer:"test",Audience:"test-api",TTL:time.Minute});if err!=nil{t.Fatal(err)}
+ token,err:=jwt.Issue("alice",time.Minute);if err!=nil{t.Fatal(err)}
+ httpEntered,httpAborted:=make(chan struct{}),make(chan struct{})
+ httpReady,grpcReady:=&server.Readiness{},&rpc.Readiness{}
+ settings:=config.Config{HTTP:config.HTTP{Address:"127.0.0.1:0",ShutdownTimeout:200*time.Millisecond},GRPC:config.GRPC{Address:"127.0.0.1:0",RequestTimeout:5*time.Second,ShutdownTimeout:200*time.Millisecond,MaxRecvBytes:1024,MaxSendBytes:1024,MaxHeaderBytes:4096,MaxConcurrentStreams:16}}
+ httpServer,err:=server.New(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){close(httpEntered);select{case <-release:w.WriteHeader(204);case <-r.Context().Done():close(httpAborted)}}),settings.HTTP,httpReady,zap.NewNop());if err!=nil{t.Fatal(err)}
+ handler:=&blockingHandler{entered:make(chan struct{}),aborted:make(chan struct{}),release:release}
+ register:=func(registrar grpc.ServiceRegistrar){
+  registrar.RegisterService(&grpc.ServiceDesc{
+   ServiceName:"test.Blocking", HandlerType:(*blockingPort)(nil),
+   Methods:[]grpc.MethodDesc{{MethodName:"Call",Handler:func(service any,ctx context.Context,decode func(any)error,interceptor grpc.UnaryServerInterceptor)(any,error){
+    request:=new(healthpb.HealthCheckRequest);if err:=decode(request);err!=nil{return nil,err}
+    return interceptor(ctx,request,&grpc.UnaryServerInfo{Server:service,FullMethod:"/test.Blocking/Call"},func(ctx context.Context,request any)(any,error){return service.(blockingPort).Call(ctx,request.(*healthpb.HealthCheckRequest))})
+   }}},
+  },handler)
+ }
+ grpcServer,err:=rpc.New(settings.GRPC,grpcReady,zap.NewNop(),jwt,map[string]string{"/test.Blocking/Call":"read"},register[[if eq .Authz "casbin"]],allowDual{}[[end]]);if err!=nil{t.Fatal(err)}
+ t.Cleanup(grpcServer.Stop)
+ return New(settings,httpServer,grpcServer,httpReady,grpcReady),handler,httpEntered,httpAborted,token
+}
+
+func TestDualDrainsBothProtocolsAndForcesWithinOneBudget(t *testing.T){
+ for _,force:=range []bool{false,true}{t.Run(map[bool]string{false:"graceful",true:"forced"}[force],func(t *testing.T){
+ release:=make(chan struct{});service,handler,httpEntered,httpAborted,token:=dualFixture(t,release)
+ httpListener,grpcListener:=listenDual(t),listenDual(t)
+ ctx,cancel:=context.WithCancel(context.Background());defer cancel()
+ done:=make(chan error,1);go func(){done<-service.Serve(ctx,httpListener,grpcListener)}()
+ connection,err:=grpc.NewClient(grpcListener.Addr().String(),grpc.WithTransportCredentials(insecure.NewCredentials()),grpc.WithDisableRetry());if err!=nil{t.Fatal(err)};defer func(){_ = connection.Close()}()
+ requestContext,end:=context.WithTimeout(context.Background(),3*time.Second);defer end()
+ rpcDone:=make(chan struct{});go func(){defer close(rpcDone);caller:=metadata.NewOutgoingContext(requestContext,metadata.Pairs("authorization","Bearer "+token));if err:=connection.Invoke(caller,"/test.Blocking/Call",&healthpb.HealthCheckRequest{},new(healthpb.HealthCheckResponse));err!=nil&&!force{t.Error("gRPC drain failed",err)}}()
+ httpDone:=make(chan struct{});go func(){defer close(httpDone);client:=http.Client{Timeout:3*time.Second};response,err:=client.Get("http://"+httpListener.Addr().String());if err==nil{_ = response.Body.Close();if !force&&response.StatusCode!=204{t.Error("HTTP drain response")}}else if !force{t.Error("HTTP drain failed")}}()
+ waitDual(t,httpEntered);waitDual(t,handler.entered)
+ started:=time.Now();cancel()
+ deadline:=time.Now().Add(time.Second);for time.Now().Before(deadline)&&(service.httpReady.Check(context.Background())==nil||service.grpcReady.Check(context.Background())==nil){time.Sleep(time.Millisecond)}
+ if service.httpReady.Check(context.Background())==nil||service.grpcReady.Check(context.Background())==nil{t.Fatal("both readiness states must stop")}
+ if !force{select{case <-httpDone:t.Fatal("HTTP was not drained");case <-rpcDone:t.Fatal("gRPC was not drained");default:};close(release)}
+ select{case err:=<-done:if force{if err==nil||!strings.Contains(err.Error(),"HTTP shutdown")||!strings.Contains(err.Error(),"gRPC shutdown"){t.Fatal("both forced shutdowns must be reported",err)};if time.Since(started)>350*time.Millisecond{t.Fatal("shutdown budgets were added instead of overlapped")}}else if err!=nil{t.Fatal(err)};case <-time.After(3*time.Second):t.Fatal("dual shutdown hung")}
+ if force{waitDual(t,httpAborted);waitDual(t,handler.aborted)}
+ waitDual(t,httpDone);waitDual(t,rpcDone)
+ })}
+}
+
+func TestDualPrebindFailureAndUnexpectedServeClose(t *testing.T){
+ for _,side:=range []string{"http","grpc"}{t.Run(side+"-occupied",func(t *testing.T){
+  release:=make(chan struct{});close(release);service,_,_,_,_:=dualFixture(t,release)
+  occupied,available:=listenDual(t),listenDual(t);address:=available.Addr().String();_ = available.Close()
+  if side=="http"{service.settings.HTTP.Address=occupied.Addr().String();service.settings.GRPC.Address=address}else{service.settings.HTTP.Address=address;service.settings.GRPC.Address=occupied.Addr().String()}
+  if err:=service.Run(context.Background());err==nil{t.Fatal("occupied port accepted")}
+  recovered,err:=net.Listen("tcp",address);if err!=nil{t.Fatal("startup leaked listener",err)};_ = recovered.Close()
+ })}
+ for _,side:=range []string{"http","grpc"}{t.Run(side+"-unexpected-close",func(t *testing.T){
+  release:=make(chan struct{});service,handler,entered,_,token:=dualFixture(t,release)
+  httpListener,grpcListener:=listenDual(t),listenDual(t);ctx,cancel:=context.WithCancel(context.Background());defer cancel()
+  done:=make(chan error,1);go func(){done<-service.Serve(ctx,httpListener,grpcListener)}()
+  client,err:=grpc.NewClient(grpcListener.Addr().String(),grpc.WithTransportCredentials(insecure.NewCredentials()));if err!=nil{t.Fatal(err)};defer func(){_ = client.Close()}()
+  caller,end:=context.WithTimeout(context.Background(),2*time.Second);defer end();caller=metadata.NewOutgoingContext(caller,metadata.Pairs("authorization","Bearer "+token))
+  calls:=make(chan struct{},2)
+  go func(){_ = client.Invoke(caller,"/test.Blocking/Call",&healthpb.HealthCheckRequest{},new(healthpb.HealthCheckResponse));calls<-struct{}{}}()
+  go func(){client:=http.Client{Timeout:2*time.Second};response,err:=client.Get("http://"+httpListener.Addr().String());if err==nil{_ = response.Body.Close()};calls<-struct{}{}}()
+  waitDual(t,entered);waitDual(t,handler.entered);close(release)
+  if side=="http"{_ = httpListener.Close()}else{_ = grpcListener.Close()}
+  select{case err:=<-done:if err==nil{t.Fatal("unexpected Serve failure was hidden")};case <-time.After(2*time.Second):t.Fatal("peer kept running")}
+  if service.httpReady.Check(context.Background())==nil||service.grpcReady.Check(context.Background())==nil{t.Fatal("peer readiness stayed enabled")}
+  <-calls;<-calls
+ })}
+}

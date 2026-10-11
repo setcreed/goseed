@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-已包含 HTTP、[[if eq .Database "sqlite"]]SQLite[[else if eq .Database "mysql"]]MySQL[[else]]PostgreSQL[[end]]、JWT 和示例 CRUD[[if .Redis]]、Redis 读取缓存[[end]][[if eq .Authz "casbin"]]、默认拒绝的 Casbin RBAC 与 SQL 策略存储[[end]]，使用入口见 README，工程约束见 AGENTS。依赖与源码在项目内，普通构建不依赖生成器。
+已包含 HTTP[[if eq .Transport "dual"]] 与 gRPC 双协议[[end]]、[[if eq .Database "sqlite"]]SQLite[[else if eq .Database "mysql"]]MySQL[[else]]PostgreSQL[[end]]、JWT 和示例 CRUD[[if .Redis]]、Redis 读取缓存[[end]][[if eq .Authz "casbin"]]、默认拒绝的 Casbin RBAC 与 SQL 策略存储[[end]]，使用入口见 README，工程约束见 AGENTS。依赖与源码在项目内，普通构建不依赖生成器。
 
 ## 项目开发
 

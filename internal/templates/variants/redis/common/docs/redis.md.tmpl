@@ -17,9 +17,9 @@ TTL 范围 1s 至 5m，命令预算 1ms 至 5s 且小于业务请求预算，拨
 
 ## 示例与一致性
 
-[[if ne .Database "none"]][[if eq .Transport "grpc"]]`ExampleService.Get`[[else]]`GET /v1/examples/{id}`[[end]] 按主体及 ID 缓存成功结果；miss 回源数据库并设置 TTL，更新/删除成功后失效。列表、不存在与错误不缓存。缓存数据必须匹配当前主体、ID 及文本约束；坏数据视为 miss。[[else]][[if eq .Transport "grpc"]]`ExampleService.Greet`[[else]]`GET /v1/examples?name=Go`[[end]] 按主体及 name 缓存问候计算结果；结果必须匹配当前主体与问候内容。没有持久化或资源 CRUD。[[end]]Key 为 namespace + 格式版本 + 主体/资源的 SHA-256 摘要，不使用原始主体或输入文本。
+[[if ne .Database "none"]][[if eq .Transport "grpc"]]`ExampleService.Get`[[else]]`GET /v1/examples/{id}`[[if eq .Transport "dual"]] 与 `ExampleService.Get`[[end]][[end]] 按主体及 ID 缓存成功结果；miss 回源数据库并设置 TTL，更新/删除成功后失效。列表、不存在与错误不缓存。缓存数据必须匹配当前主体、ID 及文本约束；坏数据视为 miss。[[else]][[if eq .Transport "grpc"]]`ExampleService.Greet`[[else]]`GET /v1/examples?name=Go`[[if eq .Transport "dual"]] 与 `ExampleService.Greet`[[end]][[end]] 按主体及 name 缓存问候计算结果；结果必须匹配当前主体与问候内容。没有持久化或资源 CRUD。[[end]]Key 为 namespace + 格式版本 + 主体/资源的 SHA-256 摘要，不使用原始主体或输入文本。
 
-默认可选缓存故障记录脱敏事件并回源，不影响就绪；恢复后后续请求重新连接。`required: true` 时，启动失败关闭客户端并退出，就绪依赖 Redis Ping，读取与 SQL 业务写入前检查失败返回 [[if eq .Transport "grpc"]]Unavailable。调用方取消返回 Canceled，deadline 返回 DeadlineExceeded；内部缓存预算到期仍为 Unavailable。[[else]]`unavailable`、HTTP 503。调用方取消和 deadline 始终传播，返回 HTTP 504。[[end]]
+默认可选缓存故障记录脱敏事件并回源，不影响就绪；恢复后后续请求重新连接。`required: true` 时，启动失败关闭客户端并退出，就绪依赖 Redis Ping，读取与 SQL 业务写入前检查失败返回 [[if eq .Transport "grpc"]]Unavailable。调用方取消返回 Canceled，deadline 返回 DeadlineExceeded；内部缓存预算到期仍为 Unavailable。[[else]]`unavailable`、HTTP 503。调用方取消和 deadline 始终传播，返回 HTTP 504。[[if eq .Transport "dual"]]gRPC 对应 Unavailable／Canceled／DeadlineExceeded，内部缓存预算到期保持 Unavailable。[[end]][[end]]
 
 每次命令有独立短 deadline，明确读写/池等待超时并关闭重试。运行中纯取消可能等待至短命令 deadline，未承诺立即打断 I/O；保留调用方取消错误。不开启客户端缓存和实验流水线，不重试可能已经执行的写入。
 

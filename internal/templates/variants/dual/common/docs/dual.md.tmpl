@@ -1,0 +1,16 @@
+# 双协议运行
+
+Gin HTTP 与 gRPC 使用独立 Handler，共用同一个 Biz、Store、数据库池、JWT[[if .Redis]]、Redis[[end]][[if eq .Authz "casbin"]] 和 Casbin[[end]]。HTTP 不通过内部 gRPC 转发。
+
+默认 HTTP 为 `127.0.0.1:8080`，gRPC 为 `127.0.0.1:9090`。`serve --address` 覆盖 HTTP，`serve --grpc-address` 覆盖 gRPC；环境变量分别为 `APP_HTTP_ADDRESS` 与 `APP_GRPC_ADDRESS`。其他命令不接受监听覆盖。Redis 命令预算需小于两侧请求预算。
+
+```sh
+./bin/apiserver serve --address 127.0.0.1:8081 --grpc-address 127.0.0.1:9091
+APP_CLIENT_TOKEN="<development-token>" go run ./cmd/exampleclient --tls=false --address 127.0.0.1:9091 [[if eq .Database "none"]]--name world[[else]]--action list[[end]]
+```
+
+两侧业务都必须经过 JWT[[if eq .Authz "casbin"]] 和默认拒绝的 Casbin[[end]]，Biz 校验归属和业务输入。HTTP 的 Swagger 2.0 见 [接口](../api/openapi/swagger.json) ，RPC 的 Proto 和客户端见 [gRPC](grpc.md) 。协议的错误格式和 ID 表达保持各自规范，业务语义一致。
+
+生产 gRPC 必须配置证书与私钥，客户端验证证书；配置见 [示例](../configs/app.example.yaml) 。HTTP TLS 可独立配置，CORS 与 pprof 规则保持 HTTP 契约。Reflection 仅开发回环开启且需要 JWT。容器开放 8080 和 9090，证书与策略只读挂载，并为 UID 10001 提供所需读取权限。
+
+先绑定两个监听器再运行服务。任一绑定失败关闭已绑定监听器；任一 Serve 返回或收到退出信号，先停止两侧就绪，再并发排空。整体关闭预算为两侧配置的较大值，超时各自强制停止；两个 Serve 返回后关闭共享池和日志。[[if ne .Database "none"]]数据库迁移显式执行，不在服务启动时建表。[[else]]没有数据库或迁移命令。[[end]]

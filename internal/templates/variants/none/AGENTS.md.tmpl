@@ -5,7 +5,7 @@
 
 ## 定位与入口
 
-本项目是独立 HTTP/JWT 业务服务，模块 `[[.Module]]`，Go 1.26.4。开始先读本文件与 ROADMAP，当前使用方式见 README；项目规则仅在本文件维护。
+本项目是独立 [[if eq .Transport "dual"]]HTTP／gRPC 双协议[[else]]HTTP[[end]]/JWT 业务服务，模块 `[[.Module]]`，Go 1.26.4。开始先读本文件与 ROADMAP，当前使用方式见 README；项目规则仅在本文件维护。
 
 ## 目录与工程边界
 
@@ -13,6 +13,10 @@
 - `internal/apiserver/bootstrap/`：DI 组装与生命周期，do 容器仅在这里使用。
 - `internal/apiserver/router.go`：路由和公共中间件。
 - `internal/apiserver/handler/http/<module>/`：协议解析、输入与响应。
+[[if eq .Transport "dual"]]- `internal/apiserver/handler/grpc/<module>/`：RPC 转换，共用 HTTP 的 Biz；Proto 位于 `api/proto/`，公开协议类型位于 `pkg/api/`。
+- `internal/pkg/dual/`：双端口与并发排空协调；契约见 [双协议](docs/dual.md) 。
+- `internal/pkg/rpc/`：安全链与健康服务；新增 RPC 登记权限，生产须 TLS，Reflection 仅开发回环且认证。协议生成显式执行 `make proto-generate`。
+[[end]]
 - `internal/apiserver/biz/<module>/`：业务规则，通过显式构造函数传递依赖，不导入 Gin 或 DI。
 - `internal/pkg/`：配置、认证、日志、错误、中间件及 HTTP 生命周期。
 - `configs/app.example.yaml`：无密钥配置模板；真实配置不提交。

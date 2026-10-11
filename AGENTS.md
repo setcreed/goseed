@@ -17,7 +17,8 @@ goseed 是面向中小型 Go 后端业务的项目与业务代码生成器。生
 - `docs/dependencies.md`：维护与许可证证据、依赖决策、协议工具和验证边界；固定版本见 `dependencies.lock.json`。
 - `docs/template-http.md`：默认 HTTP 模板的配置、服务命令、认证、示例业务与验收契约。
 - `docs/template-options.md`：可选模板的配置、裁剪、数据库与失败路径验收契约。
-- `docs/template-grpc.md`：纯 gRPC 的 Proto、安全链、健康服务与验收契约；dual/Gateway 在后续功能接入。
+- `docs/template-grpc.md`：纯 gRPC 的 Proto、安全链、健康服务与验收契约。
+- `docs/template-dual.md`：双协议的共享依赖、监听配置、并发排空与验收契约。
 
 项目规则只维护在本文件；若增加 `CLAUDE.md`，它仅作为指向本文件的兼容入口。详细约定维护在对应文档，避免复制成多个独立来源。
 
@@ -75,6 +76,6 @@ Redis 由 `Options.Redis` 生成时选择，业务只依赖缓存接口；默认
 
 Casbin 由 `Options.Authz` 选择，默认关闭。启用时所有业务路由在 JWT 之后、缓存和业务之前授权；默认拒绝，用户与角色使用独立命名空间，Biz 继续校验归属。策略存储必须显式传递 Context，不使用 SDK AutoSave 或隐式建表；SQL 全量替换必须在事务内完成，无数据库策略只读。离线更新后重启实例，不增加公开策略管理入口。具体权限/输入契约见可选模板文档；`make template-db` 先验证 SQL 基线再升级 Casbin schema，`make template-redis` 验证缓存不绕过授权，`make template-container` 验证只读策略挂载。
 
-协议由 `Options.Transport` 选择，默认 HTTP；纯 gRPC 按协议契约裁剪 HTTP／Gin／Swagger，复用业务与存储。新增 RPC 必须登记精确 FullMethod 权限，保持 JWT → Casbin → Biz／缓存顺序；公共流仅健康 Watch，开发 Reflection 必须认证。生产要求 TLS；关闭先停止就绪和 Watch，再有限期关闭服务，Serve 返回后关闭池。业务项目普通构建使用已生成 Proto，显式生成只改协议产物；根仓库完整测试需先安装项目内 linter 和协议工具，验证产物临时复现不能改写模板或依赖清单。
+协议由 `Options.Transport` 选择，默认 HTTP；纯 gRPC 按协议契约裁剪 HTTP／Gin／Swagger，复用业务与存储。dual 保留两种 Handler 并共享同一 Biz 与依赖，绑定两个监听器后并发服务；任一服务返回时停止两侧就绪，并发排空，两个 Serve 返回后关闭共享池。新增 RPC 必须登记精确 FullMethod 权限，保持 JWT → Casbin → Biz／缓存顺序；公共流仅健康 Watch，开发 Reflection 必须认证。生产 gRPC 要求 TLS；关闭先停止就绪和 Watch，再有限期关闭服务。业务项目普通构建使用已生成 Proto，显式生成只改协议产物；根仓库完整测试需先安装项目内 linter 和协议工具，验证产物临时复现不能改写模板或依赖清单。
 
 新增完成与验证记录时，使用 `TZ=Asia/Shanghai date "+%Y-%m-%d %H:%M"` 获取北京时间并更新 ROADMAP。

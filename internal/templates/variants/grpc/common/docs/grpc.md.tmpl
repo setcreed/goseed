@@ -1,6 +1,6 @@
 # gRPC 使用与边界
 
-服务默认 `127.0.0.1:9090`，仅 gRPC，无业务 HTTP。强类型配置见 [示例](../configs/app.example.yaml) ，`APP_GRPC_*` 覆盖文件，`serve --address` 覆盖监听。生产必须 TLS，最低 1.2；Reflection 默认关闭，仅开发回环可开启，调用需 JWT。没有公开 Token 签发接口，生产禁用开发签发。
+服务默认 `127.0.0.1:9090`，[[if eq .Transport "dual"]]同时提供独立 Gin HTTP，共享业务实例，双协议说明见 [dual](dual.md) 。[[else]]仅 gRPC，无业务 HTTP。[[end]]强类型配置见 [示例](../configs/app.example.yaml) ，`APP_GRPC_*` 覆盖文件，`serve --[[if eq .Transport "dual"]]grpc-[[end]]address` 覆盖监听。生产必须 TLS，最低 1.2；Reflection 默认关闭，仅开发回环可开启，调用需 JWT。没有公开 Token 签发接口，生产禁用开发签发。
 
 [Proto](../api/proto/example/v1/example.proto) 与已生成代码分开；更新字段使用 optional 保留 false／空字符串，分页省略为 1/20，显式零无效；未知字段拒绝，ID 限 int64 正数。业务校验及资源归属由 Biz 负责。[[if eq .Database "none"]]Greet 省略 name 为 world，显式空字符串拒绝。[[end]]业务 unary 通过 metadata 的单个 authorization 传递 Bearer Token；x-request-id 限 1 至 64 个字母、数字、点号、下划线或连字符，响应回传。取消／更短 deadline 贯穿请求。
 

@@ -3,8 +3,11 @@ package integration
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,10 +20,19 @@ import (
 )
 
 func TestGRPCContainer(t *testing.T) {
+	verifyProtocolContainer(t, "grpc")
+}
+
+func TestDualContainer(t *testing.T) {
+	verifyProtocolContainer(t, "dual")
+}
+
+func verifyProtocolContainer(t *testing.T, protocol string) {
+	t.Helper()
 	if os.Getenv("GOSEED_TEST_DOCKER") != "1" {
 		t.Skip("run make template-container for production gRPC TLS container verification")
 	}
-	directory := renderProjectWith(t, templates.Options{Database: "none", Transport: "grpc", Authz: "casbin"})
+	directory := renderProjectWith(t, templates.Options{Database: "none", Transport: protocol, Authz: "casbin"})
 	verifyReadonly(t, directory)
 	binary, client := filepath.Join(directory, "bin/apiserver"), filepath.Join(directory, "bin/exampleclient")
 	run(t, directory, "go", "build", "-mod=readonly", "-o", binary, "./cmd/apiserver")
@@ -47,6 +59,17 @@ func TestGRPCContainer(t *testing.T) {
 		t.Fatal("missing generated secret")
 	}
 	cert, key := grpcCertificate(t, directory)
+	pem, err := os.ReadFile(cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(pem) {
+		t.Fatal("container test CA")
+	}
+	transport := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}}
+	defer transport.CloseIdleConnections()
+	httpClient := &http.Client{Timeout: 3 * time.Second, Transport: transport}
 	// Ephemeral test credentials must be readable by the container's unrelated UID.
 	for _, path := range []string{cert, key} {
 		if err := os.Chmod(path, 0444); err != nil {
@@ -99,6 +122,9 @@ func TestGRPCContainer(t *testing.T) {
 	start := func(mountPolicy bool) string {
 		t.Helper()
 		args := []string{"run", "-d", "--name", name, "--label", "org.goseed.grpc=" + name, "--read-only", "-e", "APP_JWT_SECRET", "-e", "APP_GRPC_TLS_CERT=/app/certs/server.crt", "-e", "APP_GRPC_TLS_KEY=/app/certs/server.key", "-v", cert + ":/app/certs/server.crt:ro", "-v", key + ":/app/certs/server.key:ro", "-p", "127.0.0.1::9090"}
+		if protocol == "dual" {
+			args = append(args, "-e", "APP_HTTP_TLS_CERT=/app/certs/server.crt", "-e", "APP_HTTP_TLS_KEY=/app/certs/server.key", "-p", "127.0.0.1::8080")
+		}
 		if mountPolicy {
 			args = append(args, "-v", policy+":/app/configs/policy.csv:ro")
 		}
@@ -128,10 +154,19 @@ func TestGRPCContainer(t *testing.T) {
 		t.Fatal("gRPC TLS container did not become ready")
 	}
 	options := []string{"--ca", cert}
+	checkHTTP := func(token string, expected int) {
+		t.Helper()
+		if protocol == "dual" {
+			base := "https://" + docker("port", name, "8080/tcp")
+			request(t, httpClient, base, "GET", "/readyz", "", "", 200)
+			request(t, httpClient, base, "GET", "/v1/examples", "", token, expected)
+		}
+	}
 	operation := []string{"--action", "greet", "--name", "container-rpc-private"}
 	address := start(false)
 	ready(address)
 	rpcCall(t, directory, client, address, token, nil, options, operation, "PermissionDenied")
+	checkHTTP(token, 403)
 	docker("stop", "--time", "3", name)
 	docker("rm", name)
 	started = false
@@ -147,13 +182,17 @@ func TestGRPCContainer(t *testing.T) {
 		t.Fatal("root filesystem writable")
 	}
 	rpcCall(t, directory, client, address, "", nil, options, operation, "Unauthenticated")
+	checkHTTP("", 401)
 	rpcCall(t, directory, client, address, role, nil, options, operation, "PermissionDenied")
+	checkHTTP(role, 403)
 	rpcCall(t, directory, client, address, token, nil, options, operation, "")
+	checkHTTP(token, 200)
 	docker("stop", "--time", "3", name)
 	docker("start", name)
 	address = docker("port", name, "9090/tcp")
 	ready(address)
 	rpcCall(t, directory, client, address, token, nil, options, operation, "")
+	checkHTTP(token, 200)
 	docker("stop", "--time", "3", name)
 	logs := docker("logs", name)
 	for _, private := range []string{secret, token, role, "container-rpc-private"} {

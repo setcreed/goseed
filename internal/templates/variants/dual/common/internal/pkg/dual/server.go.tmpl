@@ -1,0 +1,50 @@
+// Package dual coordinates independent HTTP and gRPC servers.
+package dual
+
+import (
+ "context"
+ "errors"
+ "net"
+
+ "[[.Module]]/internal/pkg/config"
+ "[[.Module]]/internal/pkg/rpc"
+ "[[.Module]]/internal/pkg/server"
+)
+
+type Server struct {
+ http *server.Server
+ grpc *rpc.Server
+ httpReady *server.Readiness
+ grpcReady *rpc.Readiness
+ settings config.Config
+}
+
+func New(settings config.Config, http *server.Server, grpc *rpc.Server, httpReady *server.Readiness, grpcReady *rpc.Readiness) *Server {
+ return &Server{http:http,grpc:grpc,httpReady:httpReady,grpcReady:grpcReady,settings:settings}
+}
+
+func (s *Server) stopReadiness() { s.httpReady.Stop(); s.grpcReady.Stop() }
+
+func (s *Server) Run(ctx context.Context) error {
+ if err:=ctx.Err();err!=nil{s.stopReadiness();s.grpc.Stop();return err}
+ httpListener,err:=net.Listen("tcp",s.settings.HTTP.Address)
+ if err!=nil{s.stopReadiness();s.grpc.Stop();return errors.New("cannot listen on configured HTTP address")}
+ grpcListener,err:=net.Listen("tcp",s.settings.GRPC.Address)
+ if err!=nil{_ = httpListener.Close();s.stopReadiness();s.grpc.Stop();return errors.New("cannot listen on configured gRPC address")}
+ return s.Serve(ctx,httpListener,grpcListener)
+}
+
+// Both listeners belong to this call. Child servers drain concurrently, so
+// their shutdown budgets overlap. Shared pools remain open until both return.
+func (s *Server) Serve(ctx context.Context,httpListener,grpcListener net.Listener) error {
+ lifetime,cancel:=context.WithCancel(ctx);defer cancel()
+ finished:=make(chan error,2)
+ go func(){finished<-s.http.Serve(lifetime,httpListener)}()
+ go func(){finished<-s.grpc.Serve(lifetime,grpcListener)}()
+ var result error
+ remaining:=2
+ select{case result=<-finished:remaining--;case <-ctx.Done():}
+ s.stopReadiness();cancel()
+ for ;remaining>0;remaining-- { result=errors.Join(result,<-finished) }
+ return result
+}

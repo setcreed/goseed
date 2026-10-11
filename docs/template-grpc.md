@@ -1,6 +1,6 @@
 # 纯 gRPC 模板契约
 
-D4 先交付纯 gRPC，再实现 dual 与 Gateway。`Options.Transport` 实施 `http`（默认）与 `grpc`，其他值在渲染前拒绝；CLI 写入仍属 D5。复用 Biz、Store、JWT、Casbin 与 Redis，纯 gRPC 不交付 Gin、HTTP 配置／中间件、Swagger 或业务 HTTP 服务。
+`Options.Transport` 支持 `http`（默认）、`grpc` 与 `dual`；dual 约束见 [双协议模板](template-dual.md) ，Gateway 属后续功能，CLI 写入仍属 D5。复用 Biz、Store、JWT、Casbin 与 Redis，纯 gRPC 不交付 Gin、HTTP 配置／中间件、Swagger 或业务 HTTP 服务。
 
 Proto 源位于 `api/proto/example/v1/`，已生成代码位于 `pkg/api/example/v1/`，供其他 Go 服务导入协议类型；Handler 位于 `internal/apiserver/handler/grpc/example/`，服务及拦截器位于 `internal/pkg/rpc/`。提供示例客户端和固定版本的显式协议生成入口，普通构建不运行 protoc、不安装工具或 tidy。四种存储 × Redis 开关 × Casbin 开关共 16 种组合均需 readonly 编译，代表组合完成实际调用。
 

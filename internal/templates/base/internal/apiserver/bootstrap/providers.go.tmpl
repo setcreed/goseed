@@ -7,6 +7,9 @@ import (
 	"[[.Module]]/internal/apiserver"
 	examplebiz "[[.Module]]/internal/apiserver/biz/example"
 	examplehandler "[[.Module]]/internal/apiserver/handler/http/example"
+	[[if eq .Transport "dual"]]rpchandler "[[.Module]]/internal/apiserver/handler/grpc/example"
+	"[[.Module]]/internal/pkg/dual"
+	"[[.Module]]/internal/pkg/rpc"[[end]]
 	[[if ne .Database "none"]]examplestore "[[.Module]]/internal/apiserver/store/example"[[end]]
 	"[[.Module]]/internal/pkg/auth"
 	[[if eq .Authz "casbin"]]"[[.Module]]/internal/pkg/authz"[[end]]
@@ -19,7 +22,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type App struct { Server *server.Server; Logger *zap.Logger[[if ne .Database "none"]];Database *database.Database[[end]][[if .Redis]];Cache *cache.Client[[end]][[if eq .Authz "casbin"]];Authorization *authz.Manager[[end]] }
+type App struct { Server *server.Server; Logger *zap.Logger[[if eq .Transport "dual"]];RPC *rpc.Server;Dual *dual.Server[[end]][[if ne .Database "none"]];Database *database.Database[[end]][[if .Redis]];Cache *cache.Client[[end]][[if eq .Authz "casbin"]];Authorization *authz.Manager[[end]] }
 
 func New(settings config.Config, version string) (*App,error) {
 	logger,err := logx.New(settings.Log,version)
@@ -38,8 +41,11 @@ func New(settings config.Config, version string) (*App,error) {
 	[[if .Redis]]caching,err:=cache.Open(startup,settings.Redis,logger);if err!=nil{[[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}
 	do.ProvideValue(injector,caching)[[end]]
 	do.ProvideValue(injector,authentication)
-	do.ProvideValue(injector,examplehandler.New(examplebiz.[[if .Redis]]NewCached([[if ne .Database "none"]]examplestore.New(db.DB),[[end]]caching)[[else]]New([[if ne .Database "none"]]examplestore.New(db.DB)[[end]])[[end]]))
-	do.ProvideValue(injector,&server.Readiness{[[if .Redis]]CheckDependency:func(ctx context.Context)error{[[if ne .Database "none"]]if err:=db.Pool.PingContext(ctx);err!=nil{return err};[[end]]return caching.Check(ctx)}[[else if ne .Database "none"]]CheckDependency:db.Pool.PingContext[[end]]})
+	business:=examplebiz.[[if .Redis]]NewCached([[if ne .Database "none"]]examplestore.New(db.DB),[[end]]caching)[[else]]New([[if ne .Database "none"]]examplestore.New(db.DB)[[end]])[[end]]
+	do.ProvideValue(injector,examplehandler.New(business))
+	checkDependency:=func(ctx context.Context)error{[[if ne .Database "none"]]if err:=db.Pool.PingContext(ctx);err!=nil{return err};[[end]][[if .Redis]]return caching.Check(ctx)[[else]]return ctx.Err()[[end]]}
+	httpReady:=&server.Readiness{CheckDependency:checkDependency}
+	do.ProvideValue(injector,httpReady)
 	do.Provide(injector,func(i do.Injector)(*server.Server,error){
 		configuration,err := do.Invoke[config.Config](i); if err != nil { return nil,err }
 		logging,err := do.Invoke[*zap.Logger](i); if err != nil { return nil,err }
@@ -51,7 +57,11 @@ func New(settings config.Config, version string) (*App,error) {
 	})
 	httpServer,err := do.Invoke[*server.Server](injector)
 	if err != nil { [[if .Redis]]_ = caching.Close();[[end]][[if ne .Database "none"]]_ = db.Close();[[end]] _ = logger.Sync(); return nil,err }
-	return &App{Server:httpServer,Logger:logger,[[if ne .Database "none"]]Database:db,[[end]][[if .Redis]]Cache:caching,[[end]][[if eq .Authz "casbin"]]Authorization:authorization,[[end]]},nil
+	[[if eq .Transport "dual"]]rpcReady:=&rpc.Readiness{CheckDependency:checkDependency}
+	examples:=rpchandler.New(business)
+	rpcServer,err:=rpc.New(settings.GRPC,rpcReady,logger,authentication,rpchandler.Permissions,examples.Register[[if eq .Authz "casbin"]],authorization[[end]])
+	if err!=nil{[[if .Redis]]_ = caching.Close();[[end]][[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}[[end]]
+	return &App{Server:httpServer,Logger:logger,[[if eq .Transport "dual"]]RPC:rpcServer,Dual:dual.New(settings,httpServer,rpcServer,httpReady,rpcReady),[[end]][[if ne .Database "none"]]Database:db,[[end]][[if .Redis]]Cache:caching,[[end]][[if eq .Authz "casbin"]]Authorization:authorization,[[end]]},nil
 }
 
-func (a *App) Run(ctx context.Context) error { defer func(){ [[if .Redis]]_ = a.Cache.Close();[[end]][[if ne .Database "none"]]_ = a.Database.Close();[[end]] _ = a.Logger.Sync() }(); return a.Server.Run(ctx) }
+func (a *App) Run(ctx context.Context) error { [[if eq .Transport "dual"]]rpc.InstallProtocolLogger(a.Logger);[[end]]defer func(){ [[if .Redis]]_ = a.Cache.Close();[[end]][[if ne .Database "none"]]_ = a.Database.Close();[[end]] _ = a.Logger.Sync() }(); return a.[[if eq .Transport "dual"]]Dual[[else]]Server[[end]].Run(ctx) }

@@ -108,7 +108,7 @@ shop/
 
 这是能力全集示意，实际按参数生成：HTTP-only 不生成 gRPC、Proto 与公开 Go 协议包；grpc-only 不生成 Gin 业务 Handler；Gateway 不生成同一业务的 Gin Handler；无数据库不生成 Store、Model 或数据库迁移。只有存在实际内容时才创建目录。
 
-`pkg/api` 只承载供 Go 客户端导入的生成协议类型，不作为公共工具杂物目录。`api/proto/<module>/v1` 保存业务模块的 Proto，`pkg/api/<module>/v1` 保存对应生成代码；`v1` 表达协议版本，Biz 不默认按版本分目录。纯 gRPC 的服务与拦截器位于 `internal/pkg/rpc/`，协议运行约束见 [纯 gRPC 模板](template-grpc.md) 。
+`pkg/api` 只承载供 Go 客户端导入的生成协议类型，不作为公共工具杂物目录。`api/proto/<module>/v1` 保存业务模块的 Proto，`pkg/api/<module>/v1` 保存对应生成代码；`v1` 表达协议版本，Biz 不默认按版本分目录。gRPC 的服务与拦截器位于 `internal/pkg/rpc/`，dual 的监听与关闭协调位于 `internal/pkg/dual/`；协议运行约束见 [纯 gRPC 模板](template-grpc.md) 与 [双协议模板](template-dual.md) 。
 
 `goseed.yaml` 是版本化生成元数据，包含模板版本、模块路径、能力选择和业务登记。它不是服务运行配置，也不能作为容器中的必需文件。
 
@@ -157,7 +157,7 @@ Biz 使用独立输入输出，不直接使用 Gin Context 或 Proto 消息。HT
 
 启动错误沿调用链返回，不在底层调用 Fatal 退出。任一步失败，关闭已创建的资源和监听器。多个服务启动时，处理任意入口监听失败和其他入口的回收。
 
-关闭时先变为不就绪，再停止接收并排空请求，最后关闭数据库、缓存、客户端和日志。Gateway 先排空 HTTP，再关闭其依赖的 gRPC 与客户端连接。gRPC 优雅关闭到期后使用强制停止兜底，所有关闭操作在统一预算内完成。
+关闭时先变为不就绪，再停止接收并排空请求，最后关闭数据库、缓存、客户端和日志。dual 共用同一个 Biz 与连接池，先绑定两个监听器，再并发运行；任一 Serve 返回时停止两侧就绪并取消服务生命周期，两侧并发排空，整体排空预算为两侧关闭预算的较大值，全部返回后关闭共享依赖。Gateway 先排空 HTTP，再关闭其依赖的 gRPC 与客户端连接。gRPC 优雅关闭到期后使用强制停止兜底。
 
 ## 配置管理
 

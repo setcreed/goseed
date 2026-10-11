@@ -37,6 +37,18 @@ func TestGRPCContracts(t *testing.T) {
 	}
 }
 
+func TestDualContracts(t *testing.T) {
+	for _, backend := range []string{"sqlite", "mysql", "postgres", "none"} {
+		for _, redis := range []bool{false, true} {
+			for _, authorization := range []string{"none", "casbin"} {
+				t.Run(backend+"-"+authorization+map[bool]string{false: "", true: "-redis"}[redis], func(t *testing.T) {
+					checkDeliveredOptions(t, Options{Database: backend, Redis: redis, Authz: authorization, Transport: "dual"})
+				})
+			}
+		}
+	}
+}
+
 func checkDeliveredContracts(t *testing.T, backend string) {
 	checkDeliveredOptions(t, Options{Database: backend})
 }
@@ -156,29 +168,47 @@ func checkDeliveredOptions(t *testing.T, options Options) {
 			}
 		}
 	}
-	if options.Transport == "grpc" {
+	if options.Transport == "grpc" || options.Transport == "dual" {
 		for _, filename := range []string{"api/proto/example/v1/example.proto", "pkg/api/example/v1/example.pb.go", "pkg/api/example/v1/example_grpc.pb.go", "internal/pkg/rpc/server.go", "internal/pkg/rpc/interceptors.go", "cmd/exampleclient/main.go", "docs/grpc.md", "scripts/proto.py"} {
 			if _, exists := files[filename]; !exists {
 				t.Fatalf("missing gRPC file %s", filename)
 			}
 		}
-		for filename, content := range files {
-			if strings.HasPrefix(filename, "internal/pkg/server/") || strings.HasPrefix(filename, "internal/pkg/middleware/") || strings.HasPrefix(filename, "internal/apiserver/handler/http/") || strings.HasPrefix(filename, "api/openapi/") || filename == "internal/apiserver/router.go" {
-				t.Fatalf("HTTP file leaked %s", filename)
-			}
-			if strings.HasSuffix(filename, ".go") || filename == "go.mod" || filename == "go.sum" {
-				if strings.Contains(string(content), "github.com/gin-gonic/") {
-					t.Fatalf("Gin leaked %s", filename)
+		if options.Transport == "grpc" {
+			for filename, content := range files {
+				if strings.HasPrefix(filename, "internal/pkg/server/") || strings.HasPrefix(filename, "internal/pkg/middleware/") || strings.HasPrefix(filename, "internal/apiserver/handler/http/") || strings.HasPrefix(filename, "api/openapi/") || filename == "internal/apiserver/router.go" {
+					t.Fatalf("HTTP file leaked %s", filename)
+				}
+				if strings.HasSuffix(filename, ".go") || filename == "go.mod" || filename == "go.sum" {
+					if strings.Contains(string(content), "github.com/gin-gonic/") {
+						t.Fatalf("Gin leaked %s", filename)
+					}
 				}
 			}
-		}
-		if strings.Contains(string(files["configs/app.example.yaml"]), "http:") {
-			t.Fatal("HTTP config leaked")
+			if strings.Contains(string(files["configs/app.example.yaml"]), "http:") {
+				t.Fatal("HTTP config leaked")
+			}
 		}
 		if !strings.Contains(manifest, "google.golang.org/grpc "+lock.Runtime["google.golang.org/grpc"]) {
 			t.Fatal("gRPC lock differs")
 		}
-		return
+		if options.Transport == "grpc" {
+			return
+		}
+		for _, filename := range []string{"internal/pkg/dual/server.go", "internal/apiserver/handler/http/example/handler.go", "internal/apiserver/router.go", "docs/dual.md"} {
+			if _, exists := files[filename]; !exists {
+				t.Fatalf("missing dual file %s", filename)
+			}
+		}
+		if !strings.Contains(manifest, "github.com/gin-gonic/gin "+lock.Runtime["github.com/gin-gonic/gin"]) || !strings.Contains(string(files["configs/app.example.yaml"]), "http:") {
+			t.Fatal("dual HTTP dependency/config missing")
+		}
+		dockerfile := string(files["build/docker/Dockerfile"])
+		for _, required := range []string{"APP_HTTP_ADDRESS=0.0.0.0:8080", "APP_GRPC_ADDRESS=0.0.0.0:9090", "EXPOSE 8080 9090"} {
+			if !strings.Contains(dockerfile, required) {
+				t.Fatalf("dual Docker configuration missing %s", required)
+			}
+		}
 	}
 	var swagger map[string]any
 	if err := json.Unmarshal(files["api/openapi/swagger.json"], &swagger); err != nil {

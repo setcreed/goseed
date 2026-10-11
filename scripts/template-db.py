@@ -90,7 +90,7 @@ subjectAltName = IP:127.0.0.1
         env["GOSEED_TEST_CA_FILE"] = str(directory / "ca.crt")
         # Verify the clean v1 baseline first, then explicitly upgrade the owned
         # application database to the Casbin v2 schema in a separate invocation.
-        for test in ("TestExternalSQLProjects", "TestExternalCasbinProjects", "TestExternalGRPCProjects"):
+        for test in ("TestExternalSQLProjects", "TestExternalCasbinProjects", "TestExternalGRPCProjects", "TestExternalDualProjects"):
             run(["go", "test", "-mod=readonly", "-count=1", "-v", "-timeout=15m", "./tests/integration", "-run", "^" + test + "$"], timeout=960)
     finally:
         if started:

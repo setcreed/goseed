@@ -111,6 +111,8 @@ pgx 存在未解决的 [缓冲响应与取消竞争报告](https://github.com/ja
 
 默认业务模板保存完整 `go.mod` 与 `go.sum`；集成检查直接 readonly 构建、测试、vet、race 和 lint，并核对运行后清单未变化。模板直接依赖及工具链与根目录锁定清单比对，不在普通检查中自动 tidy。
 
+dual 的 16 种固定清单位于 `internal/templates/variants/dual/manifests/`，合并已有 HTTP 与 gRPC 所需依赖，沿用相同固定版本，没有新增运行库。无数据库、Redis 与 Casbin 按选择裁剪；生成项目同时交付完整校验和，普通检查不得通过 tidy 补齐依赖。
+
 2026-10-11 通过官方 Registry API 与 `docker manifest inspect` 核对 `golang:1.26.4-alpine` 多架构摘要，固定为 `sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648`。镜像的 [官方固定提交 Dockerfile](https://github.com/docker-library/golang/blob/34bfa3703c98a3f4e7dcc808a5b0a754faecb5ef/1.26/alpine3.24/Dockerfile) 明确 Go 1.26.4、平台下载校验和与 CA 证书；模板使用该构建镜像和纯 Go 二进制，运行阶段为 scratch、UID/GID 10001。
 
 实际容器验证通过 `make template-container` 复现，使用专用标签、全新数据卷与随机回环端口；不推送镜像、不操作现有数据库，测试结束清理本次容器、卷与镜像。镜像摘要升级需重新核验并同时更新锁定清单和模板。

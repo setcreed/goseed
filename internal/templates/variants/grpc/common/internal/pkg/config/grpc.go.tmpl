@@ -1,0 +1,32 @@
+package config
+
+import (
+ "errors"
+ "net"
+ "time"
+)
+
+type GRPC struct {
+ Address string
+ RequestTimeout time.Duration `mapstructure:"request_timeout"`
+ ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout"`
+ MaxRecvBytes int `mapstructure:"max_recv_bytes"`
+ MaxSendBytes int `mapstructure:"max_send_bytes"`
+ MaxHeaderBytes int `mapstructure:"max_header_bytes"`
+ MaxConcurrentStreams int `mapstructure:"max_concurrent_streams"`
+ TLSCert string `mapstructure:"tls_cert"`
+ TLSKey string `mapstructure:"tls_key"`
+ Reflection bool
+}
+
+func (c GRPC) Validate(environment string) error {
+ host,port,err:=net.SplitHostPort(c.Address)
+ if err!=nil||host==""||port==""{return errors.New("grpc.address requires host and port")}
+ if _,err:=net.LookupPort("tcp",port);err!=nil{return errors.New("invalid grpc.address port")}
+ for _,d:=range []time.Duration{c.RequestTimeout,c.ShutdownTimeout}{if d<time.Millisecond||d>10*time.Minute{return errors.New("invalid gRPC timeouts")}}
+ if c.MaxRecvBytes<1||c.MaxRecvBytes>16<<20||c.MaxSendBytes<1||c.MaxSendBytes>16<<20||c.MaxHeaderBytes<1024||c.MaxHeaderBytes>4<<20||c.MaxConcurrentStreams<1||c.MaxConcurrentStreams>1024{return errors.New("invalid gRPC limits")}
+ if (c.TLSCert=="")!=(c.TLSKey==""){return errors.New("TLS cert and key must be supplied together")}
+ if environment=="production"&&c.TLSCert==""{return errors.New("production gRPC requires TLS")}
+ if c.Reflection&&(environment!="development"||(host!="localhost"&&!net.ParseIP(host).IsLoopback())){return errors.New("reflection requires development and a loopback address")}
+ return nil
+}

@@ -9,6 +9,7 @@ import (
 )
 
 func TestConfigurationBoundary(t *testing.T) {
+	[[if eq .Transport "dual"]]t.Setenv("APP_GRPC_TLS_CERT","configuration-only-cert");t.Setenv("APP_GRPC_TLS_KEY","configuration-only-key")[[end]]
 	[[if or (eq .Database "mysql") (eq .Database "postgres")]]t.Setenv("APP_DATABASE_PASSWORD","unit-test-placeholder")[[end]]
 	[[if .Redis]]t.Setenv("APP_REDIS_PASSWORD","unit-test-placeholder");t.Setenv("APP_REDIS_ADDRESS","127.0.0.1:1")[[end]]
  t.Setenv("APP_JWT_SECRET", base64.StdEncoding.EncodeToString([]byte(strings.Repeat("s",32))))
@@ -30,6 +31,7 @@ func TestConfigurationBoundary(t *testing.T) {
 }
 [[if or (eq .Database "mysql") (eq .Database "postgres")]]
 func TestExternalDatabaseConfiguration(t *testing.T){
+ [[if eq .Transport "dual"]]t.Setenv("APP_GRPC_TLS_CERT","configuration-only-cert");t.Setenv("APP_GRPC_TLS_KEY","configuration-only-key")[[end]]
  t.Setenv("APP_JWT_SECRET",base64.StdEncoding.EncodeToString(make([]byte,32)))
  t.Setenv("APP_DATABASE_PASSWORD","unit-test-placeholder")
  filename:=filepath.Join(t.TempDir(),"app.yaml")
