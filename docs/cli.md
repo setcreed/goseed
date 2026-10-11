@@ -1,10 +1,10 @@
 # 命令契约
 
-本文件是首版生成命令与服务入口契约。当前可执行能力以仓库 README 为准。
+本文件定义当前根命令的项目生成行为和后续业务生成命令契约。可执行能力以仓库 README 为准。
 
 ## 创建项目
 
-本节描述 D5 待接入的创建命令，示例不是当前 CLI 已可执行的功能；当前 CLI 仅支持帮助与版本。内部模板已支持项目名与模块路径校验、替换。
+根命令不带子命令时生成项目；内部模板渲染与根 CLI 使用相同的能力契约。
 
 ```bash
 mkdir shop
@@ -42,17 +42,16 @@ goseed --name shop --module github.com/setcreed/shop
 | `--name` | 合法项目名 | 当前目录名 | 项目与服务名称 |
 | `--module` | 合法 Go 模块路径 | `example.com/<name>` | 生成项目的导入路径 |
 | `--db` | `sqlite`、`mysql`、`postgres`、`none` | `sqlite` | 选择持久化方案 |
-| `--auth` | `jwt`、`none` | `jwt` | 选择身份认证 |
 | `--authz` | `casbin`、`none` | `none` | 选择通用授权组件 |
 | `--redis` | 布尔值 | `false` | 增加 Redis 客户端与缓存示例 |
 | `--transport` | `http`、`grpc`、`dual`、`gateway` | `http` | 选择业务协议入口 |
-| `--dry-run` | 布尔值 | `false` | 校验并展示计划，不写入文件 |
+| `--dry-run` | 布尔值 | `false` | 校验并展示文件、依赖版本及冲突，不写入文件 |
 
 ```bash
 goseed --module github.com/chengwz/shop
 goseed --db=postgres --redis --authz=casbin --transport=dual
 goseed --db=mysql --transport=gateway
-goseed --db=none --auth=none
+goseed --db=none --redis --transport=grpc
 ```
 
 示例中的 GitHub 路径仅展示模块参数格式，生成器不创建远端仓库、不提交或推送。
@@ -66,10 +65,11 @@ goseed --db=none --auth=none
 
 ### 能力组合规则
 
-- Casbin 依赖 JWT 提供身份；`--auth=none --authz=casbin` 首版报错，不静默关闭授权。
+- Casbin 依赖固定 JWT 基础能力提供身份；授权默认关闭。
 - Casbin + SQLite/MySQL/PostgreSQL：策略使用所选数据库，并生成对应迁移。
 - Casbin + `--db=none`：生成只读策略文件；不生成策略写入或管理 API。
 - Redis 独立于数据库选项，可与 `--db=none` 组合。
+- JWT 是固定基础能力，不提供关闭认证的生成参数；Casbin 在 JWT 身份基础上增加授权。
 - `--db=none`：移除 ORM、数据库驱动和数据库迁移；生成无持久化示例。
 - 参数决定生成源码与依赖，不是服务运行时开关；已有项目不支持通过重复执行根命令补装或替换能力。
 - TLS、pprof、Reflection、缓存是否必需等属于服务运行配置，不增加平行的生成参数。
@@ -143,4 +143,6 @@ fields:
 
 开发初始化可创建不入 Git 的本地配置、随机开发密钥和测试 Token；不得覆盖已有密钥或在生产环境开放开发签发入口。生成命令本身不创建真实环境密钥。
 
-可执行状态和已验证用法只在实现后写入仓库或生成项目 README。
+`goseed.yaml` 记录元数据版本、模板版本、项目名、模块路径、数据库、JWT、授权、Redis、协议和初始 `example` 模块；业务服务不依赖或读取该文件。该元数据供后续业务生成器检查能力兼容性。
+
+根命令生成项目后，README 列出实际可执行的命令；业务生成命令仍按后续检查点实现。

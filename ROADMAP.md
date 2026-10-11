@@ -2,19 +2,18 @@
 
 ## 当前状态
 
-文档基线、D1、D2、D3 与 D4（HTTP、纯 gRPC、dual、Gateway）已完成。四种协议均支持四种存储、可选 Redis 与 Casbin，共 64 种组合；MySQL、PostgreSQL、Redis 已完成真实服务验证，Gateway 生产容器验收通过。首次基线提交为 `01c8d6c`，本地分支为 `main`，未配置远端。主模块为 `github.com/setcreed/goseed`，工具链固定为 Go 1.26.4。
+文档基线、D1、D2、D3、D4（HTTP、纯 gRPC、dual、Gateway）与 D5 项目生成器已完成。四种协议均支持四种存储、可选 Redis 与 Casbin，共 64 种组合；MySQL、PostgreSQL、Redis 已完成真实服务验证，Gateway 生产容器验收通过。根命令已支持当前目录生成、能力选择、版本化元数据和 dry-run；业务模块与 CRUD 生成属于 D6。首次基线提交为 `01c8d6c`，本地分支为 `main`，未配置远端。主模块为 `github.com/setcreed/goseed`，工具链固定为 Go 1.26.4。
 
-纯 gRPC 已按 [协议契约](docs/template-grpc.md) 交付共享业务层、安全链、健康服务、TLS、示例客户端与公开 `pkg/api` 协议类型；dual 按 [双协议契约](docs/template-dual.md) 共享同一 Biz 与依赖，提供独立监听覆盖、启动失败回收和并发排空。Gateway 按 [Gateway 契约](docs/template-gateway.md) 将 HTTP 请求转发到真实 RPC 服务，复用认证、授权和业务层，并先排空 HTTP 再关闭 RPC。`Options.Transport` 支持 `http`（默认）、`grpc`、`dual` 与 `gateway`。Redis 与 Casbin 默认关闭，分别通过内部 Render 的 `Options.Redis`、`Options.Authz` 选择。缓存按 TTL 最终一致；Casbin 默认拒绝，SQL 策略显式迁移与事务导入，无数据库策略只读，离线更新后重启实例。root CLI 仍仅提供帮助与版本，项目生成写入在 D5 接入。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
+纯 gRPC 已按 [协议契约](docs/template-grpc.md) 交付共享业务层、安全链、健康服务、TLS、示例客户端与公开 `pkg/api` 协议类型；dual 按 [双协议契约](docs/template-dual.md) 共享同一 Biz 与依赖，提供独立监听覆盖、启动失败回收和并发排空。Gateway 按 [Gateway 契约](docs/template-gateway.md) 将 HTTP 请求转发到真实 RPC 服务，复用认证、授权和业务层，并先排空 HTTP 再关闭 RPC。`Options.Transport` 支持 `http`（默认）、`grpc`、`dual` 与 `gateway`。Redis 与 Casbin 默认关闭，分别通过内部 Render 的 `Options.Redis`、`Options.Authz` 选择。缓存按 TTL 最终一致；Casbin 默认拒绝，SQL 策略显式迁移与事务导入，无数据库策略只读，离线更新后重启实例。项目生成命令以 [命令契约](docs/cli.md) 为准；下一检查点为 D6 业务模块与 CRUD 生成。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
 
 ## 进行中
 
-无。下一功能为 D5 全参数项目生成器。
+无。下一功能为 D6 模块与 CRUD 业务生成器。
 
 ## 待开始
 
 | 检查点 | 交付 | 依赖 |
 |---|---|---|
-| D5 | 全参数项目生成器、项目命名与 dry-run | D2、D3、D4 |
 | D6 | 模块与 CRUD 业务生成器 | D5 |
 | D7 | 首版覆盖核验和使用文档 | D6 |
 
@@ -28,6 +27,8 @@
 - 待细化：D6 的 CRUD 字段声明完整格式与生成登记接口。
 
 ## 最近完成
+
+- 2026-10-11 22:45 D5 项目生成器：根命令默认在当前目录生成 HTTP／SQLite／JWT 项目，支持项目名、模块路径、数据库、Redis、Casbin、四种协议和 dry-run；固定 JWT 为基础能力。生成前渲染全部文件并检查目录、路径与冲突，独占创建、不覆盖已有文件，写入失败仅回滚本次创建内容；允许保留 `.git` 与系统文件。生成 `goseed.yaml` 记录版本、模块、能力和初始 `example` 登记，dry-run 展示文件、依赖版本和冲突。README 与需求、架构、命令契约同步；下一检查点为 D6。
 
 - 2026-10-11 22:07 D4 Gateway：`Options.Transport: "gateway"` 通过实际 gRPC 服务转发 HTTP／ProtoJSON 请求，共享 Handler、Biz、认证和授权链；交付双监听配置、内部 TLS 验证、健康探测、HTTP 优先排空及 Gateway／Swagger 产物，裁剪重复 Gin 业务 Handler。16 种变体组合与四协议共 64 种组合契约通过；补齐 Gateway 文档、依赖和容器／数据库／Redis 验收。下一检查点为 D5。入口见 [Gateway 契约](docs/template-gateway.md) 。
 
@@ -57,9 +58,10 @@
 - 2026-10-11 00:36 D2 配置与日志：模板提供强类型配置、显式环境绑定、覆盖顺序、未知键及带单位时长校验、生产秘密和 JSON 日志要求；日志带服务、版本和 UTC 时间，渲染项目通过自身测试及 vet。
 - 2026-10-11 00:36 模板系统元数据修复：复现 Finder 创建 `.DS_Store` 后渲染失败；改用默认嵌入过滤并支持 `dot.<name>.tmpl` 输出隐藏文件，渲染忽略已知系统元数据。
 - 2026-10-11 00:30 D2 模板渲染：嵌入模板返回确定顺序的完整文件计划，校验名称/模块路径，使用独立分隔符、缺失变量检查和 Go 格式化；准备阶段失败返回空计划，CLI 生成写入仍在 D5 接入。
-- 2026-10-11 00:29 D2 配置与运行契约：确定开发初始化、迁移、Token、配置覆盖、身份与资源归属、CRUD 输入和生命周期验收；默认模板契约提供后续实现入口。
 
 ## 最近验证
+
+- 2026-10-11 22:45 D5：`make check` 与 `make build` 通过；`make check` 覆盖全部 Go 包、模板组合集成测试、vet 与 lint（0 issues）。CLI、生成器、模板定向测试、格式、契约链接和 diff 检查通过；构建出的二进制实际运行默认生成与 PostgreSQL + Redis + Casbin + Gateway dry-run，检查默认元数据、依赖版本和无落盘行为。沙箱曾因禁止回环监听拒绝集成用例，获准在本机重跑后全套通过。
 
 - 2026-10-11 22:07 D4 Gateway：`make check` 的根模块集成测试、`make fmt-check`、`make vet`、`make lint`、协议复现与 `make contract-check`／`git diff --check` 通过；新增的 Gateway 包 race 与 IPv4／IPv6 通配监听目标回归通过。`make template-db` 的 MySQL／PostgreSQL Gateway 项目、`make template-redis` 的 SQLite／无数据库及 Casbin 组合均实际运行通过且无跳过；启用 Docker 的 Gateway TLS 容器实际测试通过。Redis 重启后的旧 gRPC 健康恢复用例曾暴露瞬时观察竞态，改为有界 5 秒轮询后完整 Redis 套件通过；没有改变生产服务重试行为。
 
@@ -89,4 +91,3 @@
 - 2026-10-11 00:36 D2 配置与日志：`make check` 通过；集成测试实际渲染独立模块、补齐固定依赖后执行 readonly 测试与 vet。配置回归覆盖覆盖优先级、环境独立启动、显式文件缺失、未知键、无单位时长、pprof 限制及密钥错误脱敏。
 - 2026-10-11 00:36 模板元数据：`make test vet GO_PACKAGES=./internal/templates` 通过；回归覆盖 `.DS_Store`、`Thumbs.db` 不进入文件计划及 `.gitignore` 输出保留。
 - 2026-10-11 00:30 D2 模板渲染：`make check` 通过；单元测试覆盖确定性、变量展开、非法名称与模块注入、缺失变量、语法和格式错误，失败不返回部分计划。
-- 2026-10-11 00:29 D2 契约：`make contract-check` 通过 22 个本地链接、版本契约及 35 个交付文件格式；对照现有需求与架构，业务生成 CLI 保持 D5 范围。

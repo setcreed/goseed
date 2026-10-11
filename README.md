@@ -6,7 +6,7 @@
 
 Go 工具链固定为 **1.26.4**，主模块为 **`github.com/setcreed/goseed`**。仓库默认分支为 `main`。
 
-当前 CLI 支持 `--help` 和 `--version`。无参数执行、未知参数或命令会返回错误，并且不会创建项目文件。当前没有 CLI 项目创建入口，项目命名的设计见 [命令契约](docs/cli.md#项目名模块路径与目录) 。开发检查点以 [ROADMAP.md](ROADMAP.md) 为准。
+根命令已生成独立业务项目：在空目录执行 `goseed` 默认生成 HTTP + SQLite + JWT 项目；`--name` 和 `--module` 可分别指定项目名与模块路径，数据库、协议、Redis 和 Casbin 可通过参数选择，`--dry-run` 只展示计划并检查冲突。目录名默认作为项目名，写入前拒绝非空业务目录，不覆盖已有文件；生成的 `goseed.yaml` 记录模板版本和能力选择，业务服务不依赖此元数据。当前尚未实现 `gen module` 与 `gen resource`。完整参数、默认值和限制见 [命令契约](docs/cli.md) 。开发检查点以 [ROADMAP.md](ROADMAP.md) 为准。
 
 内部模板渲染入口为 `internal/templates.Default` 与 `Render(Project, Options)`，返回校验后的文件计划，展开项目名称及模块路径，并格式化 Go 源码。`Project.Name` 与 `Project.Module` 分别指定项目名和 Go 模块路径，二者独立校验，不要求名称与模块路径末段相同。渲染不联网、不直接写入文件。
 
@@ -18,7 +18,7 @@ Go 工具链固定为 **1.26.4**，主模块为 **`github.com/setcreed/goseed`**
 | `Options.Transport` | `http`、`grpc`、`dual`、`gateway` | `http` |
 | 身份认证 | 所有当前模板均包含 JWT，Render 没有认证裁剪选项 | JWT |
 
-四种存储 × Redis 开关 × Casbin 开关 × 四种协议模式共 64 种组合。按选项裁剪源码、驱动、配置、迁移、依赖和文档。这些是内部模板选项，当前 `goseed` CLI 不接受对应创建参数；业务项目中的 `apiserver serve` 监听参数见 [命令契约](docs/cli.md#服务开发与运行入口) 。
+四种存储 × Redis 开关 × Casbin 开关 × 四种协议模式共 64 种组合。按选项裁剪源码、驱动、配置、迁移、依赖和文档；根命令支持这四个维度的生成参数，JWT 为固定基础能力。业务项目中的 `apiserver serve` 监听参数见 [命令契约](docs/cli.md#服务开发与运行入口) 。
 
 默认 HTTP 模板包含 Handler → Biz → Store 分层、SQLite、JWT、示例 CRUD、配置与日志、健康检查和优雅退出。提供开发密钥初始化、开发 Token 签发、显式迁移、严格输入校验、资源主体隔离、TLS 与 CORS；没有公开的临时签发接口。服务命令与验收边界见 [默认 HTTP 模板](docs/template-http.md) 。
 
@@ -49,6 +49,10 @@ make build
 ./bin/goseed --help
 ./bin/goseed --version
 
+# 在空业务目录内执行；可先用 --dry-run 查看输出清单
+goseed --name shop --module github.com/acme/shop --dry-run
+goseed --db=postgres --redis --authz=casbin --transport=dual
+
 make tools
 make protocol-tools
 make check
@@ -69,6 +73,8 @@ make template-redis
 普通检查验证四种存储与 Redis 的组合、缓存命中/主体隔离/失效、受控连接取消和短超时；实际 Redis 用例在缺少专用凭据时明确跳过。`template-redis` 使用固定摘要的 Redis 8.10.2、专用密码与 TLS 证书、随机回环端口，验证 SQLite 与无数据库缓存、TTL、TLS 信任、错误密码、必需／可选故障行为及停机后恢复，禁止跳过真实用例。需要 Docker 与 OpenSSL，退出只清理本次容器与临时凭据，保留依赖镜像缓存；不清空共享 Redis 数据。
 
 普通检查覆盖 Casbin 的八种 HTTP 开启组合及原有关闭组合，验证 readonly 清单、Linux 纯 Go 构建、策略输入、并发快照、取消、默认拒绝、授权与归属隔离、错误导入保留旧策略及撤销。`template-redis` 同时验证 HTTP／gRPC／dual／Gateway 的 Casbin 组合，权限撤销并重启后，Redis 中仍存在的缓存不能绕过授权；gRPC 验证可选回源、必需模式 Unavailable、健康 NOT_SERVING、恢复与日志脱敏，dual／Gateway 验证两侧共同执行故障与授权规则。
+
+`goseed` 生成命令只写入当前目录，不执行 Git、依赖安装、迁移、容器或服务。目标目录可保留 `.git`、`.DS_Store` 和 `Thumbs.db`；其他已有内容均作为冲突拒绝生成。dry-run 不写入文件，输出完整文件计划、依赖版本与冲突说明。
 
 ## 技术兼容性验证
 

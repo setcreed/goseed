@@ -118,11 +118,11 @@ shop/
 
 这是目标能力全集示意，实际按参数生成：HTTP-only 不生成 gRPC、Proto、示例 RPC 客户端与公开 Go 协议包；grpc-only 不生成 Gin 业务 Handler；dual 保留两种 Handler，使用 `internal/pkg/dual/` 协调生命周期；Gateway 不生成同一业务的 Gin Handler；无数据库不生成 Store、Model 或数据库迁移。授权、缓存目录只在选择对应能力时生成，只有存在实际内容时才创建目录。
 
-图中的 `goseed.yaml`、`modules_gen.go` 和 `specs/` 属于 D5／D6 的元数据与业务登记设计；部署目录按交付需求创建。当前文件交付范围以 README 与实际模板为准，检查点状态以 ROADMAP 为准。
+`goseed.yaml` 由 D5 项目生成器创建，记录模板版本、能力与初始业务模块；`modules_gen.go` 和 `specs/` 属于 D6 的业务登记设计。部署目录按交付需求创建，当前文件交付范围以 README 与实际模板为准，检查点状态以 ROADMAP 为准。
 
 `pkg/api` 只承载供 Go 客户端导入的生成协议类型，不作为公共工具杂物目录。`api/proto/<module>/v1` 保存业务模块的 Proto，Gateway 在相同目录维护 `http.yaml` 映射，`pkg/api/<module>/v1` 保存对应生成代码；`v1` 表达协议版本，Biz 不默认按版本分目录。gRPC 的服务与拦截器位于 `internal/pkg/rpc/`，dual 的监听与关闭协调位于 `internal/pkg/dual/`，Gateway 的转发与顺序关闭位于 `internal/pkg/gateway/`；协议运行约束见 [纯 gRPC 模板](template-grpc.md) 、[双协议模板](template-dual.md) 与 [Gateway 模板](template-gateway.md) 。
 
-`goseed.yaml` 是版本化生成元数据，包含模板版本、模块路径、能力选择和业务登记。它不是服务运行配置，也不能作为容器中的必需文件。
+`goseed.yaml` 是版本化生成元数据，包含元数据版本、模板版本、项目名、模块路径、能力选择和初始 `example` 模块登记。它不是服务运行配置，也不能作为容器中的必需文件；后续业务生成器读取它并拒绝不兼容的模板版本或能力。
 
 ## 技术方案
 
