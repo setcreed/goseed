@@ -8,7 +8,7 @@
 
 ## 进行中
 
-D6 进行中：`gen module` 已生成无虚构业务行为的 Biz/Handler 骨架；按数据库生成仓储/Store 扩展点，并按项目协议动态登记模块。模块清单、协议索引、OpenAPI 源和汇总在同一 dry-run 计划内验证，写入失败回滚新增文件和已更新索引。四种协议的 SQLite 与无数据库代表项目均完成实际测试。下一步实现资源 spec 严格解析和 `gen resource`，验证主体隔离 CRUD 与显式迁移。
+D6 进行中：`gen module` 已生成无虚构业务行为的 Biz/Handler 骨架；按数据库生成仓储/Store 扩展点，并按项目协议动态登记模块。模块清单、协议索引、OpenAPI 源和汇总在同一 dry-run 计划内验证，写入失败回滚新增文件和已更新索引。资源字段 YAML 的严格版本 1 解析器已实现并覆盖结构与类型边界。下一步把解析器接入 `gen resource` 计划，再交付四协议主体隔离 CRUD 和显式迁移草稿。
 
 ## 待开始
 
@@ -24,9 +24,11 @@ D6 进行中：`gen module` 已生成无虚构业务行为的 Biz/Handler 骨架
 - 跟踪：go-redis 的纯取消 issue 仍开放；当前明确短命令预算、关闭命令与拨号重试，受控连接及真实服务取消已通过，但不承诺瞬时中断或全部取消竞争已消除。官方证据见 [依赖核验](docs/dependencies.md) 。
 - 待核验：pgx 缓冲响应与取消竞争的人工延迟 Write 场景；基础运行中 deadline 与随后池复用已通过，未声明解决上游报告。官方证据与版本边界见 [依赖核验](docs/dependencies.md) 。
 - 待确认：goseed 自身许可证；仅在公开发布前必须确定。主模块已确定为 `github.com/setcreed/goseed`，Go 工具链固定为 1.26.4。
-- 待实现：资源 spec 严格解析、`gen resource` dry-run 计划、协议 CRUD 产物、显式迁移草稿和业务隔离验证。当前 `gen module` 生成的是无业务操作的结构骨架；Gateway HTTP 映射及 query/body 输入规则继续由模块登记描述驱动。
+- 待实现：将严格资源 spec 解析接入 `gen resource` dry-run 计划，生成四协议 CRUD、显式迁移草稿并完成主体隔离验证。当前 `gen module` 生成的是无业务操作的结构骨架；Gateway HTTP 映射及 query/body 输入规则继续由模块登记描述驱动。
 
 ## 最近完成
+
+- 2026-10-12 07:37 D6 资源字段规范解析：新增严格版本 1 YAML 解析器，校验 UTF-8、单文档、重复/未知键、字段数量与命名、保留名、类型、required、max_length 和默认值；拒绝空值、别名、锚点、合并键及自定义标签。作为 `gen resource` 计划的输入基础，不单独写入业务项目。
 
 - 2026-10-12 07:27 D6 `gen module`：新增当前项目模块生成命令，按四种协议渲染登记索引并生成 Biz/Handler 骨架；SQL 选项生成仓储/Store 扩展点，无数据库不生成 Store。合并模块 OpenAPI 源，dry-run 显示新增、更新和冲突；多文件写入前重验输入与目标，更新失败回滚登记索引和本次新增文件。资源 CRUD 命令仍待实现。
 
@@ -84,6 +86,8 @@ D6 进行中：`gen module` 已生成无虚构业务行为的 Biz/Handler 骨架
 - 2026-10-11 00:30 D2 模板渲染：嵌入模板返回确定顺序的完整文件计划，校验名称/模块路径，使用独立分隔符、缺失变量检查和 Go 格式化；准备阶段失败返回空计划，CLI 生成写入仍在 D5 接入。
 
 ## 最近验证
+
+- 2026-10-12 07:37 D6 资源规范解析：`go test ./internal/generator ./internal/cli ./internal/templates` 与对应 `go vet` 通过；覆盖默认值/字段顺序、无效 UTF-8、多文档、重复及未知键、字段名/类型/保留名、空值、别名/锚点/合并键/自定义标签、max_length 范围和字段数上限。复用项目已有 `.tmp` Go 缓存。
 
 - 2026-10-12 07:31 D6 `gen module`：生成 HTTP、gRPC、dual、Gateway 四种协议的 SQLite 与无数据库代表项目，均执行 `go test -mod=readonly ./...` 通过；覆盖 dry-run 无写入、已有文件冲突、过期计划拒绝、更新失败后回滚和 Go 关键词模块名。定向生成器/模板/CLI 测试、`go vet ./...`、核心包 lint（0 issues）、`make contract-check`（68 个本地链接、326 个交付文件）、`make fmt-check` 与 `git diff --check` 通过。首次测试路径误用缓存触发网络下载失败，修正到 `.tmp` 缓存后测试通过；沙箱拒绝回环监听时只运行编译检查，获准回环验证后八个代表项目完整测试通过。清理本次 `.tmp/d6-module-smoke-20261012`、`.tmp/d6-module-smoke-final` 和误建根目录缓存。
 
