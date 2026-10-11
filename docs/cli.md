@@ -14,7 +14,7 @@ goseed
 
 根命令不带参数时，在当前目录生成 HTTP + SQLite + JWT 项目。当前目录必须没有业务文件；可保留 `.git` Git 元数据和 `.DS_Store`、`Thumbs.db` 系统文件，不遍历或修改这些保留内容。其他已有文件会导致生成前失败。
 
-HTTP、dual 与 Gateway 项目会同时生成内置 `example` 模块的 `api/openapi/example.yaml` 源文件和规范化的 `api/openapi/swagger.json` 汇总索引；纯 gRPC 项目不生成 HTTP OpenAPI 文件。业务生成器写入前会校验 `goseed.yaml` 和登记摘要；模块源文件变化会重新合并为待写索引，若当前汇总索引与其记录的摘要不符则失败。
+HTTP、dual 与 Gateway 项目会同时生成内置 `example` 模块的 `api/openapi/example.yaml` 源文件和规范化的 `api/openapi/swagger.json` 汇总索引；纯 gRPC 项目不生成 HTTP OpenAPI 文件。生成器内部的索引更新计划会复核 `goseed.yaml`、模块源文件与目标字节，模块源变化时重建待写索引；若当前汇总索引与登记摘要不符则失败。此计划尚未作为公开 CLI 命令提供。
 
 默认名称取目录名。首版项目与模块业务名称使用小写字母开头，后续允许小写字母和数字，对应 `^[a-z][a-z0-9]*$`；例如 `shop`、`shopapi`、`shop2`。不接受大写字母、连字符、下划线或路径分隔符；目录名不符合规则时需通过 `--name` 指定，不静默改名。
 

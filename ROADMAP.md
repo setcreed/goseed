@@ -2,13 +2,13 @@
 
 ## 当前状态
 
-文档基线、D1、D2、D3、D4（HTTP、纯 gRPC、dual、Gateway）与 D5 项目生成器已完成。四种协议均支持四种存储、可选 Redis 与 Casbin，共 64 种组合；MySQL、PostgreSQL、Redis 已完成真实服务验证，Gateway 生产容器验收通过。根命令已支持当前目录生成、能力选择、版本化元数据和 dry-run；业务模块与 CRUD 生成属于 D6。HTTP、dual 与 Gateway 初始项目现在同时生成 `example.yaml` OpenAPI 源及规范化汇总索引；生成器已有只读项目状态校验入口。首次基线提交为 `01c8d6c`，本地分支为 `main`，未配置远端。主模块为 `github.com/setcreed/goseed`，工具链固定为 Go 1.26.4。
+文档基线、D1、D2、D3、D4（HTTP、纯 gRPC、dual、Gateway）与 D5 项目生成器已完成。四种协议均支持四种存储、可选 Redis 与 Casbin，共 64 种组合；MySQL、PostgreSQL、Redis 已完成真实服务验证，Gateway 生产容器验收通过。根命令已支持当前目录生成、能力选择、版本化元数据和 dry-run；业务模块与 CRUD 生成属于 D6。HTTP、dual 与 Gateway 初始项目现在同时生成 `example.yaml` OpenAPI 源及规范化汇总索引；生成器可校验项目状态，并为已登记源变化安全刷新汇总索引与摘要。首次基线提交为 `01c8d6c`，本地分支为 `main`，未配置远端。主模块为 `github.com/setcreed/goseed`，工具链固定为 Go 1.26.4。
 
 纯 gRPC 已按 [协议契约](docs/template-grpc.md) 交付共享业务层、安全链、健康服务、TLS、示例客户端与公开 `pkg/api` 协议类型；dual 按 [双协议契约](docs/template-dual.md) 共享同一 Biz 与依赖，提供独立监听覆盖、启动失败回收和并发排空。Gateway 按 [Gateway 契约](docs/template-gateway.md) 将 HTTP 请求转发到真实 RPC 服务，复用认证、授权和业务层，并先排空 HTTP 再关闭 RPC。`Options.Transport` 支持 `http`（默认）、`grpc`、`dual` 与 `gateway`。Redis 与 Casbin 默认关闭，分别通过内部 Render 的 `Options.Redis`、`Options.Authz` 选择。缓存按 TTL 最终一致；Casbin 默认拒绝，SQL 策略显式迁移与事务导入，无数据库策略只读，离线更新后重启实例。项目生成命令以 [命令契约](docs/cli.md) 为准；D6 命令、字段、文件所有权和登记契约已确定，HTTP/dual 路由及四种协议的 RPC Service/权限、Gateway HTTP 映射已接入登记索引。OpenAPI 确定性合并器已完成，项目初始模板会写入规范化 Swagger 和摘要；新增模块的源文件读取及索引更新流程、业务生成命令仍待实现。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
 
 ## 进行中
 
-D6 进行中：HTTP/dual 路由及四种协议的 RPC Service/权限、Gateway HTTP 映射已接入登记索引；OpenAPI 多源合并、初始模块源生成及只读摘要校验/待更新识别已实现，dual 索引同时登记 HTTP 与 RPC。当前检查点是把校验状态接入登记更新计划与安全写回，再交付 `gen module` 与 `gen resource`。
+D6 进行中：HTTP/dual 路由及四种协议的 RPC Service/权限、Gateway HTTP 映射已接入登记索引；OpenAPI 多源合并、初始模块源生成、摘要校验及 OpenAPI 索引安全刷新已实现，dual 索引同时登记 HTTP 与 RPC。当前检查点是将模块元数据和 `modules_gen.go` 动态登记接入同一安全写回计划，随后交付 `gen module` 与 `gen resource`。
 
 ## 待开始
 
@@ -31,6 +31,8 @@ D6 进行中：HTTP/dual 路由及四种协议的 RPC Service/权限、Gateway H
 - 2026-10-12 00:02 D6 OpenAPI 合并器：新增生成器专用 YAML 依赖和多源 Swagger 2.0 合并器，按模块名稳定合并 paths、组件与 tags，拒绝重复键、别名、merge key、自定义标签、重复操作及 operationId，输出规范 JSON 与 SHA-256。初始模板渲染和 Gateway Proto 复现均规范化 Swagger，并把摘要写入登记索引；补齐 dual 专用 HTTP/RPC 合并登记模板。模块文件发现、摘要校验及后续索引安全写回仍待接入业务生成命令。
 
 - 2026-10-12 06:39 D6 项目状态校验：HTTP、dual 与 Gateway 新项目新增内置 `example.yaml` OpenAPI 源，Gateway 协议复现同步更新该源；新增 `generator.LoadProject`，严格校验 `goseed.yaml`、模块源登记和现有索引摘要，计算当前源的规范化索引并标出待更新状态，拒绝未登记 YAML 源及纯 gRPC 项目的 HTTP OpenAPI 文件。四种协议状态校验和关键篡改路径定向测试通过；增量登记与安全写回仍待实现。
+
+- 2026-10-12 06:49 D6 OpenAPI 安全刷新计划：新增 `PrepareOpenAPIRefresh`，准备阶段不落盘，执行前重新验证项目清单、源文件、登记摘要和目标原始字节；Swagger 与登记摘要采用同目录临时文件原子替换，多文件中后续写入失败时回滚先前替换。本能力当前是生成器内部 API，尚未接入业务生成 CLI。
 
 - 2026-10-11 23:24 D6 Gateway HTTP 登记接入：Gateway 启动组装从 `modules_gen.go` 读取模块名、路径、query 参数、JSON body 方法和 gRPC-Gateway 注册回调；请求日志路由与 query 校验使用同一登记描述，移除 Handler 对示例路径和字段的绑定。SQLite 与无数据库 Gateway 代表项目通过集成验证；OpenAPI 汇总及 D6 命令仍未实现。
 
@@ -80,6 +82,8 @@ D6 进行中：HTTP/dual 路由及四种协议的 RPC Service/权限、Gateway H
 - 2026-10-12 00:02 D6 OpenAPI/登记回归：核心包测试、`make vet`、`make lint`（0 issues）、`make contract-check`（68 个本地链接、321 个交付文件）、`make fmt-check` 与 `git diff --check` 通过。分别运行默认项目、`TestDualProjects/(sqlite-none|none-none)`、`TestGatewayProjects/(sqlite-none|none-none)`；生成项目 readonly 编译、race/vet/lint、本机服务调用通过，Gateway Proto／Swagger 逐字节复现通过。Gateway 首次复现发现模板规范化与 protoc 原始输出格式不一致，已规范化复现脚本并重跑通过。完整 `make test` 矩阵未完成；首次模板测试断言的编译问题已修正，后续全量矩阵被主动停止，不能视为全矩阵通过。验证后清理本次生成的项目和 Go/lint 构建缓存，保留历史 `.tmp/d2/render-3653844838` 与可复用模块缓存。
 
 - 2026-10-12 06:47 D6 项目状态校验：定向测试、`go vet ./...`、契约检查、格式检查和核心修改包 lint（0 issues）通过；集成包编译通过。Gateway SQLite 与无数据库代表项目均完成 Proto／Swagger／`example.yaml` 复现，SQLite 代表用例通过；默认 HTTP 与 Gateway 无数据库用例在服务 SIGTERM 排空处超时（重跑仍复现），不能算集成通过。全仓及 `tests/integration` lint 因 Go 1.26 linter 遇到 Go 1.27 源码而 panic。清理本轮 171 MiB 任务缓存；完整生成项目矩阵尚未通过。
+
+- 2026-10-12 06:49 OpenAPI 安全刷新：生成器、OpenAPI、模板和 CLI 包测试通过，覆盖 dry-run 无写入、过期计划拒绝及第二个文件替换失败后回滚；`make vet`、核心包 lint（0 issues）、`make contract-check`（68 个链接、324 个交付文件）、`make fmt-check` 和 `git diff --check` 通过。
 
 - 2026-10-11 23:17 D6 RPC 登记：`go test ./internal/templates` 通过；在获准的本机回环环境运行 `go test ./tests/integration -run '^Test(GRPCProjects|GatewayProjects)/(sqlite-none|none-none)$'`，SQLite 与无数据库的 gRPC-only、Gateway 代表项目全部通过 readonly 编译、race/vet/lint、Proto 复现和服务回环调用；清理本次测试写入的 28,811 个 Go 构建缓存文件及 132 MiB 隔离缓存，保留历史共享缓存。
 
