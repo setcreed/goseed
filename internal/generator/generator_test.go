@@ -27,6 +27,132 @@ func TestPrepareAddsVersionedGenerationMetadata(t *testing.T) {
 	}
 }
 
+func TestLoadProjectVerifiesOpenAPISourcesAndGeneratedIndex(t *testing.T) {
+	root := t.TempDir()
+	project := templates.Project{Name: "shop", Module: "example.com/shop"}
+	plan, err := Prepare(root, project, templates.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := plan.Write(); err != nil {
+		t.Fatal(err)
+	}
+	state, err := LoadProject(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Sources) != 1 || state.Sources[0].Name != "example" || state.OpenAPI.Digest == "" {
+		t.Fatalf("unexpected verified state: %+v", state)
+	}
+
+	sourcePath := filepath.Join(root, "api/openapi/example.yaml")
+	source, err := os.ReadFile(sourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := bytes.Replace(source, []byte("shop HTTP API"), []byte("changed HTTP API"), 1)
+	if bytes.Equal(changed, source) {
+		t.Fatal("test source has no expected project title")
+	}
+	if err := os.WriteFile(sourcePath, changed, 0644); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := LoadProject(root)
+	if err != nil {
+		t.Fatalf("valid source edit should produce a pending index update: %v", err)
+	}
+	if !updated.OpenAPIIndexStale || bytes.Equal(updated.OpenAPI.JSON, updated.CurrentOpenAPI) {
+		t.Fatal("source edit was not represented as a pending index update")
+	}
+	index, err := os.ReadFile(filepath.Join(root, "api/openapi/swagger.json"))
+	if err != nil || !bytes.Equal(index, updated.CurrentOpenAPI) {
+		t.Fatal("loading project modified the existing OpenAPI index")
+	}
+}
+
+func TestLoadProjectRejectsInvalidMetadataAndRegistryDigest(t *testing.T) {
+	t.Run("duplicate metadata key", func(t *testing.T) {
+		root := generatedProject(t, templates.Options{})
+		path := filepath.Join(root, "goseed.yaml")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data = append(data, []byte("version: 1\n")...)
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadProject(root); err == nil || !strings.Contains(err.Error(), "duplicate key") {
+			t.Fatalf("duplicate metadata key was not rejected: %v", err)
+		}
+	})
+
+	t.Run("modified digest", func(t *testing.T) {
+		root := generatedProject(t, templates.Options{})
+		path := filepath.Join(root, "internal/apiserver/bootstrap/modules_gen.go")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data = bytes.Replace(data, []byte("const openAPISHA256 = \""), []byte("const openAPISHA256 = \"bad"), 1)
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadProject(root); err == nil || !strings.Contains(err.Error(), "digest") {
+			t.Fatalf("modified registry digest was not rejected: %v", err)
+		}
+	})
+
+	t.Run("modified index", func(t *testing.T) {
+		root := generatedProject(t, templates.Options{})
+		path := filepath.Join(root, "api/openapi/swagger.json")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data = bytes.Replace(data, []byte("shop HTTP API"), []byte("changed HTTP API"), 1)
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadProject(root); err == nil || !strings.Contains(err.Error(), "digest") {
+			t.Fatalf("modified aggregate index was not rejected: %v", err)
+		}
+	})
+}
+
+func TestLoadProjectHandlesProtocolSpecificOpenAPI(t *testing.T) {
+	for _, transport := range []string{"http", "grpc", "dual", "gateway"} {
+		t.Run(transport, func(t *testing.T) {
+			state, err := LoadProject(generatedProject(t, templates.Options{Transport: transport}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if transport == "grpc" {
+				if len(state.Sources) != 0 || state.OpenAPI.Digest != "" {
+					t.Fatalf("gRPC-only project unexpectedly loaded HTTP sources: %+v", state)
+				}
+				return
+			}
+			if len(state.Sources) != 1 || state.OpenAPI.Digest == "" {
+				t.Fatalf("HTTP-capable project did not load its registered source: %+v", state)
+			}
+		})
+	}
+}
+
+func generatedProject(t *testing.T, options templates.Options) string {
+	t.Helper()
+	root := t.TempDir()
+	plan, err := Prepare(root, templates.Project{Name: "shop", Module: "example.com/shop"}, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := plan.Write(); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
 func TestWriteCreatesProjectAndNeverOverwrites(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Mkdir(filepath.Join(root, ".git"), 0755); err != nil {

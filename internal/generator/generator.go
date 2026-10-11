@@ -30,6 +30,15 @@ func Prepare(root string, project templates.Project, options templates.Options) 
 	if err != nil {
 		return Plan{}, fmt.Errorf("prepare project templates: %w", err)
 	}
+	for _, file := range files {
+		if file.Path == "api/openapi/swagger.json" {
+			// The initial example module owns the template's complete HTTP
+			// contract. Keep its source beside the generated aggregate so later
+			// module generation can rebuild the index from declared sources.
+			files = append(files, templates.File{Path: "api/openapi/example.yaml", Content: bytes.Clone(file.Content)})
+			break
+		}
+	}
 	metadata, err := renderMetadata(project, options)
 	if err != nil {
 		return Plan{}, err

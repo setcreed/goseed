@@ -88,6 +88,10 @@ func verifyGRPCProto(t *testing.T, directory, root string) {
 		if err != nil || string(data) != string(swagger) {
 			t.Fatal("Swagger reproduction differs")
 		}
+		source, err := os.ReadFile(filepath.Join(directory, "api/openapi/example.yaml"))
+		if err != nil || string(source) != string(swagger) {
+			t.Fatal("Gateway OpenAPI source reproduction differs")
+		}
 	}
 	for name, want := range original {
 		got, err := os.ReadFile(filepath.Join(directory, "pkg/api/example/v1", name))

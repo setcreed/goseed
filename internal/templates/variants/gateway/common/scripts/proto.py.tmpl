@@ -29,4 +29,5 @@ with tempfile.TemporaryDirectory(dir=base) as temporary:
     swagger = json.loads((Path(temporary) / 'example.swagger.json').read_text(encoding='utf-8'))
     canonical = json.dumps(swagger, ensure_ascii=False, sort_keys=True, indent=2) + '\n'
     (root / 'api/openapi/swagger.json').write_text(canonical, encoding='utf-8')
+    (root / 'api/openapi/example.yaml').write_text(canonical, encoding='utf-8')
 print('Generated protocol files updated')

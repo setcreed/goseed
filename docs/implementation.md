@@ -64,7 +64,7 @@ Redis 验证命中、失效、回源、超时、连接故障、必需状态失�
 
 ## 检查点 D6：业务生成器
 
-命令、字段声明、文件归属和登记规则已在 [命令契约](cli.md#生成业务模块) 定义。`internal/openapi.Merge` 已实现多份 Swagger 2.0 YAML 的确定性合并、重复定义/操作冲突检查、规范化 JSON 和 SHA-256；项目初始渲染会规范化内置 Swagger 并把摘要写入 HTTP 登记索引。dual 使用合并的 HTTP/RPC 登记模板，gRPC-only 裁剪 HTTP 文档与摘要。真实生成项目的默认 HTTP、dual 和 Gateway 代表组合通过构建、race、vet、lint、Proto 复现和本机调用。后续仍需将模块 OpenAPI YAML 的读取、登记文件摘要验证及安全写回接入生成计划，然后实现资源 spec 严格解析、完整生成计划与 `gen module`／`gen resource` 命令。
+命令、字段声明、文件归属和登记规则已在 [命令契约](cli.md#生成业务模块) 定义。`internal/openapi.Merge` 已实现多份 Swagger 2.0 YAML 的确定性合并、重复定义/操作冲突检查、规范化 JSON 和 SHA-256；HTTP、dual 与 Gateway 项目会把内置 Swagger 同时保存为 `example.yaml` 源文件和规范化索引。`generator.LoadProject` 严格读取版本化元数据及登记源文件，校验现有索引的 SHA-256，并计算当前源文件的合并结果以标记待更新状态；纯 gRPC 项目验证其不包含 HTTP OpenAPI。dual 使用合并的 HTTP/RPC 登记模板，gRPC-only 裁剪 HTTP 文档与摘要。真实生成项目的默认 HTTP、dual 和 Gateway 代表组合通过构建、race、vet、lint、Proto 复现和本机调用。后续仍需把校验结果接入增量登记计划与安全写回，再实现资源 spec 严格解析、完整生成计划与 `gen module`／`gen resource` 命令。
 
 交付协议适配骨架、主体隔离 CRUD、显式迁移草稿、字段校验、测试、元数据登记与冲突保护。新业务文件由开发者维护；`goseed.yaml`、`modules_gen.go` 与聚合的 `api/openapi/swagger.json` 是可再生成登记/汇总文件，带摘要/标记并在更新前校验改动。
 
