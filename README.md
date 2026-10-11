@@ -6,9 +6,9 @@
 
 Go 工具链固定为 **1.26.4**，主模块为 **`github.com/setcreed/goseed`**。仓库默认分支为 `main`。
 
-当前 CLI 支持 `--help` 和 `--version`。无参数执行、未知参数或命令会返回错误，并且不会创建项目文件。开发检查点以 [ROADMAP.md](ROADMAP.md) 为准；完整产品命令契约见设计文档。
+当前 CLI 支持 `--help` 和 `--version`。无参数执行、未知参数或命令会返回错误，并且不会创建项目文件。当前没有 CLI 项目创建入口，项目命名的设计见 [命令契约](docs/cli.md#项目名模块路径与目录) 。开发检查点以 [ROADMAP.md](ROADMAP.md) 为准。
 
-内部模板渲染入口为 `internal/templates.Default` 与 `Render(Project, Options)`，返回校验后的文件计划，展开项目名称及模块路径，并格式化 Go 源码。`Options.Database` 支持 `sqlite`、`mysql`、`postgres`、`none`，默认 SQLite；`Options.Redis` 默认关闭，可与四种存储选择组合。按选项裁剪源码、驱动、配置、迁移、依赖和文档。渲染不联网、不直接写入文件。
+内部模板渲染入口为 `internal/templates.Default` 与 `Render(Project, Options)`，返回校验后的文件计划，展开项目名称及模块路径，并格式化 Go 源码。`Project.Name` 与 `Project.Module` 分别指定项目名和 Go 模块路径，二者独立校验，不要求名称与模块路径末段相同。`Options.Database` 支持 `sqlite`、`mysql`、`postgres`、`none`，默认 SQLite；`Options.Redis` 默认关闭，可与四种存储选择组合。按选项裁剪源码、驱动、配置、迁移、依赖和文档。渲染不联网、不直接写入文件。
 
 默认 HTTP 模板包含 Handler → Biz → Store 分层、SQLite、JWT、示例 CRUD、配置与日志、健康检查和优雅退出。提供开发密钥初始化、开发 Token 签发、显式迁移、严格输入校验、资源主体隔离、TLS 与 CORS；没有公开的临时签发接口。服务命令与验收边界见 [默认 HTTP 模板](docs/template-http.md) 。
 

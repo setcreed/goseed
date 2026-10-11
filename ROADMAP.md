@@ -12,7 +12,7 @@
 |---|---|---|
 | D3 后续 | Casbin | D2；SQL、无数据库与 Redis 变体已完成 |
 | D4 | gRPC、dual、Gateway | D2；相关组合依赖 D3 |
-| D5 | 全参数项目生成器与 dry-run | D2、D3、D4 |
+| D5 | 全参数项目生成器、项目命名与 dry-run | D2、D3、D4 |
 | D6 | 模块与 CRUD 业务生成器 | D5 |
 | D7 | 首版覆盖核验和使用文档 | D6 |
 
@@ -27,6 +27,8 @@
 - 待细化：D6 的 CRUD 字段声明完整格式与生成登记接口。
 
 ## 最近完成
+
+- 2026-10-11 11:40 项目命名文档：补充 `--name`、`--module`、默认值、名称校验及目录行为，明确目录名/项目名/模块路径末段可不同，`--name` 不创建或重命名目录。README 说明内部模板当前支持名称与路径替换，创建命令示例明确属于 D5 契约；AGENTS 已有命令文档入口，无需重复规则。CLI 实现未变化，下一功能仍为 Casbin。入口见 [命令契约](docs/cli.md#项目名模块路径与目录) 。
 
 - 2026-10-11 07:35 D3 Redis：Render 支持 `Options.Redis` 与四种存储选择组合，生成时裁剪客户端、配置、依赖、文档与测试；Biz 使用缓存接口，交付主体/资源摘要 Key、成功读取缓存、坏值回源、TTL 和写后失效。提供可选故障回源、必需启动/就绪/业务阻断、验证 TLS、脱敏日志与 App 统一关闭；固定 go-redis v9.23.0 和 Redis 8.10.2 镜像摘要，交付 `make template-redis`。同步项目与生成产物文档，root CLI 写入仍属 D5；下一功能为 Casbin。契约见 [可选模板](docs/template-options.md) 。
 
@@ -52,6 +54,8 @@
 
 ## 最近验证
 
+- 2026-10-11 11:40 项目命名文档：`make contract-check` 与 `git diff --check` 通过；人工对照 CLI 当前仅支持帮助/版本、模板 Name/Module 独立校验及名称正则，核对示例参数、默认值、当前目录写入和文档锚点一致。仅修改 README、ROADMAP 与命令契约，不涉及代码或运行配置。
+
 - 2026-10-11 07:35 D3 Redis：`make check`、`make race build`、`make template-redis`、模板契约与 diff 检查通过。八种产物文件/依赖裁剪与清单不变，四种 Redis 组合完成 readonly 测试/vet/race/lint 和 Linux amd64 纯 Go 构建。固定摘要真实 TLS Redis 对 SQLite、无数据库完成无跳过验收：缓存命中、TTL、隔离、坏值、失效、取消/deadline、后续池复用、未知 CA/主机名/错误密码拒绝、可选停机回源、必需启动/就绪/读写 503 阻断、恢复及日志脱敏通过。受控 RESP2 连接覆盖运行中取消；修正 socket deadline 与 Context 定时器竞争、内部缓存预算误映射 504。复现 Docker 随机端口重启会改变，隔离夹具改用随机选择的固定映射并检查一致性。专用 Redis 标签下容器为零，仅清理本次临时凭据与依赖准备产物，保留共享镜像缓存。
 
 - 2026-10-11 07:05 D3 无数据库：最终 `make check`、`make race build`、`make template-container` 与模板契约检查通过；四种产物均通过 readonly 测试/vet/race/lint，清单不变。无数据库依赖树与文件裁剪、本机及 Linux amd64 纯 Go 构建、JWT 两主体、UTF-8/控制字符/长度/未知与重复参数、Context、非法配置、迁移命令无写入、TLS/CORS、JSON 日志脱敏与重启/退出通过。实际无数据库容器验证非 root、只读根文件系统、无卷与 JWT；默认容器迁移/CRUD/持久化回归通过。定位新二进制首次执行约 4.99s、再次非法命令约 9ms，测试先检查无写入帮助，再按原 3s 门槛验证失败退出。专用测试标签下容器、镜像与卷只读检查全部为零。
@@ -74,4 +78,3 @@
 - 2026-10-11 00:08 D1 工程与协议：`make tools`、`make protocol-tools` 成功，仅安装到项目 `.tools/`；linter 实际由 Go 1.26.4 编译。`make check`、`make race build`、`make protocol-check` 与独立模块 lint/race 通过；二进制元数据确认工具链与主模块，CLI 进程退出码及无写入行为通过。`make compatibility-cross` 对运行依赖及生成协议的两个测试包在 Linux amd64/arm64、Windows amd64 完成纯 Go 编译；实际 gRPC/Gateway 回环与 Swagger 2.0 解析通过。
 - 2026-10-11 00:08 D1 真实数据库：`make compatibility-db` 使用固定 RepoDigest 的 MySQL 8.4.11、PostgreSQL 18.6，在全新隔离数据库完成显式迁移、缺表失败且不建表、默认拒绝、角色权限、重载、删除与原子保存回滚；SQLite 同时通过，外部用例无跳过。回环 gRPC/Gateway 通过；两个测试项目的容器、卷及网络经 Docker 标签过滤只读检查均为零。日志仅作临时证据，正式复现入口见 README。
 - 2026-10-11 00:08 D1 SQLite：`CGO_ENABLED=0` 本机测试通过多连接 PRAGMA、显式 Goose 迁移及重复执行、唯一/外键错误、事务回滚、运行中 deadline、busy timeout 与连接关闭后持久化读取；策略原型通过缺表失败且不建表、默认拒绝、角色权限、重载、删除与保存失败回滚。运行依赖树只包含 libtnb/modernc SQLite，不含第二套驱动。
-- 2026-10-10 23:16 文档与仓库基线：Python 检查 7 份 Markdown 的本地链接、参考名称排除、CLI 参数和能力覆盖；Git check-ignore 验证 31 个应忽略/应跟踪路径；确认 `main`、无暂存文件和远端，全部通过。尚无代码，不涉及构建、数据库或业务运行验证。
