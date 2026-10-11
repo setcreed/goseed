@@ -74,6 +74,36 @@ func TestLoadProjectVerifiesOpenAPISourcesAndGeneratedIndex(t *testing.T) {
 }
 
 func TestLoadProjectRejectsInvalidMetadataAndRegistryDigest(t *testing.T) {
+	t.Run("modified module digest", func(t *testing.T) {
+		root := generatedProject(t, templates.Options{})
+		path := filepath.Join(root, "internal/apiserver/bootstrap/modules_gen.go")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data = bytes.Replace(data, []byte("const modulesSHA256 = \""), []byte("const modulesSHA256 = \"bad"), 1)
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadProject(root); err == nil || !strings.Contains(err.Error(), "module registration digest") {
+			t.Fatalf("modified module digest was not rejected: %v", err)
+		}
+	})
+	t.Run("changed module manifest", func(t *testing.T) {
+		root := generatedProject(t, templates.Options{})
+		path := filepath.Join(root, "goseed.yaml")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data = append(data, []byte("  - name: orders\n    type: module\n")...)
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadProject(root); err == nil || !strings.Contains(err.Error(), "module registration digest") {
+			t.Fatalf("changed module manifest was not rejected: %v", err)
+		}
+	})
 	t.Run("duplicate metadata key", func(t *testing.T) {
 		root := generatedProject(t, templates.Options{})
 		path := filepath.Join(root, "goseed.yaml")

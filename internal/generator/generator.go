@@ -43,6 +43,23 @@ func Prepare(root string, project templates.Project, options templates.Options) 
 	if err != nil {
 		return Plan{}, err
 	}
+	registryFound := false
+	moduleDigest := moduleManifestDigest([]ModuleMetadata{{Name: "example", Type: "module"}})
+	for i := range files {
+		if files[i].Path != "internal/apiserver/bootstrap/modules_gen.go" {
+			continue
+		}
+		marker := []byte(`const modulesSHA256 = ""`)
+		if bytes.Count(files[i].Content, marker) != 1 {
+			return Plan{}, fmt.Errorf("module registration index must contain one module manifest digest marker")
+		}
+		files[i].Content = bytes.Replace(files[i].Content, marker, []byte(fmt.Sprintf("const modulesSHA256 = %q", moduleDigest)), 1)
+		registryFound = true
+		break
+	}
+	if !registryFound {
+		return Plan{}, fmt.Errorf("project templates have no module registration index")
+	}
 	files = append(files, templates.File{Path: "goseed.yaml", Content: metadata})
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 

@@ -8,7 +8,7 @@
 
 ## 进行中
 
-D6 进行中：HTTP/dual 路由及四种协议的 RPC Service/权限、Gateway HTTP 映射已接入登记索引；OpenAPI 多源合并、初始模块源生成、摘要校验及 OpenAPI 索引安全刷新已实现，dual 索引同时登记 HTTP 与 RPC。新项目已写结构化模块项，项目状态读取兼容旧版字符串项，并验证资源登记字段。当前检查点是将模块清单变更、`modules_gen.go` 动态登记与 OpenAPI 汇总接入同一安全写回计划，随后交付 `gen module` 与 `gen resource`。
+D6 进行中：HTTP/dual 路由及四种协议的 RPC Service/权限、Gateway HTTP 映射已接入登记索引；OpenAPI 多源合并、初始模块源生成、摘要校验及 OpenAPI 索引安全刷新已实现，dual 索引同时登记 HTTP 与 RPC。新项目使用结构化模块项，旧版字符串项可读，资源登记字段受校验；四种协议登记索引带有并验证模块清单摘要。当前检查点是让登记索引由清单确定性渲染，并将模块清单、`modules_gen.go` 和 OpenAPI 更新接入同一安全写回计划，随后交付 `gen module` 与 `gen resource`。
 
 ## 待开始
 
@@ -27,6 +27,8 @@ D6 进行中：HTTP/dual 路由及四种协议的 RPC Service/权限、Gateway H
 - 待实现：将结构化模块清单更新、各协议 `modules_gen.go` 动态登记和 OpenAPI 多源合并接入统一安全写回计划；实现模块源码模板、资源 spec 严格解析、dry-run 生成计划及 `gen module`／`gen resource` 命令。Gateway HTTP 映射及 query/body 输入规则已由模块登记描述驱动。
 
 ## 最近完成
+
+- 2026-10-12 07:01 D6 模块清单摘要校验：四种协议模板登记索引新增模块清单摘要；项目加载校验清单与登记摘要一致，手工改变摘要或清单时拒绝继续。动态登记内容重渲染和统一写回计划仍待实现。
 
 - 2026-10-12 06:58 D6 结构化模块元数据：新项目 `goseed.yaml` 使用带 `name/type` 的登记项，资源项校验 `specs/` 相对路径及字段规范版本；读取旧版字符串条目时兼容解释为普通模块。业务生成命令及登记索引重渲染尚未实现。
 
@@ -80,6 +82,8 @@ D6 进行中：HTTP/dual 路由及四种协议的 RPC Service/权限、Gateway H
 - 2026-10-11 00:30 D2 模板渲染：嵌入模板返回确定顺序的完整文件计划，校验名称/模块路径，使用独立分隔符、缺失变量检查和 Go 格式化；准备阶段失败返回空计划，CLI 生成写入仍在 D5 接入。
 
 ## 最近验证
+
+- 2026-10-12 07:01 模块清单摘要校验：`go test ./internal/generator ./internal/cli ./internal/templates`、`go vet ./...`、核心包 `golangci-lint`（0 issues）通过；覆盖四协议项目加载、篡改摘要拒绝和篡改模块清单拒绝。验证复用项目已有 `.tmp` Go 缓存。
 
 - 2026-10-12 06:58 结构化模块元数据：`go test ./internal/generator ./internal/cli ./internal/templates`、`make contract-check`（68 个本地链接、324 个交付文件）、`make fmt-check` 与 `git diff --check` 通过；覆盖结构化模块/资源项、旧版字符串兼容、未知字段和 spec 路径/版本拒绝。使用项目已有 `.tmp` Go 构建与模块缓存。
 

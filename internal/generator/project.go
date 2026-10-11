@@ -34,10 +34,10 @@ type ProjectMetadata struct {
 
 // ModuleMetadata describes one generated business namespace.
 type ModuleMetadata struct {
-	Name         string `yaml:"name"`
-	Type         string `yaml:"type"`
-	Spec         string `yaml:"spec,omitempty"`
-	FieldVersion int    `yaml:"field_version,omitempty"`
+	Name         string `yaml:"name" json:"name"`
+	Type         string `yaml:"type" json:"type"`
+	Spec         string `yaml:"spec,omitempty" json:"spec,omitempty"`
+	FieldVersion int    `yaml:"field_version,omitempty" json:"field_version,omitempty"`
 }
 
 // ProjectState is a verified snapshot of the generation-owned OpenAPI inputs
@@ -75,6 +75,15 @@ func LoadProject(root string) (ProjectState, error) {
 		return ProjectState{}, err
 	}
 	state := ProjectState{Root: absoluteRoot, Metadata: metadata}
+	registry, err := readProjectFile(absoluteRoot, "internal/apiserver/bootstrap/modules_gen.go")
+	if err != nil {
+		return ProjectState{}, err
+	}
+	modulesDigest := moduleManifestDigest(metadata.Modules)
+	moduleMarker := []byte(`const modulesSHA256 = "` + modulesDigest + `"`)
+	if bytes.Count(registry, []byte("const modulesSHA256 = ")) != 1 || bytes.Count(registry, moduleMarker) != 1 {
+		return ProjectState{}, fmt.Errorf("module registration digest does not match goseed.yaml modules")
+	}
 	if metadata.Transport == "grpc" {
 		if _, err := os.Lstat(filepath.Join(absoluteRoot, "api/openapi")); !os.IsNotExist(err) {
 			if err != nil {
@@ -108,10 +117,6 @@ func LoadProject(root string) (ProjectState, error) {
 	}
 	if !json.Valid(index) {
 		return ProjectState{}, fmt.Errorf("api/openapi/swagger.json is not valid JSON")
-	}
-	registry, err := readProjectFile(absoluteRoot, "internal/apiserver/bootstrap/modules_gen.go")
-	if err != nil {
-		return ProjectState{}, err
 	}
 	indexDigest := sha256.Sum256(index)
 	currentDigest := hex.EncodeToString(indexDigest[:])
@@ -239,10 +244,19 @@ func parseProjectMetadata(data []byte) (ProjectMetadata, error) {
 }
 
 func validResourceSpec(spec string) bool {
-	if !filepath.IsLocal(filepath.FromSlash(spec)) || filepath.Ext(spec) != ".yaml" || !strings.HasPrefix(filepath.ToSlash(spec), "specs/") {
+	normalized := filepath.ToSlash(filepath.Clean(filepath.FromSlash(spec)))
+	if normalized != spec || !filepath.IsLocal(filepath.FromSlash(spec)) || filepath.Ext(spec) != ".yaml" || !strings.HasPrefix(spec, "specs/") {
 		return false
 	}
 	return true
+}
+
+func moduleManifestDigest(modules []ModuleMetadata) string {
+	hash := sha256.New()
+	for _, module := range modules {
+		_, _ = fmt.Fprintf(hash, "%s\x00%s\x00%s\x00%d\n", module.Name, module.Type, module.Spec, module.FieldVersion)
+	}
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 func validateMetadataNode(node *yaml.Node) error {
