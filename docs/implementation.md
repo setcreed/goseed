@@ -64,7 +64,7 @@ Redis 验证命中、失效、回源、超时、连接故障、必需状态失�
 
 ## 检查点 D6：业务生成器
 
-命令、字段声明、文件归属和登记规则已在 [命令契约](cli.md#生成业务模块) 定义。`tests/compatibility/module_registry_contract_test.go` 编译验证了 HTTP 路由、gRPC 注册/权限、Gateway 映射和文档输入的适配形态；HTTP/dual 模板已消费生成的 HTTP 模块描述，真实生成项目回归通过。下一步把 RPC 与 Gateway 注册接入真实模板，并验证跨协议共享 Biz 与 OpenAPI 汇总；确认完整样例可编译、运行后，再实现严格 YAML 解析和完整生成计划，最后交付 `gen module` 与 `gen resource`。
+命令、字段声明、文件归属和登记规则已在 [命令契约](cli.md#生成业务模块) 定义。`tests/compatibility/module_registry_contract_test.go` 编译验证 HTTP 路由、gRPC 注册/权限、Gateway 映射和文档输入的适配形态；HTTP/dual 模板按 HTTP 描述挂载路由，gRPC-only、dual 与 Gateway 通过 RPC 描述注册 Service 和 FullMethod 权限，真实生成项目代表组合回归通过。下一步把 Gateway HTTP 映射及 OpenAPI 汇总也接入索引，再验证跨协议共享 Biz；确认完整样例可编译、运行后，实现严格 YAML 解析和完整生成计划，最后交付 `gen module` 与 `gen resource`。
 
 交付协议适配骨架、主体隔离 CRUD、显式迁移草稿、字段校验、测试、元数据登记与冲突保护。新业务文件由开发者维护；`goseed.yaml`、`modules_gen.go` 与聚合的 `api/openapi/swagger.json` 是可再生成登记/汇总文件，带摘要/标记并在更新前校验改动。
 

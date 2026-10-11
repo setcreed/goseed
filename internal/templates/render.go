@@ -177,7 +177,7 @@ func renderTree(source fs.FS, root string, data templateData) ([]File, error) {
 			return fmt.Errorf("unrecognized template: %s", filename)
 		}
 		relative := strings.TrimSuffix(strings.TrimPrefix(filename, root+"/"), ".tmpl")
-		if (data.Transport == "grpc" || data.Transport == "gateway") && relative == "internal/apiserver/bootstrap/modules_gen.go" {
+		if root == "base" && (data.Transport == "grpc" || data.Transport == "gateway") && relative == "internal/apiserver/bootstrap/modules_gen.go" {
 			return nil
 		}
 		if (data.Transport == "dual" || data.Transport == "gateway") && strings.HasPrefix(root, "variants/grpc/") && relative == "internal/apiserver/bootstrap/providers_test.go" {

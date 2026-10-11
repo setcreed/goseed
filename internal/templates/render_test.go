@@ -158,10 +158,12 @@ func TestHTTPModuleRegistryIsTransportScoped(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		plan := map[string][]byte{}
 		for _, file := range files {
-			if file.Path == "internal/apiserver/bootstrap/modules_gen.go" {
-				t.Fatalf("HTTP module registry leaked into %s project", transport)
-			}
+			plan[file.Path] = file.Content
+		}
+		if !bytes.Contains(plan["internal/apiserver/bootstrap/modules_gen.go"], []byte("rpcModules")) || bytes.Contains(plan["internal/apiserver/bootstrap/modules_gen.go"], []byte("httpModules")) || len(plan["internal/apiserver/router.go"]) != 0 {
+			t.Fatalf("%s did not prune HTTP and retain RPC registration", transport)
 		}
 	}
 }

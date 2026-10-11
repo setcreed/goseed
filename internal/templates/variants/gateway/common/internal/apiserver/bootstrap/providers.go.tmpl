@@ -47,7 +47,8 @@ func New(settings config.Config, version string) (*App,error) {
 		authentication,err:=do.Invoke[*auth.JWT](i);if err!=nil{return nil,err}
 		examples,err:=do.Invoke[*examplehandler.Handler](i);if err!=nil{return nil,err}
 		[[if eq .Authz "casbin"]]authorization,err:=do.Invoke[*authz.Manager](i);if err!=nil{return nil,err}[[end]]
-		return rpc.New(configuration.GRPC,ready,logging,authentication,examplehandler.Permissions,examples.Register[[if eq .Authz "casbin"]],authorization[[end]])
+		permissions,register:=rpcModules(examples)
+		return rpc.New(configuration.GRPC,ready,logging,authentication,permissions,register[[if eq .Authz "casbin"]],authorization[[end]])
 	})
 	rpcServer,err := do.Invoke[*rpc.Server](injector)
 	if err != nil { [[if .Redis]]_ = caching.Close();[[end]][[if ne .Database "none"]]_ = db.Close();[[end]] _ = logger.Sync(); return nil,err }

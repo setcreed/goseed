@@ -4,11 +4,11 @@
 
 文档基线、D1、D2、D3、D4（HTTP、纯 gRPC、dual、Gateway）与 D5 项目生成器已完成。四种协议均支持四种存储、可选 Redis 与 Casbin，共 64 种组合；MySQL、PostgreSQL、Redis 已完成真实服务验证，Gateway 生产容器验收通过。根命令已支持当前目录生成、能力选择、版本化元数据和 dry-run；业务模块与 CRUD 生成属于 D6。首次基线提交为 `01c8d6c`，本地分支为 `main`，未配置远端。主模块为 `github.com/setcreed/goseed`，工具链固定为 Go 1.26.4。
 
-纯 gRPC 已按 [协议契约](docs/template-grpc.md) 交付共享业务层、安全链、健康服务、TLS、示例客户端与公开 `pkg/api` 协议类型；dual 按 [双协议契约](docs/template-dual.md) 共享同一 Biz 与依赖，提供独立监听覆盖、启动失败回收和并发排空。Gateway 按 [Gateway 契约](docs/template-gateway.md) 将 HTTP 请求转发到真实 RPC 服务，复用认证、授权和业务层，并先排空 HTTP 再关闭 RPC。`Options.Transport` 支持 `http`（默认）、`grpc`、`dual` 与 `gateway`。Redis 与 Casbin 默认关闭，分别通过内部 Render 的 `Options.Redis`、`Options.Authz` 选择。缓存按 TTL 最终一致；Casbin 默认拒绝，SQL 策略显式迁移与事务导入，无数据库策略只读，离线更新后重启实例。项目生成命令以 [命令契约](docs/cli.md) 为准；D6 命令、字段、文件所有权和模块登记接口契约已确定，兼容性模块中已编译原型，待接入并验证真实模板。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
+纯 gRPC 已按 [协议契约](docs/template-grpc.md) 交付共享业务层、安全链、健康服务、TLS、示例客户端与公开 `pkg/api` 协议类型；dual 按 [双协议契约](docs/template-dual.md) 共享同一 Biz 与依赖，提供独立监听覆盖、启动失败回收和并发排空。Gateway 按 [Gateway 契约](docs/template-gateway.md) 将 HTTP 请求转发到真实 RPC 服务，复用认证、授权和业务层，并先排空 HTTP 再关闭 RPC。`Options.Transport` 支持 `http`（默认）、`grpc`、`dual` 与 `gateway`。Redis 与 Casbin 默认关闭，分别通过内部 Render 的 `Options.Redis`、`Options.Authz` 选择。缓存按 TTL 最终一致；Casbin 默认拒绝，SQL 策略显式迁移与事务导入，无数据库策略只读，离线更新后重启实例。项目生成命令以 [命令契约](docs/cli.md) 为准；D6 命令、字段、文件所有权和登记契约已确定，HTTP/dual 路由及 gRPC-only、dual、Gateway RPC Service/权限已接入登记索引，待接入 Gateway HTTP 映射与 OpenAPI 汇总。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
 
 ## 进行中
 
-D6 进行中：命令/字段契约与登记回调原型已完成；HTTP/dual 模板已用登记列表挂载业务路由，默认 HTTP、无数据库 HTTP 和 dual 生成项目通过回归。当前检查点是接入 gRPC/Gateway 注册及 OpenAPI 汇总。
+D6 进行中：HTTP/dual 路由及 gRPC-only、dual、Gateway 的 RPC Service/权限已接入登记索引；HTTP、无数据库 HTTP、dual、gRPC-only、Gateway 代表项目集成通过。当前检查点是把 Gateway HTTP 映射和 OpenAPI 汇总也接入索引。
 
 ## 待开始
 
@@ -24,9 +24,11 @@ D6 进行中：命令/字段契约与登记回调原型已完成；HTTP/dual 模
 - 跟踪：go-redis 的纯取消 issue 仍开放；当前明确短命令预算、关闭命令与拨号重试，受控连接及真实服务取消已通过，但不承诺瞬时中断或全部取消竞争已消除。官方证据见 [依赖核验](docs/dependencies.md) 。
 - 待核验：pgx 缓冲响应与取消竞争的人工延迟 Write 场景；基础运行中 deadline 与随后池复用已通过，未声明解决上游报告。官方证据与版本边界见 [依赖核验](docs/dependencies.md) 。
 - 待确认：goseed 自身许可证；仅在公开发布前必须确定。主模块已确定为 `github.com/setcreed/goseed`，Go 工具链固定为 1.26.4。
-- 待实现：gRPC/Gateway 服务注册描述、依赖组装和 OpenAPI 汇总接入；目前完整模板回归只覆盖 HTTP 与 dual。
+- 待实现：Gateway HTTP 映射、OpenAPI 汇总、D6 严格 YAML 解析与 `gen module`／`gen resource` 生成计划；目前 Gateway 映射仍静态绑定示例 API。
 
 ## 最近完成
+
+- 2026-10-11 23:17 D6 RPC 登记接入：gRPC-only、dual 与 Gateway 的启动组装改用 `modules_gen.go` 返回的 RPC Service 注册回调和 FullMethod 权限映射；HTTP-only 渲染不带 gRPC 登记依赖。
 
 - 2026-10-11 23:12 D6 HTTP/dual 登记接入：生成的 `modules_gen.go` 为 HTTP 业务模块提供路由、名称、路径和操作权限描述；通用路由按登记列表挂载 Handler，Casbin 权限使用模块描述，HTTP 与 dual 共用该入口；gRPC-only/Gateway 渲染裁剪 HTTP 登记文件。业务 Handler 和 Bootstrap 仍由模板维护，生成器暂未开放 `gen` 命令。
 
@@ -68,6 +70,10 @@ D6 进行中：命令/字段契约与登记回调原型已完成；HTTP/dual 模
 - 2026-10-11 00:30 D2 模板渲染：嵌入模板返回确定顺序的完整文件计划，校验名称/模块路径，使用独立分隔符、缺失变量检查和 Go 格式化；准备阶段失败返回空计划，CLI 生成写入仍在 D5 接入。
 
 ## 最近验证
+
+- 2026-10-11 23:17 D6 RPC 登记：`go test ./internal/templates` 通过；在获准的本机回环环境运行 `go test ./tests/integration -run '^Test(GRPCProjects|GatewayProjects)/(sqlite-none|none-none)$'`，SQLite 与无数据库的 gRPC-only、Gateway 代表项目全部通过 readonly 编译、race/vet/lint、Proto 复现和服务回环调用；清理本次测试写入的 28,811 个 Go 构建缓存文件及 132 MiB 隔离缓存，保留历史共享缓存。
+
+- 2026-10-11 23:18 D6 文档/格式收尾：`make contract-check`（68 个本地链接、317 个交付文件）、`make fmt-check`、`git diff --check` 通过；本轮专用缓存与集成测试生成目录已清理。
 
 - 2026-10-11 23:12 D6 HTTP/dual：`go test ./internal/templates` 与新增 transport-scope 测试通过；在获准的本机回环环境执行 `go test ./tests/integration -run '^Test(DefaultProject|NoDatabaseProject|DualProjects)$'`，三个生成项目集成套件无跳过通过，覆盖 readonly 编译、race/vet/lint、HTTP/JWT CRUD、无数据库入口及 dual HTTP+gRPC 行为。清理本次 132 MiB 隔离 Go 构建缓存；`.tmp/d2` 仅保留任务前已有目录。23:13 `make contract-check`（68 个本地链接、316 个交付文件）、`make fmt-check` 与 `git diff --check` 通过，隔离缓存目录已确认不存在。
 
