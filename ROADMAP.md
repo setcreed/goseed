@@ -4,11 +4,11 @@
 
 文档基线、D1、D2、D3、D4（HTTP、纯 gRPC、dual、Gateway）与 D5 项目生成器已完成。四种协议均支持四种存储、可选 Redis 与 Casbin，共 64 种组合；MySQL、PostgreSQL、Redis 已完成真实服务验证，Gateway 生产容器验收通过。根命令已支持当前目录生成、能力选择、版本化元数据和 dry-run；业务模块与 CRUD 生成属于 D6。首次基线提交为 `01c8d6c`，本地分支为 `main`，未配置远端。主模块为 `github.com/setcreed/goseed`，工具链固定为 Go 1.26.4。
 
-纯 gRPC 已按 [协议契约](docs/template-grpc.md) 交付共享业务层、安全链、健康服务、TLS、示例客户端与公开 `pkg/api` 协议类型；dual 按 [双协议契约](docs/template-dual.md) 共享同一 Biz 与依赖，提供独立监听覆盖、启动失败回收和并发排空。Gateway 按 [Gateway 契约](docs/template-gateway.md) 将 HTTP 请求转发到真实 RPC 服务，复用认证、授权和业务层，并先排空 HTTP 再关闭 RPC。`Options.Transport` 支持 `http`（默认）、`grpc`、`dual` 与 `gateway`。Redis 与 Casbin 默认关闭，分别通过内部 Render 的 `Options.Redis`、`Options.Authz` 选择。缓存按 TTL 最终一致；Casbin 默认拒绝，SQL 策略显式迁移与事务导入，无数据库策略只读，离线更新后重启实例。项目生成命令以 [命令契约](docs/cli.md) 为准；D6 命令、字段、文件所有权及登记规则已确定，待开始最小可编译登记样例与业务生成实现。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
+纯 gRPC 已按 [协议契约](docs/template-grpc.md) 交付共享业务层、安全链、健康服务、TLS、示例客户端与公开 `pkg/api` 协议类型；dual 按 [双协议契约](docs/template-dual.md) 共享同一 Biz 与依赖，提供独立监听覆盖、启动失败回收和并发排空。Gateway 按 [Gateway 契约](docs/template-gateway.md) 将 HTTP 请求转发到真实 RPC 服务，复用认证、授权和业务层，并先排空 HTTP 再关闭 RPC。`Options.Transport` 支持 `http`（默认）、`grpc`、`dual` 与 `gateway`。Redis 与 Casbin 默认关闭，分别通过内部 Render 的 `Options.Redis`、`Options.Authz` 选择。缓存按 TTL 最终一致；Casbin 默认拒绝，SQL 策略显式迁移与事务导入，无数据库策略只读，离线更新后重启实例。项目生成命令以 [命令契约](docs/cli.md) 为准；D6 命令、字段、文件所有权和模块登记接口契约已确定，兼容性模块中已编译原型，待接入并验证真实模板。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
 
 ## 进行中
 
-无。下一功能为 D6 模块与 CRUD 业务生成器。
+D6 进行中：命令/字段契约与登记回调原型已完成；当前检查点是把登记索引接入实际 HTTP、gRPC、dual、Gateway 模板并验证生成项目编译和启动。
 
 ## 待开始
 
@@ -24,9 +24,11 @@
 - 跟踪：go-redis 的纯取消 issue 仍开放；当前明确短命令预算、关闭命令与拨号重试，受控连接及真实服务取消已通过，但不承诺瞬时中断或全部取消竞争已消除。官方证据见 [依赖核验](docs/dependencies.md) 。
 - 待核验：pgx 缓冲响应与取消竞争的人工延迟 Write 场景；基础运行中 deadline 与随后池复用已通过，未声明解决上游报告。官方证据与版本边界见 [依赖核验](docs/dependencies.md) 。
 - 待确认：goseed 自身许可证；仅在公开发布前必须确定。主模块已确定为 `github.com/setcreed/goseed`，Go 工具链固定为 1.26.4。
-- 待实现：D6 登记索引接入四种协议的启动组装，先完成可编译样例并验证契约可行。
+- 待实现：实际模板的协议注册描述、依赖组装和 OpenAPI 汇总接入；原型尚未证明完整生成项目启动编译。
 
 ## 最近完成
+
+- 2026-10-11 23:02 D6 登记接口原型：新增兼容性测试，编译并验证 HTTP 路由组回调、gRPC Service 注册/FullMethod 权限映射、Gateway ServeMux 注册回调与文档输入的确定顺序；明确这是接口原型，尚未接入四种生成模板。同步命令、架构和实施契约，下一步验证真实模板。
 
 - 2026-10-11 22:58 D6 契约定义：确定 `gen module`／`gen resource` 命令、版本 1 YAML 字段规则、类型与校验语义、保留字段、主体隔离、目标文件范围及 no-overwrite 边界；以 `goseed.yaml` 为模块清单权威源、`modules_gen.go` 为带摘要的确定性注册索引。更新 CLI、需求、架构和实施文档；D6 代码尚未开始。
 
@@ -64,6 +66,9 @@
 - 2026-10-11 00:30 D2 模板渲染：嵌入模板返回确定顺序的完整文件计划，校验名称/模块路径，使用独立分隔符、缺失变量检查和 Go 格式化；准备阶段失败返回空计划，CLI 生成写入仍在 D5 接入。
 
 ## 最近验证
+
+- 2026-10-11 23:02 D6 登记接口原型：`make compatibility` 首次受沙箱回环监听限制；获准本机重跑后全套兼容性测试通过，包括新增 `TestGeneratedModuleRegistryContract`、Proto 回环测试和 SQLite 行为测试；MySQL/PostgreSQL 兼容性子用例按该目标设计跳过，真实服务仍由 `make compatibility-db` 验证。清理本次隔离 Go 构建缓存。
+- 2026-10-11 23:03 D6 文档与格式回归：`make contract-check`（68 个链接、315 个交付文件）、`make fmt-check`、`git diff --check` 全部通过；确认本次隔离缓存目录已清除。
 
 - 2026-10-11 22:58 D6 契约文档：`make contract-check` 通过（68 个本地链接、314 个交付文件），`git diff --check` 通过；复核命令示例、字段约束、登记文件所有权和 D6 未实现状态一致。
 
