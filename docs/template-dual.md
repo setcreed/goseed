@@ -1,6 +1,6 @@
 # dual 模板契约
 
-D4 的本次功能交付 `Options.Transport: "dual"`。Gin HTTP 与 gRPC 使用独立 Handler，共用同一个 Biz 实例、Store、数据库池、JWT、可选 Redis 和 Casbin；HTTP 不转发到 gRPC。Gateway 留在下一功能，公开生成 CLI 仍属 D5。
+`Options.Transport: "dual"` 选择双协议模板。Gin HTTP 与 gRPC 使用独立 Handler，共用同一个 Biz 实例、JWT、所选存储及可选 Redis 和 Casbin；启用数据库时共用 Store 与连接池，无数据库时仅采用 Handler → Biz。HTTP 不转发到 gRPC。当前交付与后续检查点状态统一见 [ROADMAP](../ROADMAP.md) ，公开生成 CLI 属 D5。
 
 ## 配置与源码
 

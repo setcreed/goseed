@@ -8,7 +8,17 @@ Go 工具链固定为 **1.26.4**，主模块为 **`github.com/setcreed/goseed`**
 
 当前 CLI 支持 `--help` 和 `--version`。无参数执行、未知参数或命令会返回错误，并且不会创建项目文件。当前没有 CLI 项目创建入口，项目命名的设计见 [命令契约](docs/cli.md#项目名模块路径与目录) 。开发检查点以 [ROADMAP.md](ROADMAP.md) 为准。
 
-内部模板渲染入口为 `internal/templates.Default` 与 `Render(Project, Options)`，返回校验后的文件计划，展开项目名称及模块路径，并格式化 Go 源码。`Project.Name` 与 `Project.Module` 分别指定项目名和 Go 模块路径，二者独立校验，不要求名称与模块路径末段相同。`Options.Database` 支持 `sqlite`、`mysql`、`postgres`、`none`，默认 SQLite；`Options.Redis` 默认关闭；`Options.Authz` 支持 `none`（默认）和 `casbin`；`Options.Transport` 支持 `http`（默认）、`grpc` 和 `dual`。四种存储、Redis、Casbin 与三种协议模式共 48 种组合。按选项裁剪源码、驱动、配置、迁移、依赖和文档。渲染不联网、不直接写入文件。
+内部模板渲染入口为 `internal/templates.Default` 与 `Render(Project, Options)`，返回校验后的文件计划，展开项目名称及模块路径，并格式化 Go 源码。`Project.Name` 与 `Project.Module` 分别指定项目名和 Go 模块路径，二者独立校验，不要求名称与模块路径末段相同。渲染不联网、不直接写入文件。
+
+| 模板能力 | 当前支持 | 默认值 |
+|---|---|---|
+| `Options.Database` | `sqlite`、`mysql`、`postgres`、`none` | `sqlite` |
+| `Options.Redis` | 开启或关闭 Redis 缓存 | `false` |
+| `Options.Authz` | `none`、`casbin` | `none` |
+| `Options.Transport` | `http`、`grpc`、`dual` | `http` |
+| 身份认证 | 所有当前模板均包含 JWT，Render 没有认证裁剪选项 | JWT |
+
+四种存储 × Redis 开关 × Casbin 开关 × 三种协议模式共 48 种组合。按选项裁剪源码、驱动、配置、迁移、依赖和文档。这些是内部模板选项，当前 `goseed` CLI 不接受对应创建参数；业务项目中的 `apiserver serve` 监听参数见 [命令契约](docs/cli.md#服务开发与运行入口) 。
 
 默认 HTTP 模板包含 Handler → Biz → Store 分层、SQLite、JWT、示例 CRUD、配置与日志、健康检查和优雅退出。提供开发密钥初始化、开发 Token 签发、显式迁移、严格输入校验、资源主体隔离、TLS 与 CORS；没有公开的临时签发接口。服务命令与验收边界见 [默认 HTTP 模板](docs/template-http.md) 。
 
@@ -22,7 +32,7 @@ Casbin 变体提供默认拒绝的简单 RBAC，业务路由在 JWT 之后、缓
 
 纯 gRPC 变体复用相同 Biz、Store、JWT、Redis 和 Casbin，提供 SQL CRUD／无数据库问候的 Proto、已生成代码与示例客户端。业务方法经过 JWT 和可选授权，保留 optional 零值更新、资源归属、请求 ID、取消与 deadline，错误和日志脱敏。标准 Health Check／Watch 支持依赖故障与恢复，退出先停止就绪再有限期关闭；生产必须 TLS，Reflection 仅开发回环且要求 JWT。移除 Gin、业务 HTTP 配置与 Swagger。协议目录、配置、输入和验证边界见 [纯 gRPC 模板](docs/template-grpc.md) 。
 
-dual 变体同时提供 Gin HTTP 与 gRPC，两种 Handler 共用同一个 Biz、数据库池、JWT、可选缓存与授权。`serve --address` 覆盖 HTTP，`serve --grpc-address` 覆盖 gRPC；先绑定双端口，任一启动失败回收资源，任一服务返回则停止两侧就绪并并发排空，全部退出后关闭共享依赖。保留两种接口契约和生产 TLS 规则，详见 [双协议模板](docs/template-dual.md) 。
+dual 变体同时提供 Gin HTTP 与 gRPC，两种 Handler 共用同一个 Biz、JWT、可选缓存与授权；启用数据库时共用 Store 与连接池。`serve --address` 覆盖 HTTP，`serve --grpc-address` 覆盖 gRPC；先绑定双端口，任一启动失败回收资源，任一服务返回则停止两侧就绪并并发排空，全部退出后关闭共享依赖。保留两种接口契约和生产 TLS 规则，详见 [双协议模板](docs/template-dual.md) 。
 
 渲染项目包含完整 `go.mod` / `go.sum`、AGENTS/README/ROADMAP、Makefile、配置示例和非 root Dockerfile；HTTP 提供 Swagger 2.0，gRPC 提供 Proto 与固定版本显式生成入口，dual 同时提供两者。按所选数据库提供 SQL 迁移，可以独立构建及运行。
 
@@ -99,5 +109,7 @@ make protocol-check
 - [命令契约](docs/cli.md)：默认行为、参数、能力组合和业务生成约束。
 - [实施方案](docs/implementation.md)：开发顺序、检查点及验证方式。
 - [依赖核验](docs/dependencies.md)：固定版本、官方来源、维护情况与兼容性约束。
+- [默认 HTTP 模板](docs/template-http.md)：开发初始化、迁移、JWT、配置、示例业务与运行契约。
+- [可选模板](docs/template-options.md)：数据库裁剪、Redis 缓存、Casbin 策略及真实服务验收。
 - [纯 gRPC 模板](docs/template-grpc.md)：协议目录、配置、安全链、健康服务、退出与验收。
 - [双协议模板](docs/template-dual.md)：共享依赖、独立配置、双端口启动、并发退出与验收。

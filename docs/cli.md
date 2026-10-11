@@ -130,6 +130,16 @@ fields:
 
 生成项目提供 `make build`、`make test`、`make lint`、`make check`；各命令只执行其明确职责。默认 HTTP 模板的服务命令、开发初始化、迁移和 Token 规则见 [默认 HTTP 模板](template-http.md) 。
 
+生成器的 `--transport`、`--db` 等选择生成哪些源码；业务服务的 `serve --address`、`--grpc-address` 覆盖当前模板的监听配置。后者在业务项目中执行，不是 `goseed` 根命令参数。
+
+| 已实现模板 | 业务服务监听参数 | 默认监听地址 | 详细契约 |
+|---|---|---|---|
+| HTTP | `serve --address` 覆盖 HTTP | `127.0.0.1:8080` | [HTTP](template-http.md) |
+| gRPC | `serve --address` 覆盖 gRPC | `127.0.0.1:9090` | [gRPC](template-grpc.md) |
+| dual | `serve --address` 覆盖 HTTP，`--grpc-address` 覆盖 gRPC | HTTP 8080、gRPC 9090，均为回环地址 | [双协议](template-dual.md) |
+
+监听覆盖只适用于 `serve`；开发、迁移及策略命令拒绝这些参数。生产 gRPC 必须配置 TLS，dual 两侧分别遵循各自协议配置和关闭预算；数据库、Redis、Casbin 的使用契约见 [可选模板](template-options.md) 。
+
 开发初始化可创建不入 Git 的本地配置、随机开发密钥和测试 Token；不得覆盖已有密钥或在生产环境开放开发签发入口。生成命令本身不创建真实环境密钥。
 
 可执行状态和已验证用法只在实现后写入仓库或生成项目 README。

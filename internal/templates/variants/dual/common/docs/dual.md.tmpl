@@ -1,6 +1,6 @@
 # 双协议运行
 
-Gin HTTP 与 gRPC 使用独立 Handler，共用同一个 Biz、Store、数据库池、JWT[[if .Redis]]、Redis[[end]][[if eq .Authz "casbin"]] 和 Casbin[[end]]。HTTP 不通过内部 gRPC 转发。
+Gin HTTP 与 gRPC 使用独立 Handler，共用同一个 Biz[[if ne .Database "none"]]、Store、数据库池[[end]]、JWT[[if .Redis]]、Redis[[end]][[if eq .Authz "casbin"]] 和 Casbin[[end]]。HTTP 不通过内部 gRPC 转发。
 
 默认 HTTP 为 `127.0.0.1:8080`，gRPC 为 `127.0.0.1:9090`。`serve --address` 覆盖 HTTP，`serve --grpc-address` 覆盖 gRPC；环境变量分别为 `APP_HTTP_ADDRESS` 与 `APP_GRPC_ADDRESS`。其他命令不接受监听覆盖。Redis 命令预算需小于两侧请求预算。
 

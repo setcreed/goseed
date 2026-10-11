@@ -56,6 +56,8 @@ goseed/
 
 D2 的默认 HTTP 模板集中在 `internal/templates/base/`，文件使用 `.tmpl` 后缀，模板变量使用 `[[...]]` 分隔符以避开 Go 复合字面量。隐藏输出文件使用 `dot.<name>.tmpl` 命名，例如 `dot.gitignore.tmpl` 输出 `.gitignore`，避免嵌入系统隐藏元数据。渲染返回完整文件计划，校验并格式化 Go 源码；测试负责写入本次专用临时项目。公开 CLI 的生成写入与参数组合仍在 D5 接入。
 
+可选能力集中在 `internal/templates/variants/`：`sql/` 提供外部 SQL 共用实现，`mysql/`、`postgres/`、`none/` 提供存储差异，`redis/`、`casbin/`、`grpc/`、`dual/` 提供能力叠加。Render 按所选能力合并文件计划，纯 gRPC 裁剪 HTTP 文件，dual 保留两种 Handler；完整依赖清单按组合固定，不在渲染时查询或生成依赖版本。
+
 Go 工具链固定为 `1.26.4`，主模块为 `github.com/setcreed/goseed`。兼容性测试使用独立 Go 模块，候选业务运行依赖不进入生成器主模块；验证原型不作为未来业务模板的运行依赖。
 
 标准库 `embed` 嵌入模板，`text/template` 渲染，`go/format` 格式化。生成器以明确的登记文件集成模块，优先避免 AST 改写手工业务文件。模板按基础能力和特性组织，避免复制大量完整项目变体。
@@ -68,15 +70,16 @@ shop/
 ├── README.md
 ├── ROADMAP.md
 ├── goseed.yaml
-├── cmd/apiserver/
-│   ├── main.go
-│   └── app/
+├── cmd/
+│   ├── apiserver/
+│   │   ├── main.go
+│   │   └── app/
+│   └── exampleclient/
 ├── internal/
 │   ├── apiserver/
 │   │   ├── bootstrap/
 │   │   │   ├── providers.go
 │   │   │   └── modules_gen.go
-│   │   ├── server.go
 │   │   ├── router.go
 │   │   ├── handler/
 │   │   │   ├── http/example/
@@ -85,11 +88,17 @@ shop/
 │   │   ├── store/example/
 │   │   └── model/
 │   └── pkg/
+│       ├── auth/
+│       ├── authz/
+│       ├── cache/
 │       ├── config/
 │       ├── contextx/
+│       ├── database/
+│       ├── dual/
 │       ├── errno/
 │       ├── log/
 │       ├── middleware/
+│       ├── rpc/
 │       └── server/
 ├── api/
 │   ├── openapi/
@@ -106,7 +115,9 @@ shop/
 └── go.sum
 ```
 
-这是能力全集示意，实际按参数生成：HTTP-only 不生成 gRPC、Proto 与公开 Go 协议包；grpc-only 不生成 Gin 业务 Handler；Gateway 不生成同一业务的 Gin Handler；无数据库不生成 Store、Model 或数据库迁移。只有存在实际内容时才创建目录。
+这是目标能力全集示意，实际按参数生成：HTTP-only 不生成 gRPC、Proto、示例 RPC 客户端与公开 Go 协议包；grpc-only 不生成 Gin 业务 Handler；dual 保留两种 Handler，使用 `internal/pkg/dual/` 协调生命周期；Gateway 不生成同一业务的 Gin Handler；无数据库不生成 Store、Model 或数据库迁移。授权、缓存目录只在选择对应能力时生成，只有存在实际内容时才创建目录。
+
+图中的 `goseed.yaml`、`modules_gen.go` 和 `specs/` 属于 D5／D6 的元数据与业务登记设计；部署目录按交付需求创建。当前文件交付范围以 README 与实际模板为准，检查点状态以 ROADMAP 为准。
 
 `pkg/api` 只承载供 Go 客户端导入的生成协议类型，不作为公共工具杂物目录。`api/proto/<module>/v1` 保存业务模块的 Proto，`pkg/api/<module>/v1` 保存对应生成代码；`v1` 表达协议版本，Biz 不默认按版本分目录。gRPC 的服务与拦截器位于 `internal/pkg/rpc/`，dual 的监听与关闭协调位于 `internal/pkg/dual/`；协议运行约束见 [纯 gRPC 模板](template-grpc.md) 与 [双协议模板](template-dual.md) 。
 
