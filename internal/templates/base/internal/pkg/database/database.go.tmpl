@@ -55,6 +55,7 @@ func (d *Database) CheckSchema(ctx context.Context)error{
  version,err:=d.Version(ctx);if err!=nil{return err};if version!=migrations.Version{return errors.New("database schema is not ready; run migrate up")}
  // Check the actual schema as well as its recorded version without writing.
  if err:=d.DB.WithContext(ctx).Exec("SELECT id,owner,name,description,enabled,created_at,updated_at FROM examples LIMIT 0").Error;err!=nil{return errors.New("database schema is not ready; run migrate up")}
+ [[if eq .Authz "casbin"]]if err:=d.DB.WithContext(ctx).Exec("SELECT id,ptype,v0,v1,v2 FROM casbin_rules LIMIT 0").Error;err!=nil{return errors.New("policy schema is not ready; run migrate up")}[[end]]
  return nil
 }
 func (d *Database) Migrate(ctx context.Context)error{

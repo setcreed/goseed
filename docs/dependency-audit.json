@@ -2470,5 +2470,105 @@
   "redis_image_supplement": {
     "image": "redis:8.10.2-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0",
     "source": "https://raw.githubusercontent.com/docker-library/official-images/master/library/redis"
+  },
+  "casbin_supplement": {
+    "nameWithOwner": "apache/casbin",
+    "url": "https://github.com/apache/casbin",
+    "isArchived": false,
+    "licenseInfo": {
+      "spdxId": "Apache-2.0"
+    },
+    "latestRelease": {
+      "tagName": "v3.11.0",
+      "publishedAt": "2026-08-20T02:57:58Z",
+      "url": "https://github.com/apache/casbin/releases/tag/v3.11.0"
+    },
+    "defaultBranchRef": {
+      "target": {
+        "history": {
+          "nodes": [
+            {
+              "committedDate": "2026-10-09T18:29:41Z",
+              "messageHeadline": "fix: avoid cache key collisions in cached enforcer",
+              "url": "https://github.com/apache/casbin/commit/1e19095c5287eff82ae0d5cc07502d87017944f2",
+              "author": {
+                "user": {
+                  "login": "hsluoyz"
+                }
+              }
+            },
+            {
+              "committedDate": "2026-10-09T18:26:54Z",
+              "messageHeadline": "fix: invalidate decision cache on policy change",
+              "url": "https://github.com/apache/casbin/commit/27d2b2d3663f536a3466d16b5ce00878fc9cd968",
+              "author": {
+                "user": {
+                  "login": "hsluoyz"
+                }
+              }
+            },
+            {
+              "committedDate": "2026-10-08T15:59:58Z",
+              "messageHeadline": "docs: add Trendshift badge to README",
+              "url": "https://github.com/apache/casbin/commit/24d5dc40db0c7f61b17ce752cfdf90aa0632f2e8",
+              "author": {
+                "user": {
+                  "login": "hsluoyz"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "issues": {
+      "nodes": [
+        {
+          "number": 1072,
+          "title": "[Question] How to get data with rbac with domains models",
+          "state": "CLOSED",
+          "updatedAt": "2026-10-05T06:57:27Z",
+          "url": "https://github.com/apache/casbin/issues/1072",
+          "comments": {
+            "nodes": [
+              {
+                "author": {
+                  "login": "hsluoyz"
+                },
+                "authorAssociation": "MEMBER",
+                "createdAt": "2022-12-13T08:50:23Z",
+                "url": "https://github.com/apache/casbin/issues/1072#issuecomment-1347946000"
+              },
+              {
+                "author": {
+                  "login": "ironytr"
+                },
+                "authorAssociation": "NONE",
+                "createdAt": "2024-01-15T23:15:15Z",
+                "url": "https://github.com/apache/casbin/issues/1072#issuecomment-1892861873"
+              },
+              {
+                "author": {
+                  "login": "hsluoyz"
+                },
+                "authorAssociation": "MEMBER",
+                "createdAt": "2024-01-16T00:47:10Z",
+                "url": "https://github.com/apache/casbin/issues/1072#issuecomment-1892916924"
+              }
+            ]
+          }
+        },
+        {
+          "number": 1672,
+          "title": "[feature] Support rate limiting through policy_effect extension",
+          "state": "OPEN",
+          "updatedAt": "2026-09-11T01:50:41Z",
+          "url": "https://github.com/apache/casbin/issues/1672",
+          "comments": {
+            "nodes": []
+          }
+        }
+      ]
+    }
   }
 }

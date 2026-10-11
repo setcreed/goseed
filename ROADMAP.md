@@ -2,15 +2,14 @@
 
 ## 当前状态
 
-文档基线、D1 与 D2 已完成，D3 的 MySQL、PostgreSQL 模板已完成真实服务验证，无数据库变体已完成进程与容器验证，Redis 可选能力已完成四种存储组合检查与真实 TLS 服务验收。首次基线提交为 `01c8d6c`，本地分支为 `main`，未配置远端。主模块为 `github.com/setcreed/goseed`，工具链固定为 Go 1.26.4。三个 SQL 模板与无数据库模板可独立构建，默认 HTTP + SQLite + JWT 及无数据库 HTTP + JWT 的实际进程和容器验证通过。
+文档基线、D1、D2 与 D3 已完成。三个 SQL 模板与无数据库模板可独立构建，MySQL、PostgreSQL 已完成真实服务验证，Redis 与 Casbin 可选能力已完成组合检查及真实存储验收；默认、无数据库及 Casbin 文件策略容器验证通过。首次基线提交为 `01c8d6c`，本地分支为 `main`，未配置远端。主模块为 `github.com/setcreed/goseed`，工具链固定为 Go 1.26.4。
 
-下一功能为 D3 Casbin。Redis 默认关闭，通过内部 Render 的 `Options.Redis` 选择，缓存按 TTL 最终一致，不用于强一致或权威状态。root CLI 仍仅提供帮助与版本，项目生成写入在 D5 接入。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
+下一检查点为 D4 协议模板。Redis 与 Casbin 默认关闭，分别通过内部 Render 的 `Options.Redis`、`Options.Authz` 选择。缓存按 TTL 最终一致；Casbin 默认拒绝，SQL 策略显式迁移与事务导入，无数据库策略只读，离线更新后重启实例。root CLI 仍仅提供帮助与版本，项目生成写入在 D5 接入。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
 
 ## 待开始
 
 | 检查点 | 交付 | 依赖 |
 |---|---|---|
-| D3 后续 | Casbin | D2；SQL、无数据库与 Redis 变体已完成 |
 | D4 | gRPC、dual、Gateway | D2；相关组合依赖 D3 |
 | D5 | 全参数项目生成器、项目命名与 dry-run | D2、D3、D4 |
 | D6 | 模块与 CRUD 业务生成器 | D5 |
@@ -20,13 +19,14 @@
 
 ## 待核验与待确认
 
-- 待核验：D3 的正式 Casbin 策略适配实现、输入约束与请求 Context；D1 原型已在三种数据库通过，不作为业务实现复用。
 - 跟踪：go-redis 的纯取消 issue 仍开放；当前明确短命令预算、关闭命令与拨号重试，受控连接及真实服务取消已通过，但不承诺瞬时中断或全部取消竞争已消除。官方证据见 [依赖核验](docs/dependencies.md) 。
 - 待核验：pgx 缓冲响应与取消竞争的人工延迟 Write 场景；基础运行中 deadline 与随后池复用已通过，未声明解决上游报告。官方证据与版本边界见 [依赖核验](docs/dependencies.md) 。
 - 待确认：goseed 自身许可证；仅在公开发布前必须确定。主模块已确定为 `github.com/setcreed/goseed`，Go 工具链固定为 1.26.4。
 - 待细化：D6 的 CRUD 字段声明完整格式与生成登记接口。
 
 ## 最近完成
+
+- 2026-10-11 12:12 D3 Casbin：Render 支持 `Options.Authz`，交付固定 RBAC、默认拒绝、用户／角色命名空间及 JWT 后的业务授权，资源归属仍由 Biz 校验。三种 SQL 复用现有连接，显式迁移策略表、Context 存储与事务全量导入；无数据库提供只读 CSV。策略严格校验，完整快照成功后发布，失败保留旧策略；离线更新需重启实例，不提供公开策略管理 API。八种新增组合与 Redis／数据库／容器验收通过，D3 完成，下一检查点为 D4。入口见 [可选模板](docs/template-options.md#casbin-可选能力) 。
 
 - 2026-10-11 11:40 项目命名文档：补充 `--name`、`--module`、默认值、名称校验及目录行为，明确目录名/项目名/模块路径末段可不同，`--name` 不创建或重命名目录。README 说明内部模板当前支持名称与路径替换，创建命令示例明确属于 D5 契约；AGENTS 已有命令文档入口，无需重复规则。CLI 实现未变化，下一功能仍为 Casbin。入口见 [命令契约](docs/cli.md#项目名模块路径与目录) 。
 
@@ -54,6 +54,8 @@
 
 ## 最近验证
 
+- 2026-10-11 12:12 D3 Casbin：最终 `make check`、`make race build`、`make template-db`、`make template-redis`、`make template-container` 通过；16 种组合契约及八种新增模板 readonly 测试/vet/race/lint、Linux amd64 纯 Go 构建通过，清单未变化。真实 SQLite/MySQL/PostgreSQL 验证显式迁移、持久化、撤销、唯一约束、保存失败回滚、连接池 deadline 与随后复用；外部数据库无跳过，并先验证 SQL v1 再升级 Casbin v2。真实 TLS Redis 与只读文件容器验证默认拒绝、主体／角色隔离、授权先于缓存、错误导入保留旧策略、重启撤销及日志脱敏；原有数据库、缓存和容器回归通过。仅清理本次临时目录与专用 Docker 资源，相关容器、测试镜像、卷和网络只读核对为空。
+
 - 2026-10-11 11:40 项目命名文档：`make contract-check` 与 `git diff --check` 通过；人工对照 CLI 当前仅支持帮助/版本、模板 Name/Module 独立校验及名称正则，核对示例参数、默认值、当前目录写入和文档锚点一致。仅修改 README、ROADMAP 与命令契约，不涉及代码或运行配置。
 
 - 2026-10-11 07:35 D3 Redis：`make check`、`make race build`、`make template-redis`、模板契约与 diff 检查通过。八种产物文件/依赖裁剪与清单不变，四种 Redis 组合完成 readonly 测试/vet/race/lint 和 Linux amd64 纯 Go 构建。固定摘要真实 TLS Redis 对 SQLite、无数据库完成无跳过验收：缓存命中、TTL、隔离、坏值、失效、取消/deadline、后续池复用、未知 CA/主机名/错误密码拒绝、可选停机回源、必需启动/就绪/读写 503 阻断、恢复及日志脱敏通过。受控 RESP2 连接覆盖运行中取消；修正 socket deadline 与 Context 定时器竞争、内部缓存预算误映射 504。复现 Docker 随机端口重启会改变，隔离夹具改用随机选择的固定映射并检查一致性。专用 Redis 标签下容器为零，仅清理本次临时凭据与依赖准备产物，保留共享镜像缓存。
@@ -77,4 +79,3 @@
 - 2026-10-11 00:13 功能提交工作流与基线：`make check` 通过模块/工具契约、19 个本地文档链接、34 个交付文件、格式、CLI 测试、vet 和 lint；核对提交范围仅包含项目交付文件，`.tmp/`、`.tools/` 和 `bin/` 保持忽略。数据库与协议实现未变化，沿用 D1 已通过的运行证据。
 - 2026-10-11 00:08 D1 工程与协议：`make tools`、`make protocol-tools` 成功，仅安装到项目 `.tools/`；linter 实际由 Go 1.26.4 编译。`make check`、`make race build`、`make protocol-check` 与独立模块 lint/race 通过；二进制元数据确认工具链与主模块，CLI 进程退出码及无写入行为通过。`make compatibility-cross` 对运行依赖及生成协议的两个测试包在 Linux amd64/arm64、Windows amd64 完成纯 Go 编译；实际 gRPC/Gateway 回环与 Swagger 2.0 解析通过。
 - 2026-10-11 00:08 D1 真实数据库：`make compatibility-db` 使用固定 RepoDigest 的 MySQL 8.4.11、PostgreSQL 18.6，在全新隔离数据库完成显式迁移、缺表失败且不建表、默认拒绝、角色权限、重载、删除与原子保存回滚；SQLite 同时通过，外部用例无跳过。回环 gRPC/Gateway 通过；两个测试项目的容器、卷及网络经 Docker 标签过滤只读检查均为零。日志仅作临时证据，正式复现入口见 README。
-- 2026-10-11 00:08 D1 SQLite：`CGO_ENABLED=0` 本机测试通过多连接 PRAGMA、显式 Goose 迁移及重复执行、唯一/外键错误、事务回滚、运行中 deadline、busy timeout 与连接关闭后持久化读取；策略原型通过缺表失败且不建表、默认拒绝、角色权限、重载、删除与保存失败回滚。运行依赖树只包含 libtnb/modernc SQLite，不含第二套驱动。

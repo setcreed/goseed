@@ -4,6 +4,8 @@
 
 ## 开发启动
 
+[[if eq .Authz "casbin"]]本项目启用 Casbin，默认空策略会拒绝所有业务操作。迁移后需按 [授权文档](docs/authz.md) 审核并导入所需策略，再启动或重启服务；下列 CRUD 示例只有获得对应权限后才会成功。
+[[end]]
 ```sh
 make build
 ./bin/apiserver dev init

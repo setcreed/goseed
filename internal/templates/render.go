@@ -31,6 +31,7 @@ type Project struct {
 type Options struct {
 	Database string
 	Redis    bool
+	Authz    string
 }
 
 type templateData struct {
@@ -65,12 +66,18 @@ func Render(project Project, options Options) ([]File, error) {
 	if options.Database != "sqlite" && options.Database != "mysql" && options.Database != "postgres" && options.Database != "none" {
 		return nil, fmt.Errorf("unsupported database")
 	}
+	if options.Authz == "" {
+		options.Authz = "none"
+	}
+	if options.Authz != "none" && options.Authz != "casbin" {
+		return nil, fmt.Errorf("unsupported authorization")
+	}
 	data := templateData{Project: project, Options: options}
 	base, err := renderTree(sources, "base", data)
 	if err != nil {
 		return nil, err
 	}
-	if options.Database == "sqlite" && !options.Redis {
+	if options.Database == "sqlite" && !options.Redis && options.Authz == "none" {
 		return base, nil
 	}
 	// Variant directories intentionally replace matching base files, and add
@@ -88,6 +95,17 @@ func Render(project Project, options Options) ([]File, error) {
 	}
 	if options.Redis {
 		directories = append(directories, "variants/redis/common", "variants/redis/"+options.Database)
+	}
+	if options.Authz == "casbin" {
+		directories = append(directories, "variants/casbin/common")
+		if options.Database != "none" {
+			directories = append(directories, "variants/casbin/sql")
+		}
+		manifest := "plain"
+		if options.Redis {
+			manifest = "redis"
+		}
+		directories = append(directories, "variants/casbin/manifests/"+options.Database+"/"+manifest)
 	}
 	for _, directory := range directories {
 		variant, err := renderTree(sources, directory, data)

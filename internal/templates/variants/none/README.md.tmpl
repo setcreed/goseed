@@ -4,6 +4,8 @@
 
 ## 开发启动
 
+[[if eq .Authz "casbin"]]本项目启用 Casbin，默认空策略拒绝业务操作。启动前按 [授权文档](docs/authz.md) 配置只读策略文件；只有显式获得 example/read 权限的主体可以调用下列问候示例。
+[[end]]
 ```sh
 make build
 ./bin/apiserver dev init

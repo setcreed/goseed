@@ -1,0 +1,55 @@
+package authz
+
+import (
+ "context"
+ "errors"
+ "os"
+ "path/filepath"
+ "strings"
+ "sync"
+ "testing"
+ "time"
+ "[[.Module]]/internal/pkg/errno"
+)
+
+// This store is only a test fixture, never runtime persistence.
+type memoryStore struct{rules []Rule;failure error}
+func(s *memoryStore)Load(ctx context.Context)([]Rule,error){if err:=ctx.Err();err!=nil{return nil,err};if s.failure!=nil{return nil,s.failure};return append([]Rule(nil),s.rules...),nil}
+func(s *memoryStore)Replace(ctx context.Context,rules []Rule)error{if err:=ctx.Err();err!=nil{return err};if s.failure!=nil{return s.failure};s.rules=append([]Rule(nil),rules...);return nil}
+func readRules()[]Rule{return []Rule{{Ptype:"p",V0:"role:reader",V1:"example",V2:"read"},{Ptype:"g",V0:"user:alice",V1:"role:reader"}}}
+
+func TestSnapshotsDefaultDenyIdentityAndFailure(t *testing.T){
+ ctx:=context.Background();store:=&memoryStore{};service,err:=New(ctx,store);if err!=nil{t.Fatal(err)}
+ if !errors.Is(service.Authorize(ctx,"alice","example","read"),errno.Forbidden){t.Fatal("empty policy allowed")}
+ rules:=readRules();if err:=service.Replace(ctx,rules);err!=nil{t.Fatal(err)};rules[0].V2="invalid"
+ if err:=service.Authorize(ctx,"alice","example","read");err!=nil{t.Fatal("granted permission lost")}
+ for _,subject:=range []string{"bob","reader","role:reader","user:alice","Alice"}{if !errors.Is(service.Authorize(ctx,subject,"example","read"),errno.Forbidden){t.Fatal("identity or role namespace bypass")}}
+ for _,permission:=range [][2]string{{"unknown","read"},{"example","*"},{"example","create"}}{if !errors.Is(service.Authorize(ctx,"alice",permission[0],permission[1]),errno.Forbidden){t.Fatal("unknown or ungranted permission allowed")}}
+ store.failure=errors.New("private-storage-failure");if err:=service.Replace(ctx,nil);err==nil{t.Fatal("failed persistence published")};if err:=service.Reload(ctx);err==nil{t.Fatal("failed reload accepted")};if err:=service.Authorize(ctx,"alice","example","read");err!=nil{t.Fatal("failed update changed snapshot")};store.failure=nil
+ canceled,cancel:=context.WithCancel(ctx);cancel();if !errors.Is(service.Authorize(canceled,"alice","example","read"),context.Canceled){t.Fatal("cancel ignored")};if !errors.Is(service.Replace(canceled,nil),context.Canceled){t.Fatal("canceled policy write accepted")}
+ budget,end:=context.WithTimeout(ctx,time.Second);defer end();if err:=service.Replace(budget,nil);err!=nil{t.Fatal("canceled mutation stranded gate")};if !errors.Is(service.Authorize(ctx,"alice","example","read"),errno.Forbidden){t.Fatal("revocation did not publish")}
+ store.rules=readRules();if err:=service.Reload(ctx);err!=nil{t.Fatal(err)};if err:=service.Authorize(ctx,"alice","example","read");err!=nil{t.Fatal("reload failed")}
+ store.rules=[]Rule{{Ptype:"g",V0:"role:reader",V1:"role:other"}};if _,err:=New(ctx,store);err==nil{t.Fatal("corrupt storage accepted at startup")}
+}
+
+func TestConcurrentSnapshotPublication(t *testing.T){
+ ctx:=context.Background();service,err:=New(ctx,&memoryStore{rules:readRules()});if err!=nil{t.Fatal(err)}
+ var workers sync.WaitGroup
+ for range 4{workers.Add(1);go func(){defer workers.Done();for range 100{err:=service.Authorize(ctx,"alice","example","read");if err!=nil&&!errors.Is(err,errno.Forbidden){t.Error(err)};if !errors.Is(service.Authorize(ctx,"role:reader","example","read"),errno.Forbidden){t.Error("role bypass during publication")}}}()}
+ for i:=0;i<20;i++{var rules []Rule;if i%2==0{rules=readRules()};if err:=service.Replace(ctx,rules);err!=nil{t.Fatal(err)}};workers.Wait()
+}
+
+func TestStrictCSVAndReadOnlyFile(t *testing.T){
+ ctx:=context.Background();path:=filepath.Join(t.TempDir(),"policy.csv")
+ write:=func(data string){t.Helper();if err:=os.WriteFile(path,[]byte(data),0600);err!=nil{t.Fatal(err)}}
+ valid:="p, role:reader, example, read\ng, user:alice, role:reader\n";write(valid)
+ source:=NewFile(path);service,err:=New(ctx,source);if err!=nil{t.Fatal(err)};if err:=service.Authorize(ctx,"alice","example","read");err!=nil{t.Fatal(err)}
+ if !errors.Is(service.Replace(ctx,nil),ErrReadOnly){t.Fatal("file store was writable")};data,_:=os.ReadFile(path);if string(data)!=valid{t.Fatal("read-only operation changed file")}
+ for _,data:=range []string{"p, role:reader, example, read, extra\n","g, role:reader, role:other\n","g, user:alice, reader\n","p, role:Reader, example, read\n","p, role:reader, unknown, read\n","p, role:reader, example, *\n",valid+valid,"g, user: alice, role:reader\n","g, user:alice ","g, user:alice, role:reader,\n","g, user:bad\x00subject, role:reader\n",string([]byte{0xff}),strings.Repeat("#",MaxFileBytes+1)}{write(data);if _,err:=ReadFile(ctx,path);err==nil{t.Fatal("invalid CSV accepted")}}
+ write("# empty policy\n");if rules,err:=ReadFile(ctx,path);err!=nil||len(rules)!=0{t.Fatal("empty policy rejected")}
+ link:=filepath.Join(filepath.Dir(path),"link.csv");if err:=os.Symlink(path,link);err!=nil{t.Fatal(err)};if _,err:=ReadFile(ctx,link);err==nil{t.Fatal("symlink policy accepted")}
+ if _,err:=ReadFile(ctx,filepath.Dir(path));err==nil{t.Fatal("directory policy accepted")};if _,err:=ReadFile(ctx,path+"missing");err==nil||strings.Contains(err.Error(),"missing"){t.Fatal("missing policy accepted or disclosed")}
+ tooMany:=make([]Rule,MaxRules+1);if err:=ValidateRules(ctx,tooMany);err==nil{t.Fatal("rule limit ignored")}
+ longSubject:=strings.Repeat("中",128);if err:=ValidateRules(ctx,[]Rule{{Ptype:"g",V0:"user:"+longSubject,V1:"role:reader"}});err!=nil{t.Fatal("valid Unicode subject rejected")}
+ if err:=ValidateRules(ctx,[]Rule{{Ptype:"g",V0:"user:"+longSubject+"中",V1:"role:reader"}});err==nil{t.Fatal("long subject accepted")}
+}

@@ -1,0 +1,109 @@
+// Package authz evaluates validated RBAC snapshots without transport dependencies.
+package authz
+
+import (
+ "context"
+ "errors"
+ "fmt"
+ "regexp"
+ "strings"
+ "sync"
+ "unicode"
+ "unicode/utf8"
+
+ "[[.Module]]/internal/pkg/errno"
+ "github.com/casbin/casbin/v3"
+ "github.com/casbin/casbin/v3/model"
+)
+
+const MaxRules = 4096
+const MaxFileBytes = 1 << 20
+var ErrReadOnly = errors.New("policy storage is read-only")
+var rolePattern = regexp.MustCompile(`^role:[a-z][a-z0-9_]{0,31}$`)
+
+type Rule struct { Ptype string; V0, V1, V2 string }
+type Store interface {
+ Load(context.Context) ([]Rule,error)
+ Replace(context.Context,[]Rule) error
+}
+
+func validSubject(subject string) bool {
+ if !utf8.ValidString(subject) || utf8.RuneCountInString(subject)<1 || utf8.RuneCountInString(subject)>128 || strings.TrimSpace(subject)!=subject { return false }
+ for _,r:=range subject { if unicode.IsControl(r) { return false } }; return true
+}
+func validPermission(resource,operation string) bool {
+ if resource!="example" { return false }
+ switch operation { case "read": return true
+ [[if ne .Database "none"]]case "create","update","delete": return true[[end]] }; return false
+}
+func ValidateRules(ctx context.Context,rules []Rule) error {
+ if len(rules)>MaxRules { return errors.New("policy exceeds rule limit") }
+ seen:=make(map[Rule]struct{},len(rules))
+ for i,rule:=range rules {
+  if err:=ctx.Err();err!=nil{return err}
+  valid:=false
+  switch rule.Ptype {
+  case "p": valid=rolePattern.MatchString(rule.V0)&&validPermission(rule.V1,rule.V2)
+  case "g": valid=strings.HasPrefix(rule.V0,"user:")&&validSubject(strings.TrimPrefix(rule.V0,"user:"))&&rolePattern.MatchString(rule.V1)&&rule.V2==""
+  }
+  if !valid { return fmt.Errorf("invalid policy rule at row %d",i+1) }
+  if _,exists:=seen[rule];exists { return fmt.Errorf("duplicate policy rule at row %d",i+1) };seen[rule]=struct{}{}
+ };return ctx.Err()
+}
+
+const rbacModel = `[request_definition]
+r = sub, obj, act
+[policy_definition]
+p = sub, obj, act
+[role_definition]
+g = _, _
+[policy_effect]
+e = some(where (p.eft == allow))
+[matchers]
+m = g(r.sub, p.sub) && r.obj == p.obj && r.act == p.act
+`
+
+func build(ctx context.Context,rules []Rule)(*casbin.SyncedEnforcer,error){
+ if err:=ValidateRules(ctx,rules);err!=nil{return nil,err}
+ definition,err:=model.NewModelFromString(rbacModel);if err!=nil{return nil,errno.WithCause(errno.Internal,err)}
+ enforcer,err:=casbin.NewSyncedEnforcer(definition);if err!=nil{return nil,errno.WithCause(errno.Internal,err)}
+ enforcer.SetLogger(nil)
+ enforcer.EnableAutoSave(false);enforcer.EnableGFunctionCache(false);enforcer.EnableAutoBuildRoleLinks(false)
+ for _,rule:=range rules {
+  if err:=ctx.Err();err!=nil{return nil,err}
+  if rule.Ptype=="p" { _,err=enforcer.AddPolicy(rule.V0,rule.V1,rule.V2) } else { _,err=enforcer.AddGroupingPolicy(rule.V0,rule.V1) }
+  if err!=nil{return nil,errno.WithCause(errno.Internal,err)}
+ }
+ if err:=enforcer.BuildRoleLinks();err!=nil{return nil,errno.WithCause(errno.Internal,err)}
+ if err:=ctx.Err();err!=nil{return nil,err};return enforcer,nil
+}
+
+// Manager publishes whole snapshots; its SDK pointer is never exposed.
+type Manager struct { store Store;mu sync.RWMutex;current *casbin.SyncedEnforcer;mutation chan struct{} }
+func New(ctx context.Context,store Store)(*Manager,error){
+ rules,err:=store.Load(ctx);if err!=nil{return nil,err};current,err:=build(ctx,rules);if err!=nil{return nil,err}
+ return &Manager{store:store,current:current,mutation:make(chan struct{},1)},nil
+}
+func(m *Manager)Authorize(ctx context.Context,subject,resource,operation string)error{
+ if err:=ctx.Err();err!=nil{return err};if !validSubject(subject){return errno.Unauthorized};if !validPermission(resource,operation){return errno.Forbidden}
+ m.mu.RLock();snapshot:=m.current;m.mu.RUnlock()
+ allowed,err:=snapshot.Enforce("user:"+subject,resource,operation)
+ if parent:=ctx.Err();parent!=nil{return parent};if err!=nil{return errno.WithCause(errno.Internal,err)};if !allowed{return errno.Forbidden};return nil
+}
+func(m *Manager)begin(ctx context.Context)error{select{case <-ctx.Done():return ctx.Err();case m.mutation<-struct{}{}:return nil}}
+func(m *Manager)publish(snapshot *casbin.SyncedEnforcer){m.mu.Lock();m.current=snapshot;m.mu.Unlock()}
+func(m *Manager)Replace(ctx context.Context,rules []Rule)error{
+ // Copy caller-owned input so later changes cannot alter the published policy.
+ rules=append([]Rule(nil),rules...)
+ if err:=m.begin(ctx);err!=nil{return err};defer func(){<-m.mutation}()
+ candidate,err:=build(ctx,rules);if err!=nil{return err};if err:=m.store.Replace(ctx,rules);err!=nil{return err}
+ // A committed change must be published even if cancellation arrives just after commit.
+ m.publish(candidate);return nil
+}
+func(m *Manager)Reload(ctx context.Context)error{
+ if err:=m.begin(ctx);err!=nil{return err};defer func(){<-m.mutation}()
+ rules,err:=m.store.Load(ctx);if err!=nil{return err};candidate,err:=build(ctx,rules);if err!=nil{return err};m.publish(candidate);return nil
+}
+func Import(ctx context.Context,store Store,filename string)error{
+ rules,err:=ReadFile(ctx,filename);if err!=nil{return err};if _,err:=build(ctx,rules);err!=nil{return err};return store.Replace(ctx,rules)
+}

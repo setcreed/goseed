@@ -41,82 +41,90 @@ func TestRealRedisProjects(t *testing.T) {
 		t.Fatal("explicit Redis TLS fixture required")
 	}
 	for _, backend := range []string{"sqlite", "none"} {
-		t.Run(backend, func(t *testing.T) {
-			directory := renderProjectWith(t, templates.Options{Database: backend, Redis: true})
-			verifyReadonly(t, directory)
-			fixtures := []string{"GOSEED_TEST_REDIS=1", "GOSEED_TEST_REDIS_ADDRESS=" + address, "GOSEED_TEST_REDIS_PASSWORD=" + password, "GOSEED_TEST_REDIS_CA_FILE=" + ca}
-			output := runWith(t, directory, fixtures, "go", "test", "-mod=readonly", "-race", "-count=1", "-v", "./...")
-			if strings.Contains(string(output), "--- SKIP:") {
-				t.Fatal("real Redis verification skipped a test")
-			}
-			binary := filepath.Join(directory, "bin/apiserver")
-			run(t, directory, "go", "build", "-mod=readonly", "-o", binary, "./cmd/apiserver")
-			env := []string{"APP_REDIS_ADDRESS=" + address, "APP_REDIS_PASSWORD=" + password, "APP_REDIS_TLS=true", "APP_REDIS_CA_FILE=" + ca, "APP_REDIS_KEY_PREFIX=goseed_http_" + backend}
-			runWith(t, directory, env, binary, "dev", "init")
-			if backend == "sqlite" {
-				runWith(t, directory, env, binary, "migrate", "up")
-				verifyHTTPWith(t, directory, binary, env)
-			}
-			token := strings.TrimSpace(string(runWith(t, directory, env, binary, "dev", "token", "--subject", "alice")))
-			client := &http.Client{Timeout: 3 * time.Second}
-			defer client.CloseIdleConnections()
-			process := startServiceWith(t, directory, binary, client, "http", env)
-			path := "/v1/examples?name=redis-private"
-			if backend == "sqlite" {
-				data, _ := request(t, client, process.url, "POST", "/v1/examples", `{"name":"redis-read"}`, token, 201)
-				item := resource(t, data)
-				path = "/v1/examples/" + strconv.FormatUint(item.ID, 10)
-			}
-			request(t, client, process.url, "GET", path, "", token, 200)
-			request(t, client, process.url, "GET", path, "", token, 200)
-			process.stop(t)
-			// An unreachable loopback port deterministically verifies optional and required startup behavior.
-			unavailable := append(append([]string{}, env...), "APP_REDIS_ADDRESS=127.0.0.1:1")
-			fallback := startServiceWith(t, directory, binary, client, "http", unavailable)
-			request(t, client, fallback.url, "GET", path, "", token, 200)
-			fallback.stop(t)
-			rejectCommand(t, directory, binary, append(unavailable, "APP_REDIS_REQUIRED=true"), "serve")
-			// Required mode starts against the real fixture, then its pool is exercised through the process fault test.
-			required := startServiceWith(t, directory, binary, client, "http", append(append([]string{}, env...), "APP_REDIS_REQUIRED=true"))
-			request(t, client, required.url, "GET", path, "", token, 200)
-			optional := startServiceWith(t, directory, binary, client, "http", env)
-			signalRedisFault(t, true)
-			t.Cleanup(func() { signalRedisFault(t, false) })
-			checkRedisReadiness(t, client, required.url, 503)
-			request(t, client, required.url, "GET", path, "", token, 503)
-			request(t, client, optional.url, "GET", "/readyz", "", "", 200)
-			request(t, client, optional.url, "GET", path, "", token, 200)
-			if backend == "sqlite" {
-				request(t, client, required.url, "PATCH", path, `{"enabled":false}`, token, 503)
-				data, _ := request(t, client, optional.url, "GET", path, "", token, 200)
-				if !resource(t, data).Enabled {
-					t.Fatal("required Redis failure reached database")
+		for _, authorization := range []string{"none", "casbin"} {
+			t.Run(backend+"-"+authorization, func(t *testing.T) {
+				directory := renderProjectWith(t, templates.Options{Database: backend, Redis: true, Authz: authorization})
+				verifyReadonly(t, directory)
+				fixtures := []string{"GOSEED_TEST_REDIS=1", "GOSEED_TEST_REDIS_ADDRESS=" + address, "GOSEED_TEST_REDIS_PASSWORD=" + password, "GOSEED_TEST_REDIS_CA_FILE=" + ca}
+				output := runWith(t, directory, fixtures, "go", "test", "-mod=readonly", "-race", "-count=1", "-v", "./...")
+				if strings.Contains(string(output), "--- SKIP:") {
+					t.Fatal("real Redis verification skipped a test")
 				}
-				request(t, client, optional.url, "PATCH", path, `{"description":"updated while cache down"}`, token, 200)
-			}
-			signalRedisFault(t, false)
-			request(t, client, required.url, "GET", "/readyz", "", "", 200)
-			request(t, client, required.url, "GET", path, "", token, 200)
-			request(t, client, optional.url, "GET", path, "", token, 200)
-			required.stop(t)
-			optional.stop(t)
-			for _, logPath := range []string{process.log, fallback.log, required.log, optional.log} {
-				data, err := os.ReadFile(logPath)
-				if err != nil {
-					t.Fatal(err)
-				}
-				for _, secret := range []string{password, token, "redis-private", "redis-read"} {
-					if strings.Contains(string(data), secret) {
-						t.Fatal("Redis HTTP log disclosed input")
+				binary := filepath.Join(directory, "bin/apiserver")
+				run(t, directory, "go", "build", "-mod=readonly", "-o", binary, "./cmd/apiserver")
+				env := []string{"APP_REDIS_ADDRESS=" + address, "APP_REDIS_PASSWORD=" + password, "APP_REDIS_TLS=true", "APP_REDIS_CA_FILE=" + ca, "APP_REDIS_KEY_PREFIX=goseed_http_" + backend}
+				runWith(t, directory, env, binary, "dev", "init")
+				if backend == "sqlite" {
+					runWith(t, directory, env, binary, "migrate", "up")
+					if authorization == "none" {
+						verifyHTTPWith(t, directory, binary, env)
 					}
 				}
-				for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
-					if !json.Valid([]byte(line)) {
-						t.Fatal("Redis failure bypassed JSON logging")
+				if authorization == "casbin" {
+					verifyCasbinHTTP(t, directory, binary, backend, env)
+					installCasbinPolicy(t, directory, binary, backend, env, casbinPolicy(backend))
+				}
+				token := strings.TrimSpace(string(runWith(t, directory, env, binary, "dev", "token", "--subject", "alice")))
+				client := &http.Client{Timeout: 3 * time.Second}
+				defer client.CloseIdleConnections()
+				process := startServiceWith(t, directory, binary, client, "http", env)
+				path := "/v1/examples?name=redis-private"
+				if backend == "sqlite" {
+					data, _ := request(t, client, process.url, "POST", "/v1/examples", `{"name":"redis-read"}`, token, 201)
+					item := resource(t, data)
+					path = "/v1/examples/" + strconv.FormatUint(item.ID, 10)
+				}
+				request(t, client, process.url, "GET", path, "", token, 200)
+				request(t, client, process.url, "GET", path, "", token, 200)
+				process.stop(t)
+				// An unreachable loopback port deterministically verifies optional and required startup behavior.
+				unavailable := append(append([]string{}, env...), "APP_REDIS_ADDRESS=127.0.0.1:1")
+				fallback := startServiceWith(t, directory, binary, client, "http", unavailable)
+				request(t, client, fallback.url, "GET", path, "", token, 200)
+				fallback.stop(t)
+				rejectCommand(t, directory, binary, append(unavailable, "APP_REDIS_REQUIRED=true"), "serve")
+				// Required mode starts against the real fixture, then its pool is exercised through the process fault test.
+				required := startServiceWith(t, directory, binary, client, "http", append(append([]string{}, env...), "APP_REDIS_REQUIRED=true"))
+				request(t, client, required.url, "GET", path, "", token, 200)
+				optional := startServiceWith(t, directory, binary, client, "http", env)
+				signalRedisFault(t, true)
+				t.Cleanup(func() { signalRedisFault(t, false) })
+				checkRedisReadiness(t, client, required.url, 503)
+				request(t, client, required.url, "GET", path, "", token, 503)
+				request(t, client, optional.url, "GET", "/readyz", "", "", 200)
+				request(t, client, optional.url, "GET", path, "", token, 200)
+				if backend == "sqlite" {
+					request(t, client, required.url, "PATCH", path, `{"enabled":false}`, token, 503)
+					data, _ := request(t, client, optional.url, "GET", path, "", token, 200)
+					if !resource(t, data).Enabled {
+						t.Fatal("required Redis failure reached database")
+					}
+					request(t, client, optional.url, "PATCH", path, `{"description":"updated while cache down"}`, token, 200)
+				}
+				signalRedisFault(t, false)
+				request(t, client, required.url, "GET", "/readyz", "", "", 200)
+				request(t, client, required.url, "GET", path, "", token, 200)
+				request(t, client, optional.url, "GET", path, "", token, 200)
+				required.stop(t)
+				optional.stop(t)
+				for _, logPath := range []string{process.log, fallback.log, required.log, optional.log} {
+					data, err := os.ReadFile(logPath)
+					if err != nil {
+						t.Fatal(err)
+					}
+					for _, secret := range []string{password, token, "redis-private", "redis-read"} {
+						if strings.Contains(string(data), secret) {
+							t.Fatal("Redis HTTP log disclosed input")
+						}
+					}
+					for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+						if !json.Valid([]byte(line)) {
+							t.Fatal("Redis failure bypassed JSON logging")
+						}
 					}
 				}
-			}
-		})
+			})
+		}
 	}
 }
 

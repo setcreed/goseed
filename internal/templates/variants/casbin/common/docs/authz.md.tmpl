@@ -1,0 +1,34 @@
+# Casbin 授权
+
+本项目在生成时选择了 Casbin；JWT 识别用户，授权组件判定角色权限，Biz 继续校验资源归属。默认策略为空，所有业务操作返回 403；缺失或无效 Token 返回 401。公共存活/就绪与 CORS 预检保持原有行为。配置入口见 [配置示例](../configs/app.example.yaml) ，命令入口见 [README](../README.md) 。
+
+## 权限与策略
+
+固定模型使用用户 → 角色 → 资源/操作，不使用 URL、任意表达式、通配符、角色继承或超级管理员绕过。资源为 `example`，[[if eq .Database "none"]]操作只有 `read`。[[else]]操作为 `read/create/update/delete`，分别对应 GET、POST、PATCH、DELETE；GET 列表和详情共用 read。[[end]]业务协议入口登记同一资源与操作；增加业务时需同步登记权限及验证。
+
+策略采用严格 CSV，以下内容明确授予 alice 读取自己的示例：
+
+```csv
+p, role:reader, example, read
+g, user:alice, role:reader
+```
+
+生成的 [策略文件](../configs/policy.csv) 仅包含注释，不默认授予任何用户权限。请求中的 JWT 主体自动加 `user:`，角色以 `role:` 开头；两者不能混用。角色名为小写字母开头，后续小写字母/数字/下划线，最多 32 个字符；用户部分沿用 JWT 的主体约束。只接受 p 的三字段和 g 的两字段，拒绝未知类型/资源/操作、重复规则及额外字段。最多 4096 条策略，文件最多 1MiB，要求非符号链接普通文件、有效 UTF-8；解析失败不打印文件内容或主体。
+
+## 存储与更新
+
+[[if ne .Database "none"]]策略存入现有数据库的 `casbin_rules` 表，先显式执行 `migrate up`，服务启动和导入命令均不会自动建表。空策略表合法并默认拒绝。准备经过审核的 CSV 后，使用离线命令全量替换：
+
+```sh
+./bin/apiserver policy replace --file configs/policy.csv
+```
+
+完整校验在写入前完成；DELETE 与全部 INSERT 在同一事务提交，失败回滚旧规则。空文件显式导入表示撤销全部权限。导入成功后重启所有运行实例加载新策略；这不是在线同步命令，不创建公开策略管理 API。不要同时运行多个策略维护命令，避免互相覆盖策略快照。[[else]]策略仅在启动时从 `authz.policy_file` 只读加载，默认 `configs/policy.csv`，环境变量为 `APP_AUTHZ_POLICY_FILE`。缺失、非法或不可读文件拒绝启动；更新文件后重启服务。没有策略写入或离线导入命令，容器携带默认空策略；真实策略应通过明确路径只读挂载。[[end]]
+
+应用持有 `authz.Manager`，通过显式 Context 的 Replace/Reload 维护候选快照；文件存储的 Replace 返回只读错误。只在候选校验及存储操作成功后发布，失败保留之前的策略；SQL 提交成功后的候选一定发布。不会暴露 Casbin SDK 对象，不启用判定或 g 函数缓存。开始判定的请求可能使用更新前快照；跨实例同步、租户角色与账号体系需要业务另行设计。
+
+授权在读取缓存之前执行，缓存命中不能绕过权限。权限只控制操作，任何角色仍不能访问其他主体的资源。存储或模型错误拒绝启动或返回脱敏错误，不通过空策略替代失败；请求 Context 取消/deadline 继续传播。
+
+## 验证
+
+`make check`、`make race` 覆盖默认拒绝、允许/拒绝、角色冒充、严格 CSV、文件只读、取消、完整快照发布及并发判定。[[if ne .Database "none"]]数据库测试使用已有隔离夹具，验证迁移、策略持久化与重载、撤销、事务失败回滚和关闭。[[end]]外部数据库缺少专用测试环境时明确跳过，不将编译通过视为真实数据库验收；goseed 仓库 `make template-db` 为实际 MySQL/PostgreSQL 策略验收入口。

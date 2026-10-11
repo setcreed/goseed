@@ -88,7 +88,10 @@ subjectAltName = IP:127.0.0.1
             digest = run(["docker", "image", "inspect", "--format", "{{json .RepoDigests}}", image], True).stdout.strip()
             print(service + " tested image: " + digest, flush=True)
         env["GOSEED_TEST_CA_FILE"] = str(directory / "ca.crt")
-        run(["go", "test", "-mod=readonly", "-count=1", "-v", "-timeout=15m", "./tests/integration", "-run", "^TestExternalSQLProjects$"], timeout=960)
+        # Verify the clean v1 baseline first, then explicitly upgrade the owned
+        # application database to the Casbin v2 schema in a separate invocation.
+        for test in ("TestExternalSQLProjects", "TestExternalCasbinProjects"):
+            run(["go", "test", "-mod=readonly", "-count=1", "-v", "-timeout=15m", "./tests/integration", "-run", "^" + test + "$"], timeout=960)
     finally:
         if started:
             cleanup = subprocess.run(compose + ["down", "--volumes", "--remove-orphans"], cwd=root, env=env)

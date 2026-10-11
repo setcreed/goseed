@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+ [[if eq .Authz "casbin"]]"context"[[end]]
  "encoding/base64"
  "encoding/json"
  "net/http/httptest"
@@ -17,8 +18,10 @@ import (
 
 func TestGreetingAuthenticationAndLifecycle(t *testing.T){
  authentication,err:=auth.New(config.JWT{Secret:base64.StdEncoding.EncodeToString(make([]byte,32)),Issuer:"demo",Audience:"api",TTL:time.Minute});if err!=nil{t.Fatal(err)}
- ready:=&server.Readiness{};router:=NewRouter(config.HTTP{MaxBodyBytes:1024,RequestTimeout:time.Second},ready,zap.NewNop(),authentication,handler.New(biz.New()))
+ ready:=&server.Readiness{};router:=NewRouter(config.HTTP{MaxBodyBytes:1024,RequestTimeout:time.Second},ready,zap.NewNop(),authentication,handler.New(biz.New())[[if eq .Authz "casbin"]],allowAuthorizationTest{}[[end]])
  for _,subject:=range []string{"alice","bob"}{token,err:=authentication.Issue(subject,time.Minute);if err!=nil{t.Fatal(err)};recorder:=httptest.NewRecorder();request:=httptest.NewRequest("GET","/v1/examples?name=Go",nil);request.Header.Set("Authorization","Bearer "+token);router.ServeHTTP(recorder,request);var result biz.Greeting;if recorder.Code!=200||json.Unmarshal(recorder.Body.Bytes(),&result)!=nil||result.Subject!=subject||result.Message!="hello, Go"{t.Fatal("authentication or greeting response")}}
  for _,test:=range []struct{method,path string;status int}{{"GET","/v1/examples",401},{"POST","/v1/examples",405},{"GET","/v1/examples/1",404},{"GET","/readyz",200},{"GET","/healthz",200}}{recorder:=httptest.NewRecorder();router.ServeHTTP(recorder,httptest.NewRequest(test.method,test.path,nil));if recorder.Code!=test.status{t.Fatalf("%s %s: %d",test.method,test.path,recorder.Code)}}
  ready.Stop();recorder:=httptest.NewRecorder();router.ServeHTTP(recorder,httptest.NewRequest("GET","/readyz",nil));if recorder.Code!=503{t.Fatal("stopping service remained ready")}
 }
+[[if eq .Authz "casbin"]]type allowAuthorizationTest struct{}
+func(allowAuthorizationTest)Authorize(ctx context.Context,_,_,_ string)error{return ctx.Err()}[[end]]

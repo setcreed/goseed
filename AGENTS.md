@@ -72,4 +72,6 @@ SQL 变体由 `make test` 执行生成产物静态与运行基础检查；`make 
 
 Redis 由 `Options.Redis` 生成时选择，业务只依赖缓存接口；默认可选故障回源，必需模式阻断不可用依赖。缓存不是权威业务状态，写后失效失败与并发回填由 TTL 收敛，强一致读取应绕过缓存。`make test` 核对四种存储组合和受控连接取消，`make template-redis` 使用固定镜像、专用 TLS/密码和随机回环端口，真实用例不得跳过；只停止与清理本次名称和标签匹配的容器，禁止共享 Redis 的全库清空。
 
+Casbin 由 `Options.Authz` 选择，默认关闭。启用时所有业务路由在 JWT 之后、缓存和业务之前授权；默认拒绝，用户与角色使用独立命名空间，Biz 继续校验归属。策略存储必须显式传递 Context，不使用 SDK AutoSave 或隐式建表；SQL 全量替换必须在事务内完成，无数据库策略只读。离线更新后重启实例，不增加公开策略管理入口。具体权限/输入契约见可选模板文档；`make template-db` 先验证 SQL 基线再升级 Casbin schema，`make template-redis` 验证缓存不绕过授权，`make template-container` 验证只读策略挂载。
+
 新增完成与验证记录时，使用 `TZ=Asia/Shanghai date "+%Y-%m-%d %H:%M"` 获取北京时间并更新 ROADMAP。

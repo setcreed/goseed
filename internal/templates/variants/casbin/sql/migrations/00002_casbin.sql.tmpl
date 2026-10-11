@@ -1,0 +1,26 @@
+-- +goose Up
+[[if eq .Database "sqlite"]]CREATE TABLE casbin_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ptype TEXT NOT NULL CHECK(ptype IN ('p','g')),
+    v0 TEXT COLLATE BINARY NOT NULL CHECK(length(v0) <= 134),
+    v1 TEXT COLLATE BINARY NOT NULL CHECK(length(v1) <= 64),
+    v2 TEXT COLLATE BINARY NOT NULL CHECK(length(v2) <= 32),
+    UNIQUE(ptype,v0,v1,v2)
+);[[else if eq .Database "mysql"]]CREATE TABLE casbin_rules (
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    ptype VARCHAR(1) NOT NULL CHECK(ptype IN ('p','g')),
+    v0 VARCHAR(134) NOT NULL,
+    v1 VARCHAR(64) NOT NULL,
+    v2 VARCHAR(32) NOT NULL,
+    UNIQUE(ptype,v0,v1,v2)
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin;[[else]]CREATE TABLE casbin_rules (
+    id BIGSERIAL PRIMARY KEY,
+    ptype VARCHAR(1) NOT NULL CHECK(ptype IN ('p','g')),
+    v0 VARCHAR(134) COLLATE "C" NOT NULL,
+    v1 VARCHAR(64) COLLATE "C" NOT NULL,
+    v2 VARCHAR(32) COLLATE "C" NOT NULL,
+    UNIQUE(ptype,v0,v1,v2)
+);[[end]]
+
+-- +goose Down
+DROP TABLE casbin_rules;

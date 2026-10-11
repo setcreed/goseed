@@ -8,7 +8,7 @@ Go 工具链固定为 **1.26.4**，主模块为 **`github.com/setcreed/goseed`**
 
 当前 CLI 支持 `--help` 和 `--version`。无参数执行、未知参数或命令会返回错误，并且不会创建项目文件。当前没有 CLI 项目创建入口，项目命名的设计见 [命令契约](docs/cli.md#项目名模块路径与目录) 。开发检查点以 [ROADMAP.md](ROADMAP.md) 为准。
 
-内部模板渲染入口为 `internal/templates.Default` 与 `Render(Project, Options)`，返回校验后的文件计划，展开项目名称及模块路径，并格式化 Go 源码。`Project.Name` 与 `Project.Module` 分别指定项目名和 Go 模块路径，二者独立校验，不要求名称与模块路径末段相同。`Options.Database` 支持 `sqlite`、`mysql`、`postgres`、`none`，默认 SQLite；`Options.Redis` 默认关闭，可与四种存储选择组合。按选项裁剪源码、驱动、配置、迁移、依赖和文档。渲染不联网、不直接写入文件。
+内部模板渲染入口为 `internal/templates.Default` 与 `Render(Project, Options)`，返回校验后的文件计划，展开项目名称及模块路径，并格式化 Go 源码。`Project.Name` 与 `Project.Module` 分别指定项目名和 Go 模块路径，二者独立校验，不要求名称与模块路径末段相同。`Options.Database` 支持 `sqlite`、`mysql`、`postgres`、`none`，默认 SQLite；`Options.Redis` 默认关闭；`Options.Authz` 支持 `none`（默认）和 `casbin`，可与四种存储选择及 Redis 组合。按选项裁剪源码、驱动、配置、迁移、依赖和文档。渲染不联网、不直接写入文件。
 
 默认 HTTP 模板包含 Handler → Biz → Store 分层、SQLite、JWT、示例 CRUD、配置与日志、健康检查和优雅退出。提供开发密钥初始化、开发 Token 签发、显式迁移、严格输入校验、资源主体隔离、TLS 与 CORS；没有公开的临时签发接口。服务命令与验收边界见 [默认 HTTP 模板](docs/template-http.md) 。
 
@@ -17,6 +17,8 @@ MySQL、PostgreSQL 变体复用相同业务分层与 JWT，提供强类型连接
 无数据库变体保留 HTTP/JWT、配置、日志和生命周期，提供 Handler → Biz 的认证问候接口，移除模型、Store、ORM、SQL 驱动、迁移命令与数据库配置。没有持久化或资源 CRUD，详细行为见 [可选模板](docs/template-options.md) 。
 
 Redis 变体提供按主体隔离的示例读取缓存、TTL、写后失效、连接池与生命周期，默认验证 TLS。可选模式在故障时回源，必需模式在启动、就绪和业务入口检查依赖；生产要求密码与验证证书。缓存与数据库之间按 TTL 保证最终一致性，强一致读取应绕过缓存；配置和边界见 [可选模板](docs/template-options.md) 。
+
+Casbin 变体提供默认拒绝的简单 RBAC，业务路由在 JWT 之后、缓存和 Biz 之前授权，资源归属仍由 Biz 校验。用户／角色名称隔离，权限精确匹配资源与操作；默认策略为空，不授予任何用户权限。SQL 复用现有连接并显式迁移策略表，提供 `policy replace --file <csv>` 全量事务导入；无数据库只读加载策略文件，配置 `authz.policy_file`。离线更新后需重启所有实例，运行接口不提供策略管理 API。输入约束、权限和快照边界见 [可选模板](docs/template-options.md#casbin-可选能力) 。
 
 渲染项目包含完整 `go.mod` / `go.sum`、AGENTS/README/ROADMAP、Makefile、配置示例、Swagger 2.0 和非 root Dockerfile，按所选数据库提供 SQL 迁移，可以独立构建及运行。
 
@@ -41,13 +43,15 @@ make template-db
 make template-redis
 ```
 
-`make tools` 显式安装固定版本 linter 到 `.tools/bin/`。构建与检查使用项目 `.tmp/` 缓存，不安装全局工具，不自动生成源码或修改依赖清单。`template-container` 实际构建默认与无数据库业务镜像，使用随机回环端口；默认模板用全新数据卷验证生产禁用开发签发、显式迁移、CRUD 与重启持久化，无数据库模板验证非 root、只读根文件系统、无数据卷、JWT 与重启。结束清理本次容器、卷及测试镜像，普通检查不启动 Docker。
+`make tools` 显式安装固定版本 linter 到 `.tools/bin/`。构建与检查使用项目 `.tmp/` 缓存，不安装全局工具，不自动生成源码或修改依赖清单。`template-container` 实际构建默认与无数据库业务镜像，使用随机回环端口；默认模板用全新数据卷验证生产禁用开发签发、显式迁移、CRUD 与重启持久化，无数据库模板验证非 root、只读根文件系统、无数据卷、JWT 与重启；Casbin 文件策略镜像另验证默认拒绝、只读策略挂载和角色冒充拒绝。结束清理本次容器、卷及测试镜像，普通检查不启动 Docker。
 
-普通检查同时实际渲染 MySQL、PostgreSQL 项目，执行 readonly 测试、vet、race、lint 与构建；没有专用服务时明确跳过其中的外部数据库用例。`template-db` 使用固定摘要的真实 MySQL 8.4.11、PostgreSQL 18.6，全新测试证书/数据卷、随机回环端口和隔离数据库；外部用例禁止跳过，验证迁移、CRUD、事务、运行中取消、后续连接复用、启动失败、日志脱敏、TLS 信任/主机名与服务重启持久化。结束仅清理本次资源，需要 Docker、Compose 与 OpenSSL。
+普通检查同时实际渲染 MySQL、PostgreSQL 项目，执行 readonly 测试、vet、race、lint 与构建；没有专用服务时明确跳过其中的外部数据库用例。`template-db` 使用固定摘要的真实 MySQL 8.4.11、PostgreSQL 18.6，全新测试证书/数据卷、随机回环端口和隔离数据库；外部用例禁止跳过，先验证 SQL 基线，再验证 Casbin v1 → v2 迁移升级、权限、策略持久化/撤销和保存失败回滚。SQL 基线覆盖 CRUD、事务、运行中取消、后续连接复用、启动失败、日志脱敏、TLS 信任/主机名与服务重启持久化。结束仅清理本次资源，需要 Docker、Compose 与 OpenSSL。
 
 普通检查也实际渲染无数据库项目，核对文件与依赖树裁剪、固定清单不变，执行 readonly 测试、vet、race、lint、本机构建与 Linux amd64 纯 Go 构建；真实服务进程覆盖初始化、迁移命令拒绝、JWT、输入边界、TLS/CORS、日志脱敏、重启和优雅退出。
 
 普通检查验证四种存储与 Redis 的组合、缓存命中/主体隔离/失效、受控连接取消和短超时；实际 Redis 用例在缺少专用凭据时明确跳过。`template-redis` 使用固定摘要的 Redis 8.10.2、专用密码与 TLS 证书、随机回环端口，验证 SQLite 与无数据库缓存、TTL、TLS 信任、错误密码、必需／可选故障行为及停机后恢复，禁止跳过真实用例。需要 Docker 与 OpenSSL，退出只清理本次容器与临时凭据，保留依赖镜像缓存；不清空共享 Redis 数据。
+
+普通检查覆盖 Casbin 的八种开启组合及原有关闭组合，验证 readonly 清单、Linux 纯 Go 构建、策略输入、并发快照、取消、默认拒绝、授权与归属隔离、错误导入保留旧策略及撤销。`template-redis` 同时验证 Casbin 组合，权限撤销并重启后，Redis 中仍存在的缓存不能绕过授权。
 
 ## 技术兼容性验证
 
@@ -72,7 +76,8 @@ make protocol-check
 |---|---|
 | SQLite | 真实磁盘文件；多连接 PRAGMA、迁移、约束错误、事务回滚、Context、锁等待和关闭连接后读取 |
 | MySQL 8.4.11、PostgreSQL 18.6 | 固定镜像摘要的真实数据库服务；显式迁移、Casbin 策略保存与重载、权限判定、删除和保存失败回滚 |
-| Casbin 适配原型 | 三种数据库共用现有 GORM 连接；缺表报错且不隐式建表，原型仅用于技术验证 |
+| Casbin 正式模板 | 三种数据库策略与无数据库只读文件；默认拒绝、主体/角色命名空间、权限与资源隔离、事务回滚、撤销、并发快照和请求 Context |
+| Casbin 适配原型 | D1 独立兼容性验证，未作为正式模板实现复用 |
 | gRPC、Gateway | 本机回环服务的实际调用和转发、Swagger 2.0 产物解析、固定工具重新生成比对 |
 | Redis 8.10.2 | 专用 TLS 服务；缓存读写/隔离/TTL、请求取消、证书与密码拒绝、故障回源、必需依赖阻断、恢复和关闭 |
 | 其他运行依赖 | 配置读取、日志与 DI 组装、JWT 签发与解析 |

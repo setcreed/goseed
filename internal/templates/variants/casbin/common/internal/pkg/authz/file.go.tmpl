@@ -1,0 +1,35 @@
+package authz
+
+import (
+ "bytes"
+ "context"
+ "encoding/csv"
+ "errors"
+ "io"
+ "os"
+ "unicode/utf8"
+)
+
+func ReadFile(ctx context.Context,filename string)([]Rule,error){
+ if err:=ctx.Err();err!=nil{return nil,err}
+ info,err:=os.Lstat(filename);if err!=nil||!info.Mode().IsRegular()||info.Size()>MaxFileBytes{return nil,errors.New("policy file must be a regular file within size limit")}
+ file,err:=os.Open(filename);if err!=nil{return nil,errors.New("cannot open policy file")};defer func(){_ = file.Close()}()
+ current,err:=file.Stat();if err!=nil||!os.SameFile(info,current)||!current.Mode().IsRegular(){return nil,errors.New("policy file changed during opening")}
+ data,err:=io.ReadAll(io.LimitReader(file,MaxFileBytes+1));if err!=nil||len(data)>MaxFileBytes||!utf8.Valid(data){return nil,errors.New("invalid policy file contents")}
+ reader:=csv.NewReader(bytes.NewReader(data));reader.Comment='#';reader.FieldsPerRecord=-1;reader.TrimLeadingSpace=true
+ rules:=make([]Rule,0)
+ for {
+  if err:=ctx.Err();err!=nil{return nil,err}
+  record,err:=reader.Read();if errors.Is(err,io.EOF){break};if err!=nil{return nil,errors.New("invalid policy CSV")}
+  if len(rules)>=MaxRules{return nil,errors.New("policy exceeds rule limit")}
+  var rule Rule
+  if len(record)==4&&record[0]=="p" {rule=Rule{Ptype:"p",V0:record[1],V1:record[2],V2:record[3]}} else if len(record)==3&&record[0]=="g" {rule=Rule{Ptype:"g",V0:record[1],V1:record[2]}} else {return nil,errors.New("invalid policy CSV fields")}
+  rules=append(rules,rule)
+ }
+ if err:=ValidateRules(ctx,rules);err!=nil{return nil,err};return rules,nil
+}
+
+type FileStore struct { filename string }
+func NewFile(filename string)*FileStore{return &FileStore{filename:filename}}
+func(s *FileStore)Load(ctx context.Context)([]Rule,error){return ReadFile(ctx,s.filename)}
+func(s *FileStore)Replace(ctx context.Context,_ []Rule)error{if err:=ctx.Err();err!=nil{return err};return ErrReadOnly}

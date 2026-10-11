@@ -6,4 +6,4 @@ import "embed"
 //go:embed *.sql
 var Files embed.FS
 
-const Version int64 = 1
+const Version int64 = [[if eq .Authz "casbin"]]2[[else]]1[[end]]

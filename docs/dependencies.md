@@ -41,7 +41,7 @@
 - Viper 沿用成熟的配置 API，但当前样本以 2025 年 CI 更新及机器人关闭 issue 为主，不能称为近期人工响应活跃。首版只用独立实例与强类型配置，不增加热更新；若后续发现 API 缺陷，再评估替换。do v2 有近期维护，但 [健康检查 issue](https://github.com/samber/do/issues/317) 尚未解决；只用 provider/构造组装，生命周期与健康状态由应用管理。
 - SQLite 选择 `github.com/libtnb/sqlite v1.2.2`，底层 modernc；[GORM 官方接入文档](https://gorm.io/docs/connecting_to_the_database.html) 提供这个纯 Go 选项。小型维护团队不能视为大型社区：最近 3 个提交是依赖机器人，但 [单连接死锁问题](https://github.com/libtnb/sqlite/issues/24) 有人工响应并关闭。用隔离驱动接入和实际行为测试控制替换成本。未选 `glebarez/sqlite`，其 [维护者说明](https://github.com/glebarez/sqlite/issues/152) 表示缺少维护时间并征集维护者。
 - GORM MySQL/PostgreSQL 使用官方驱动。MySQL 样本没有维护者 issue 回复证据；PostgreSQL 有近期源码修复。GORM [默认事务超时问题](https://github.com/go-gorm/gorm/issues/7875) 仍待处理，模板使用请求 Context 与自行持有 cancel 的超时，不依赖该配置项。
-- Casbin 使用普通或同步 Enforcer，暂不使用 CachedEnforcer；近期缓存判断修复不代表已进入 v3.11.0。策略存储采用复用现有 GORM 连接的最小适配器，表由 Goose 显式迁移。官方适配器虽然提供关闭自动建表开关，但 [固定版本源码](https://github.com/apache/casbin-gorm-adapter/blob/v3.41.0/adapter.go) 与 [依赖清单](https://github.com/apache/casbin-gorm-adapter/blob/v3.41.0/go.mod) 同时引入多种驱动及旧 SQLite 库，会破坏按参数裁剪的依赖边界。D1 原型仅验证可行性，D3 再实现完整输入约束、Context 和受控策略操作。
+- Casbin 使用同步 Enforcer，不使用 CachedEnforcer；近期缓存判断修复不代表已进入 v3.11.0。策略存储复用现有 GORM 连接，表由 Goose 显式迁移。官方适配器虽然提供关闭自动建表开关，但 [固定版本源码](https://github.com/apache/casbin-gorm-adapter/blob/v3.41.0/adapter.go) 与 [依赖清单](https://github.com/apache/casbin-gorm-adapter/blob/v3.41.0/go.mod) 同时引入多种驱动及旧 SQLite 库，会破坏按参数裁剪的依赖边界。D1 原型仅验证可行性；正式模板提供独立 Context 存储接口、严格输入约束和受控快照替换，详细边界见下方补充核验。
 - JWT v5.3.1 的 [签名段 CR/LF issue](https://github.com/golang-jwt/jwt/issues/542) 有维护者讨论；底层 Base64 解码可能接受换行。D2 在解析前校验三段 Base64URL 字符语法，并固定算法和必需 claims，不能只依赖签名校验或 `WithStrictDecoding`。
 - Redis 客户端仅由 Redis 选项引入，明确设置读写、连接池和命令预算，禁用隐式重试与实验性流水线；取消约束、正式接入和真实验证边界见下方补充核验。
 
@@ -58,6 +58,16 @@
 MySQL 默认配置不保证 TLS，见 [TLS 默认值 issue](https://github.com/go-sql-driver/mysql/issues/1728) ；模板显式提供 TLS 配置，不使用全局注册。真实验证发现连接握手不支持 309 号 `utf8mb4_0900_bin`，因此连接仅设置 utf8mb4，唯一约束的二进制语义由迁移中的表列决定。驱动协议日志统一为脱敏 JSON 事件。
 
 pgx 存在未解决的 [缓冲响应与取消竞争报告](https://github.com/jackc/pgx/issues/2673) ，报告涉及 v5.11.0 及 v5.8.0，不能认为升级即可解决。模板使用请求 Context 和无语句缓存执行模式；实际验证覆盖运行中 deadline 及随后复用连接，尚未复现该报告的人工延迟 Write 调度场景。后续驱动维护与上线负载验证须继续核对该问题，基础回归不证明所有取消竞争已消除。
+
+## Casbin 补充核验
+
+2026-10-11 通过官方 GitHub GraphQL 重新核对 `apache/casbin` 的归档、许可证、最新发布、最近三次提交与两个 issue 的评论身份，响应保存在 `dependency-audit.json` 的 `casbin_supplement`。仓库未归档，Apache-2.0，最新 release 仍为 [v3.11.0](https://github.com/apache/casbin/releases/tag/v3.11.0)（2026-08-20）；正式模板沿用此固定版本。最近人工源码维护为 [2026-10-09](https://github.com/apache/casbin/commit/1e19095c5287eff82ae0d5cc07502d87017944f2)；所查 issue 中有 MEMBER 历史回复，但不足以声称近期响应及时。
+
+标准库与 JWT 不提供 RBAC 角色权限模型，Casbin 仅负责精确权限判定；用户认证和资源归属分别由 JWT、Biz 负责。[官方 RBAC 文档](https://casbin.apache.org/docs/rbac/) 指出用户与角色都是字符串，应避免同名；模板强制 `user:`/`role:` 前缀及严格 p/g 校验，不开放模型表达式和角色继承。
+
+固定 [v3.11.0 构造与配置源码](https://github.com/apache/casbin/blob/v3.11.0/enforcer.go) 使用事件 Logger API；模板显式 `SetLogger(nil)`，不沿用旧版 EnableLog/末尾布尔参数。不使用 CachedEnforcer，关闭 g 函数缓存，避免无界主体缓存及依赖未发布的缓存修复。同步 Enforcer 仅用于已经验证的完整快照，策略读取和保存由显式 Context 的存储接口执行，绕过 SDK 隐式加载与 AutoSave；SQL 使用已有 GORM 连接，不增加多驱动官方适配器。
+
+真实验收入口为 `make template-db`、`make template-redis` 和 `make template-container`；单独兼容性模块仍保留 D1 原型用于版本核验，不当作正式实现。版本升级或扩展模型需独立权限、并发与真实存储回归。
 
 ## Redis 补充核验
 

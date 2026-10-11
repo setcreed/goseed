@@ -61,7 +61,7 @@ protocol-check:
 	python3 scripts/protocol-check.py
 
 template-container:
-	GOSEED_TEST_DOCKER=1 $(GO) test -mod=readonly -count=1 -timeout=15m -v ./tests/integration -run '^Test(DefaultProject|NoDatabaseProject)$$'
+	GOSEED_TEST_DOCKER=1 $(GO) test -mod=readonly -count=1 -timeout=15m -v ./tests/integration -run '^Test(DefaultProject|NoDatabaseProject|CasbinFileContainer)$$'
 
 template-db:
 	python3 scripts/template-db.py

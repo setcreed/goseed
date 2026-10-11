@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-已包含 HTTP、JWT、无持久化问候示例[[if .Redis]]、Redis 问候缓存[[end]]、配置与日志、健康检查和优雅退出。使用入口见 README，工程约束见 AGENTS；源码与依赖清单可以独立构建。
+已包含 HTTP、JWT、无持久化问候示例[[if .Redis]]、Redis 问候缓存[[end]][[if eq .Authz "casbin"]]、默认拒绝的 Casbin RBAC 与只读文件策略[[end]]、配置与日志、健康检查和优雅退出。使用入口见 README，工程约束见 AGENTS；源码与依赖清单可以独立构建。
 
 ## 项目开发
 

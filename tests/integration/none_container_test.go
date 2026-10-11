@@ -16,6 +16,11 @@ import (
 
 func verifyNoneContainer(t *testing.T, directory, binary string) {
 	t.Helper()
+	_, policyError := os.Stat(filepath.Join(directory, "internal/pkg/authz/policy.go"))
+	casbin := policyError == nil
+	if policyError != nil && !os.IsNotExist(policyError) {
+		t.Fatal(policyError)
+	}
 	var random [8]byte
 	if _, err := rand.Read(random[:]); err != nil {
 		t.Fatal(err)
@@ -98,6 +103,27 @@ func verifyNoneContainer(t *testing.T, directory, binary string) {
 	}
 	token := strings.TrimSpace(string(run(t, directory, binary, "dev", "token", "--subject", "alice")))
 	base := ready()
+	if casbin {
+		request(t, client, base, "GET", "/v1/examples", "", token, 403)
+		if docker("inspect", "--format", "{{len .Mounts}}", name) != "0" {
+			t.Fatal("default policy container unexpectedly mounts storage")
+		}
+		docker("stop", "--time", "3", name)
+		docker("rm", name)
+		started = false
+		policy := filepath.Join(directory, "configs/policy.csv")
+		if err := os.WriteFile(policy, []byte("p, role:reader, example, read\ng, user:alice, role:reader\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		docker("run", "-d", "--name", name, "--label", "org.goseed.none="+name, "--read-only", "-e", "APP_JWT_SECRET", "-v", policy+":/app/configs/policy.csv:ro", "-p", "127.0.0.1::8080", image)
+		started = true
+		base = ready()
+		role := strings.TrimSpace(string(run(t, directory, binary, "dev", "token", "--subject", "role:reader")))
+		request(t, client, base, "GET", "/v1/examples", "", role, 403)
+		if docker("inspect", "--format", "{{(index .Mounts 0).RW}}", name) != "false" {
+			t.Fatal("policy mount was writable")
+		}
+	}
 	data, _ := request(t, client, base, "GET", "/v1/examples?name=container-private", "", token, 200)
 	verifyGreeting(t, data, "hello, container-private", "alice")
 	docker("stop", "--time", "3", name)
@@ -112,8 +138,16 @@ func verifyNoneContainer(t *testing.T, directory, binary string) {
 			t.Fatal("container log disclosed private data")
 		}
 	}
-	if docker("inspect", "--format", "{{len .Mounts}}", name) != "0" {
+	wantMounts := "0"
+	if casbin {
+		wantMounts = "1"
+	}
+	if docker("inspect", "--format", "{{len .Mounts}}", name) != wantMounts {
 		t.Fatal("none container unexpectedly mounts storage")
 	}
-	t.Log("non root, read only root filesystem, JWT, no volumes and restart passed")
+	if casbin {
+		t.Log("non root, read only root filesystem, default deny, read only policy mount, role impersonation rejection and restart passed")
+	} else {
+		t.Log("non root, read only root filesystem, JWT, no volumes and restart passed")
+	}
 }

@@ -55,3 +55,6 @@ jwt:
   tls: true
   ca_file: ""
 [[end]]
+[[if and (eq .Authz "casbin") (eq .Database "none")]]authz:
+  policy_file: configs/policy.csv
+[[end]]

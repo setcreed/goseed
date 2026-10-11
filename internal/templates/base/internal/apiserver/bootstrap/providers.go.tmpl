@@ -2,13 +2,14 @@ package bootstrap
 
 import (
 	"context"
-	[[if or (ne .Database "none") .Redis]]"time"[[end]]
+	[[if or (ne .Database "none") .Redis (eq .Authz "casbin")]]"time"[[end]]
 
 	"[[.Module]]/internal/apiserver"
 	examplebiz "[[.Module]]/internal/apiserver/biz/example"
 	examplehandler "[[.Module]]/internal/apiserver/handler/http/example"
 	[[if ne .Database "none"]]examplestore "[[.Module]]/internal/apiserver/store/example"[[end]]
 	"[[.Module]]/internal/pkg/auth"
+	[[if eq .Authz "casbin"]]"[[.Module]]/internal/pkg/authz"[[end]]
 	[[if .Redis]]"[[.Module]]/internal/pkg/cache"[[end]]
 	"[[.Module]]/internal/pkg/config"
 	[[if ne .Database "none"]]"[[.Module]]/internal/pkg/database"[[end]]
@@ -18,12 +19,12 @@ import (
 	"go.uber.org/zap"
 )
 
-type App struct { Server *server.Server; Logger *zap.Logger[[if ne .Database "none"]];Database *database.Database[[end]][[if .Redis]];Cache *cache.Client[[end]] }
+type App struct { Server *server.Server; Logger *zap.Logger[[if ne .Database "none"]];Database *database.Database[[end]][[if .Redis]];Cache *cache.Client[[end]][[if eq .Authz "casbin"]];Authorization *authz.Manager[[end]] }
 
 func New(settings config.Config, version string) (*App,error) {
 	logger,err := logx.New(settings.Log,version)
 	if err != nil { return nil,err }
-	[[if or (ne .Database "none") .Redis]]startup,cancel:=context.WithTimeout(context.Background(),10*time.Second);defer cancel()[[end]]
+	[[if or (ne .Database "none") .Redis (eq .Authz "casbin")]]startup,cancel:=context.WithTimeout(context.Background(),10*time.Second);defer cancel()[[end]]
 	[[if ne .Database "none"]]db,err:=database.Open(startup,settings.Database,logger)
 	if err!=nil { _ = logger.Sync(); return nil,err }
 	if err:=db.CheckSchema(startup);err!=nil {_ = db.Close(); _ = logger.Sync(); return nil,err}[[end]]
@@ -32,6 +33,8 @@ func New(settings config.Config, version string) (*App,error) {
 	do.ProvideValue(injector,logger)
 	[[if ne .Database "none"]]do.ProvideValue(injector,db)[[end]]
 	authentication,err:=auth.New(settings.JWT);if err!=nil{[[if ne .Database "none"]]_ = db.Close();[[end]] _ = logger.Sync();return nil,err}
+	[[if eq .Authz "casbin"]]authorization,err:=authz.New(startup,authz.[[if eq .Database "none"]]NewFile(settings.Authz.PolicyFile)[[else]]NewDatabase(db.DB)[[end]]);if err!=nil{[[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}
+	do.ProvideValue(injector,authorization)[[end]]
 	[[if .Redis]]caching,err:=cache.Open(startup,settings.Redis,logger);if err!=nil{[[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}
 	do.ProvideValue(injector,caching)[[end]]
 	do.ProvideValue(injector,authentication)
@@ -43,11 +46,12 @@ func New(settings config.Config, version string) (*App,error) {
 		ready,err := do.Invoke[*server.Readiness](i); if err != nil { return nil,err }
 		authentication,err:=do.Invoke[*auth.JWT](i);if err!=nil{return nil,err}
 		examples,err:=do.Invoke[*examplehandler.Handler](i);if err!=nil{return nil,err}
-		return server.New(apiserver.NewRouter(configuration.HTTP,ready,logging,authentication,examples),configuration.HTTP,ready,logging)
+		[[if eq .Authz "casbin"]]authorization,err:=do.Invoke[*authz.Manager](i);if err!=nil{return nil,err}[[end]]
+		return server.New(apiserver.NewRouter(configuration.HTTP,ready,logging,authentication,examples[[if eq .Authz "casbin"]],authorization[[end]]),configuration.HTTP,ready,logging)
 	})
 	httpServer,err := do.Invoke[*server.Server](injector)
 	if err != nil { [[if .Redis]]_ = caching.Close();[[end]][[if ne .Database "none"]]_ = db.Close();[[end]] _ = logger.Sync(); return nil,err }
-	return &App{Server:httpServer,Logger:logger,[[if ne .Database "none"]]Database:db,[[end]][[if .Redis]]Cache:caching[[end]]},nil
+	return &App{Server:httpServer,Logger:logger,[[if ne .Database "none"]]Database:db,[[end]][[if .Redis]]Cache:caching,[[end]][[if eq .Authz "casbin"]]Authorization:authorization,[[end]]},nil
 }
 
 func (a *App) Run(ctx context.Context) error { defer func(){ [[if .Redis]]_ = a.Cache.Close();[[end]][[if ne .Database "none"]]_ = a.Database.Close();[[end]] _ = a.Logger.Sync() }(); return a.Server.Run(ctx) }

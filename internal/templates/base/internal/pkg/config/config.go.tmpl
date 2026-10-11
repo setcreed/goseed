@@ -22,6 +22,7 @@ type Config struct {
 	[[if ne .Database "none"]]Database Database[[end]]
 	JWT JWT
 	[[if .Redis]]Redis Redis[[end]]
+	[[if and (eq .Authz "casbin") (eq .Database "none")]]Authz Authz[[end]]
 }
 
 type HTTP struct {
@@ -77,6 +78,7 @@ type JWT struct { Secret string; Issuer string; Audience string; TTL time.Durati
  CAFile string `mapstructure:"ca_file"`
 }[[end]]
 type Overrides struct { Address string; Env string }
+[[if and (eq .Authz "casbin") (eq .Database "none")]]type Authz struct {PolicyFile string `mapstructure:"policy_file"`}[[end]]
 
 func Load(filename string, explicit bool, overrides Overrides) (Config, error) {
 	v := viper.New()
@@ -97,6 +99,7 @@ func Load(filename string, explicit bool, overrides Overrides) (Config, error) {
 		"database.max_open": 4, "database.max_idle": 2, "database.slow_threshold": "200ms",[[end]]
 		"jwt.secret": "", "jwt.issuer": "[[.Name]]", "jwt.audience": "[[.Name]]-api", "jwt.ttl": "15m",
 		[[if .Redis]]"redis.address":"127.0.0.1:6379","redis.username":"","redis.password":"","redis.db":0,"redis.key_prefix":"[[.Name]]","redis.ttl":"30s","redis.command_timeout":"200ms","redis.dial_timeout":"1s","redis.pool_size":4,"redis.required":false,"redis.tls":true,"redis.ca_file":"",[[end]]
+		[[if and (eq .Authz "casbin") (eq .Database "none")]]"authz.policy_file":"configs/policy.csv",[[end]]
 	}
 	for key, value := range defaults {
 		v.SetDefault(key, value)
@@ -163,5 +166,6 @@ func (c Config) Validate() error {
 	if err != nil || len(key) < 32 { return errors.New("jwt.secret requires Base64 encoding of at least 32 bytes") }
 	if strings.TrimSpace(c.JWT.Issuer) == "" || strings.TrimSpace(c.JWT.Audience) == "" || c.JWT.TTL < time.Second || c.JWT.TTL > time.Hour { return errors.New("invalid jwt issuer, audience or ttl") }
 	[[if .Redis]]if err:=c.Redis.Validate(c.Env,c.HTTP.RequestTimeout);err!=nil{return err}[[end]]
+	[[if and (eq .Authz "casbin") (eq .Database "none")]]if strings.TrimSpace(c.Authz.PolicyFile)==""||strings.ContainsAny(c.Authz.PolicyFile,"\x00\r\n"){return errors.New("invalid authz.policy_file")}[[end]]
 	return nil
 }

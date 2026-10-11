@@ -13,6 +13,15 @@ func TestDeliveredContracts(t *testing.T) {
 	for _, backend := range []string{"sqlite", "mysql", "postgres", "none"} {
 		t.Run(backend, func(t *testing.T) { checkDeliveredContracts(t, backend) })
 		t.Run(backend+"-redis", func(t *testing.T) { checkDeliveredOptions(t, Options{Database: backend, Redis: true}) })
+		for _, redis := range []bool{false, true} {
+			label := backend + "-casbin"
+			if redis {
+				label += "-redis"
+			}
+			t.Run(label, func(t *testing.T) {
+				checkDeliveredOptions(t, Options{Database: backend, Redis: redis, Authz: "casbin"})
+			})
+		}
 	}
 }
 
@@ -48,6 +57,23 @@ func checkDeliveredOptions(t *testing.T, options Options) {
 		lock.Runtime[name] = version
 	}
 	manifest := string(files["go.mod"])
+	casbin := options.Authz == "casbin"
+	if strings.Contains(manifest, "github.com/casbin/casbin/v3 ") != casbin {
+		t.Fatal("incorrect Casbin dependency composition")
+	}
+	for _, filename := range []string{"internal/pkg/authz/policy.go", "internal/pkg/middleware/authz.go", "docs/authz.md", "configs/policy.csv"} {
+		if _, exists := files[filename]; exists != casbin {
+			t.Fatalf("incorrect Casbin file composition: %s", filename)
+		}
+	}
+	for _, filename := range []string{"internal/pkg/authz/database.go", "migrations/00002_casbin.sql"} {
+		if _, exists := files[filename]; exists != (casbin && backend != "none") {
+			t.Fatalf("incorrect policy storage composition: %s", filename)
+		}
+	}
+	if strings.Contains(string(files["configs/app.example.yaml"]), "authz:") != (casbin && backend == "none") {
+		t.Fatal("incorrect policy file configuration composition")
+	}
 	if strings.Contains(manifest, "github.com/redis/go-redis/v9 ") != options.Redis {
 		t.Fatal("incorrect Redis dependency composition")
 	}
@@ -167,6 +193,21 @@ func checkDeliveredOptions(t *testing.T, options Options) {
 	for _, route := range expectedRoutes {
 		if _, ok := routes[route]; !ok {
 			t.Fatalf("missing documented route %s", route)
+		}
+	}
+	if casbin {
+		for route, item := range routes {
+			if !strings.HasPrefix(route, "/v1/") {
+				continue
+			}
+			for method, raw := range item.(map[string]any) {
+				if method == "parameters" {
+					continue
+				}
+				if _, exists := raw.(map[string]any)["responses"].(map[string]any)["403"]; !exists {
+					t.Fatalf("authorization response undocumented: %s %s", method, route)
+				}
+			}
 		}
 	}
 }

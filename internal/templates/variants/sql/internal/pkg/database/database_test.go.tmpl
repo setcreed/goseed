@@ -26,7 +26,7 @@ func TestExternalMigrationPersistenceAndPrivacy(t *testing.T){
  var tables int
  if err:=db.Pool.QueryRowContext(ctx,[[if eq .Database "mysql"]]"SELECT count(*) FROM information_schema.tables WHERE table_schema=DATABASE()"[[else]]"SELECT count(*) FROM information_schema.tables WHERE table_schema=current_schema()"[[end]]).Scan(&tables);err!=nil||tables!=0{t.Fatal("status or startup wrote schema")}
  for range 2 {if err:=db.Migrate(ctx);err!=nil{t.Fatal(err)}}
- version,err=db.Version(ctx);if err!=nil||version!=1{t.Fatal("applied version")}
+ version,err=db.Version(ctx);if err!=nil||version!=[[if eq .Authz "casbin"]]2[[else]]1[[end]]{t.Fatal("applied version")}
  if err:=db.DB.Exec("INSERT INTO examples(owner,name,description,enabled,created_at,updated_at) VALUES(?,?,?,?,?,?)","subject-private","sql-private","",false,time.Now().UTC(),time.Now().UTC()).Error;err!=nil{t.Fatal(err)}
  result,err:=db.Pool.ExecContext(ctx,"UPDATE examples SET enabled=enabled WHERE owner='subject-private'");if err!=nil{t.Fatal(err)}
  affected,err:=result.RowsAffected();if err!=nil||affected!=1{t.Fatal("unchanged update must count the matched row")}

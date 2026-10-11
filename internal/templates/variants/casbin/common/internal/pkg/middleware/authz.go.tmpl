@@ -1,0 +1,18 @@
+package middleware
+
+import (
+ "context"
+ "[[.Module]]/internal/pkg/contextx"
+ "[[.Module]]/internal/pkg/errno"
+ "github.com/gin-gonic/gin"
+)
+
+type Authorizer interface {Authorize(context.Context,string,string,string)error}
+func Authorize(authorizer Authorizer,resource string,operations map[string]string)gin.HandlerFunc{
+ return func(c *gin.Context){
+  operation,known:=operations[c.Request.Method]
+  if !known||authorizer==nil{Failure(c,errno.Forbidden);return}
+  subject:=contextx.Subject(c.Request.Context());if subject==""{Failure(c,errno.Unauthorized);return}
+  if err:=authorizer.Authorize(c.Request.Context(),subject,resource,operation);err!=nil{Failure(c,err);return};c.Next()
+ }
+}

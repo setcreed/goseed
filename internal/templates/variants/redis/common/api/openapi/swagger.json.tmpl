@@ -145,6 +145,10 @@
               "$ref": "#/definitions/Error"
             }
           },
+          [[if eq .Authz "casbin"]]"403": {
+            "description": "Permission denied",
+            "schema": {"$ref": "#/definitions/Error"}
+          },[[end]]
           "504": {
             "description": "Request timeout",
             "schema": {

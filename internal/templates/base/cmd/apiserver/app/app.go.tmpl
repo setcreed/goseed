@@ -16,6 +16,7 @@ import (
 	"[[.Module]]/internal/apiserver/bootstrap"
 	"[[.Module]]/internal/pkg/config"
  "[[.Module]]/internal/pkg/auth"
+ [[if and (eq .Authz "casbin") (ne .Database "none")]]"[[.Module]]/internal/pkg/authz"[[end]]
 	[[if ne .Database "none"]]"[[.Module]]/internal/pkg/database"
 	logx "[[.Module]]/internal/pkg/log"[[end]]
 )
@@ -28,18 +29,20 @@ func Run(ctx context.Context, args []string, output io.Writer, version string) e
 		if len(args)==0 || (args[0]!="init" && args[0]!="token") { return errors.New("expected dev init or token") }; action=args[0];args = args[1:]
 	} [[if ne .Database "none"]]else if command == "migrate" {
 		if len(args)==0 || (args[0]!="up" && args[0]!="status") {return errors.New("expected migrate up or status")};action=args[0];args=args[1:]
-	} [[end]]else if command != "serve" { return errors.New("unknown command") }
+	} [[end]][[if and (eq .Authz "casbin") (ne .Database "none")]]else if command=="policy" {if len(args)==0||args[0]!="replace"{return errors.New("expected policy replace")};action=args[0];args=args[1:]} [[end]]else if command != "serve" { return errors.New("unknown command") }
 	flags := flag.NewFlagSet(command,flag.ContinueOnError); flags.SetOutput(io.Discard)
 	filename := flags.String("config",config.DefaultPath,"configuration file")
 	address := flags.String("address","","HTTP listen address")
 	environment := flags.String("env","","runtime environment")
  var subject,lifetime string
+ [[if and (eq .Authz "casbin") (ne .Database "none")]]var policyFile string;if command=="policy" {flags.StringVar(&policyFile,"file","","validated policy CSV to import")}[[end]]
  if command=="dev" && action=="token" {flags.StringVar(&subject,"subject","","token subject");flags.StringVar(&lifetime,"ttl","","token lifetime")}
-	if err := flags.Parse(args); err != nil { if errors.Is(err,flag.ErrHelp) { _,err = fmt.Fprintln(output,"commands: serve [--config file] [--address host:port] [--env environment]; dev init [--config file]; dev token --subject value [--ttl duration] [--config file][[if ne .Database "none"]]; migrate up|status [--config file][[end]]"); return err }; return err }
+	if err := flags.Parse(args); err != nil { if errors.Is(err,flag.ErrHelp) { _,err = fmt.Fprintln(output,"commands: serve [--config file] [--address host:port] [--env environment]; dev init [--config file]; dev token --subject value [--ttl duration] [--config file][[if ne .Database "none"]]; migrate up|status [--config file][[end]][[if and (eq .Authz "casbin") (ne .Database "none")]]; policy replace --file csv [--config file][[end]]"); return err }; return err }
 	if flags.NArg()!=0 { return errors.New("unexpected arguments") }
 	explicit := false; flags.Visit(func(f *flag.Flag){ if f.Name=="config" { explicit = true } })
 	if command!="serve" && (*address!="" || *environment!="") {return errors.New("--address and --env only apply to serve")}
  if command=="dev" && action=="init" {return Init(*filename,output)}
+ [[if and (eq .Authz "casbin") (ne .Database "none")]]if command=="policy"&&policyFile==""{return errors.New("policy replace requires --file") }[[end]]
 	settings,err := config.Load(*filename,explicit,config.Overrides{Address:*address,Env:*environment})
 	if err != nil { return err }
 	if command=="dev" {
@@ -47,11 +50,12 @@ func Run(ctx context.Context, args []string, output io.Writer, version string) e
   ttl:=settings.JWT.TTL; if lifetime!="" {ttl,err=time.ParseDuration(lifetime);if err!=nil{return errors.New("invalid token lifetime")}}
   service,err:=auth.New(settings.JWT);if err!=nil{return err};token,err:=service.Issue(subject,ttl);if err!=nil{return err};_,err=fmt.Fprintln(output,token);return err
  }
- [[if ne .Database "none"]]if command=="migrate" {
+ [[if ne .Database "none"]]if command=="migrate"[[if eq .Authz "casbin"]]||command=="policy"[[end]] {
 		if *address!="" || *environment!="" {return errors.New("migrate only accepts --config")}
 		logging,err:=logx.New(settings.Log,version);if err!=nil{return err};defer func(){_ = logging.Sync()}()
 		migrationContext,cancel:=context.WithTimeout(ctx,time.Minute);defer cancel()
 		db,err:=database.Open(migrationContext,settings.Database,logging);if err!=nil{return err};defer func(){_ = db.Close()}()
+  [[if eq .Authz "casbin"]]if command=="policy"{if err:=db.CheckSchema(migrationContext);err!=nil{return err};if err:=authz.Import(migrationContext,authz.NewDatabase(db.DB),policyFile);err!=nil{return err};_,err=fmt.Fprintln(output,"policy replaced; restart running instances to load the new policy");return err}[[end]]
 		if action=="up" {if err:=db.Migrate(migrationContext);err!=nil{return err}}
 		version,err:=db.Version(migrationContext);if err!=nil{return err};_,err=fmt.Fprintf(output,"schema version: %d\n",version);return err
 	}[[end]]
