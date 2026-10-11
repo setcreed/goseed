@@ -53,7 +53,7 @@ func New(settings config.Config, version string) (*App,error) {
 		authentication,err:=do.Invoke[*auth.JWT](i);if err!=nil{return nil,err}
 		examples,err:=do.Invoke[*examplehandler.Handler](i);if err!=nil{return nil,err}
 		[[if eq .Authz "casbin"]]authorization,err:=do.Invoke[*authz.Manager](i);if err!=nil{return nil,err}[[end]]
-		return server.New(apiserver.NewRouter(configuration.HTTP,ready,logging,authentication,examples[[if eq .Authz "casbin"]],authorization[[end]]),configuration.HTTP,ready,logging)
+		return server.New(apiserver.NewRouter(configuration.HTTP,ready,logging,authentication,httpModules(examples)[[if eq .Authz "casbin"]],authorization[[end]]),configuration.HTTP,ready,logging)
 	})
 	httpServer,err := do.Invoke[*server.Server](injector)
 	if err != nil { [[if .Redis]]_ = caching.Close();[[end]][[if ne .Database "none"]]_ = db.Close();[[end]] _ = logger.Sync(); return nil,err }

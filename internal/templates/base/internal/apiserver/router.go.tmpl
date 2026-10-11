@@ -6,7 +6,6 @@ import (
 
 	"[[.Module]]/internal/pkg/config"
 	"[[.Module]]/internal/pkg/auth"
-	example "[[.Module]]/internal/apiserver/handler/http/example"
 	"[[.Module]]/internal/pkg/errno"
 	"[[.Module]]/internal/pkg/middleware"
 	"[[.Module]]/internal/pkg/server"
@@ -14,7 +13,14 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewRouter(settings config.HTTP, ready *server.Readiness, logger *zap.Logger, authentication *auth.JWT, examples *example.Handler[[if eq .Authz "casbin"]],authorization middleware.Authorizer[[end]]) http.Handler {
+type HTTPModule struct {
+	Name string
+	Path string
+	Operations map[string]string
+	Register func(*gin.RouterGroup)
+}
+
+func NewRouter(settings config.HTTP, ready *server.Readiness, logger *zap.Logger, authentication *auth.JWT, modules []HTTPModule[[if eq .Authz "casbin"]],authorization middleware.Authorizer[[end]]) http.Handler {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	_ = router.SetTrustedProxies(nil)
@@ -24,7 +30,11 @@ func NewRouter(settings config.HTTP, ready *server.Readiness, logger *zap.Logger
 	router.GET("/readyz",func(c *gin.Context){ if err := ready.Check(c.Request.Context()); err != nil { c.JSON(503,gin.H{"status":"unavailable"}); return }; c.JSON(200,gin.H{"status":"ok"}) })
 	router.NoRoute(func(c *gin.Context){ middleware.Failure(c,errno.NotFound) })
 	router.NoMethod(func(c *gin.Context){ middleware.Failure(c,&errno.Error{Code:"method_not_allowed",Message:"method not allowed"}) })
-	examples.Register(router.Group("/v1/examples",middleware.Authenticate(authentication)[[if eq .Authz "casbin"]],middleware.Authorize(authorization,"example",map[string]string{"GET":"read"[[if ne .Database "none"]],"POST":"create","PATCH":"update","DELETE":"delete"[[end]]})[[end]]))
+	for _, module := range modules {
+		middlewareChain := []gin.HandlerFunc{middleware.Authenticate(authentication)}
+		[[if eq .Authz "casbin"]]middlewareChain = append(middlewareChain, middleware.Authorize(authorization, module.Name, module.Operations))[[end]]
+		module.Register(router.Group(module.Path, middlewareChain...))
+	}
 	if settings.Pprof {
 		router.GET("/debug/pprof/",gin.WrapF(pprof.Index))
 		router.GET("/debug/pprof/cmdline",gin.WrapF(pprof.Cmdline))

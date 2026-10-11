@@ -138,6 +138,34 @@ func TestProtocolPlansAndInvalidTransport(t *testing.T) {
 	}
 }
 
+func TestHTTPModuleRegistryIsTransportScoped(t *testing.T) {
+	project := Project{Name: "short", Module: "example.com/short"}
+	for _, transport := range []string{"http", "dual"} {
+		files, err := Render(project, Options{Transport: transport})
+		if err != nil {
+			t.Fatal(err)
+		}
+		plan := map[string][]byte{}
+		for _, file := range files {
+			plan[file.Path] = file.Content
+		}
+		if len(plan["internal/apiserver/bootstrap/modules_gen.go"]) == 0 || !bytes.Contains(plan["internal/apiserver/router.go"], []byte("for _, module := range modules")) {
+			t.Fatalf("%s does not use the generated HTTP module registry", transport)
+		}
+	}
+	for _, transport := range []string{"grpc", "gateway"} {
+		files, err := Render(project, Options{Transport: transport})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range files {
+			if file.Path == "internal/apiserver/bootstrap/modules_gen.go" {
+				t.Fatalf("HTTP module registry leaked into %s project", transport)
+			}
+		}
+	}
+}
+
 func TestCasbinPlansAndInvalidOptions(t *testing.T) {
 	project := Project{Name: "demo", Module: "example.com/demo"}
 	for _, backend := range []string{"sqlite", "mysql", "postgres", "none"} {
