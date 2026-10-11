@@ -1,0 +1,509 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "[[.Name]]",
+    "version": "1.0"
+  },
+  "tags": [
+    {
+      "name": "ExampleService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/examples": {
+      "get": {
+        "operationId": "ExampleService_List",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListResponse"
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "schema": {}
+          },
+          "401": {
+            "description": "JWT required",
+            "schema": {}
+          },
+          "403": {
+            "description": "Permission denied",
+            "schema": {}
+          },
+          "404": {
+            "description": "Resource not found",
+            "schema": {}
+          },
+          "409": {
+            "description": "Resource conflict",
+            "schema": {}
+          },
+          "413": {
+            "description": "Request body too large",
+            "schema": {}
+          },
+          "429": {
+            "description": "RPC message limit exceeded",
+            "schema": {}
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {}
+          },
+          "503": {
+            "description": "Service unavailable",
+            "schema": {}
+          },
+          "504": {
+            "description": "Request timeout",
+            "schema": {}
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "ExampleService"
+        ]
+      },
+      "post": {
+        "operationId": "ExampleService_Create",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Example"
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "schema": {}
+          },
+          "401": {
+            "description": "JWT required",
+            "schema": {}
+          },
+          "403": {
+            "description": "Permission denied",
+            "schema": {}
+          },
+          "404": {
+            "description": "Resource not found",
+            "schema": {}
+          },
+          "409": {
+            "description": "Resource conflict",
+            "schema": {}
+          },
+          "413": {
+            "description": "Request body too large",
+            "schema": {}
+          },
+          "429": {
+            "description": "RPC message limit exceeded",
+            "schema": {}
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {}
+          },
+          "503": {
+            "description": "Service unavailable",
+            "schema": {}
+          },
+          "504": {
+            "description": "Request timeout",
+            "schema": {}
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ExampleService"
+        ]
+      }
+    },
+    "/v1/examples/{id}": {
+      "get": {
+        "operationId": "ExampleService_Get",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Example"
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "schema": {}
+          },
+          "401": {
+            "description": "JWT required",
+            "schema": {}
+          },
+          "403": {
+            "description": "Permission denied",
+            "schema": {}
+          },
+          "404": {
+            "description": "Resource not found",
+            "schema": {}
+          },
+          "409": {
+            "description": "Resource conflict",
+            "schema": {}
+          },
+          "413": {
+            "description": "Request body too large",
+            "schema": {}
+          },
+          "429": {
+            "description": "RPC message limit exceeded",
+            "schema": {}
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {}
+          },
+          "503": {
+            "description": "Service unavailable",
+            "schema": {}
+          },
+          "504": {
+            "description": "Request timeout",
+            "schema": {}
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "uint64"
+          }
+        ],
+        "tags": [
+          "ExampleService"
+        ]
+      },
+      "delete": {
+        "operationId": "ExampleService_Delete",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "schema": {}
+          },
+          "401": {
+            "description": "JWT required",
+            "schema": {}
+          },
+          "403": {
+            "description": "Permission denied",
+            "schema": {}
+          },
+          "404": {
+            "description": "Resource not found",
+            "schema": {}
+          },
+          "409": {
+            "description": "Resource conflict",
+            "schema": {}
+          },
+          "413": {
+            "description": "Request body too large",
+            "schema": {}
+          },
+          "429": {
+            "description": "RPC message limit exceeded",
+            "schema": {}
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {}
+          },
+          "503": {
+            "description": "Service unavailable",
+            "schema": {}
+          },
+          "504": {
+            "description": "Request timeout",
+            "schema": {}
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "uint64"
+          }
+        ],
+        "tags": [
+          "ExampleService"
+        ]
+      },
+      "patch": {
+        "operationId": "ExampleService_Update",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Example"
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "schema": {}
+          },
+          "401": {
+            "description": "JWT required",
+            "schema": {}
+          },
+          "403": {
+            "description": "Permission denied",
+            "schema": {}
+          },
+          "404": {
+            "description": "Resource not found",
+            "schema": {}
+          },
+          "409": {
+            "description": "Resource conflict",
+            "schema": {}
+          },
+          "413": {
+            "description": "Request body too large",
+            "schema": {}
+          },
+          "429": {
+            "description": "RPC message limit exceeded",
+            "schema": {}
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {}
+          },
+          "503": {
+            "description": "Service unavailable",
+            "schema": {}
+          },
+          "504": {
+            "description": "Request timeout",
+            "schema": {}
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ExampleServiceUpdateBody"
+            }
+          }
+        ],
+        "tags": [
+          "ExampleService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "ExampleServiceUpdateBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1CreateRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "v1Example": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1ListResponse": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Example"
+          }
+        },
+        "total": {
+          "type": "string",
+          "format": "int64"
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page_size": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    }
+  },
+  "securityDefinitions": {
+    "BearerAuth": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header"
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ]
+}

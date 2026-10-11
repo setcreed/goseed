@@ -63,14 +63,32 @@ func verifyGRPCProto(t *testing.T, directory, root string) {
 		t.Fatal(err)
 	}
 	original := map[string][]byte{}
-	for _, name := range []string{"example.pb.go", "example_grpc.pb.go"} {
+	names := []string{"example.pb.go", "example_grpc.pb.go"}
+	if _, err := os.Stat(filepath.Join(directory, "pkg/api/example/v1/example.pb.gw.go")); err == nil {
+		names = append(names, "example.pb.gw.go")
+	}
+	for _, name := range names {
 		data, err := os.ReadFile(filepath.Join(directory, "pkg/api/example/v1", name))
 		if err != nil {
 			t.Fatal(err)
 		}
 		original[name] = data
 	}
+	var swagger []byte
+	if len(names) == 3 {
+		var err error
+		swagger, err = os.ReadFile(filepath.Join(directory, "api/openapi/swagger.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	run(t, directory, "make", "proto-generate")
+	if len(names) == 3 {
+		data, err := os.ReadFile(filepath.Join(directory, "api/openapi/swagger.json"))
+		if err != nil || string(data) != string(swagger) {
+			t.Fatal("Swagger reproduction differs")
+		}
+	}
 	for name, want := range original {
 		got, err := os.ReadFile(filepath.Join(directory, "pkg/api/example/v1", name))
 		if err != nil || string(got) != string(want) {
@@ -390,12 +408,19 @@ func TestRealGRPCProjects(t *testing.T) {
 				rpcCall(t, directory, client, optional.url, token, env, options, []string{"--action", "update", "--id", item.ID, "--description", "updated while cache down"}, "")
 			}
 			signalRedisFault(t, false)
-			check = rpcCall(t, directory, client, required.url, "", requiredEnv, options, []string{"--action", "health"}, "")
 			var health struct {
 				Status string `json:"status"`
 			}
-			if json.Unmarshal(check, &health) != nil || health.Status != "SERVING" {
-				t.Fatal("Redis health did not recover")
+			deadline := time.Now().Add(5 * time.Second)
+			for {
+				check = rpcCall(t, directory, client, required.url, "", requiredEnv, options, []string{"--action", "health"}, "")
+				if json.Unmarshal(check, &health) == nil && health.Status == "SERVING" {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("Redis health did not recover within 5s")
+				}
+				time.Sleep(50 * time.Millisecond)
 			}
 			rpcCall(t, directory, client, required.url, token, requiredEnv, options, operation, "")
 			required.stop(t)

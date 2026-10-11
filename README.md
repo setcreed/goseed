@@ -15,10 +15,10 @@ Go 工具链固定为 **1.26.4**，主模块为 **`github.com/setcreed/goseed`**
 | `Options.Database` | `sqlite`、`mysql`、`postgres`、`none` | `sqlite` |
 | `Options.Redis` | 开启或关闭 Redis 缓存 | `false` |
 | `Options.Authz` | `none`、`casbin` | `none` |
-| `Options.Transport` | `http`、`grpc`、`dual` | `http` |
+| `Options.Transport` | `http`、`grpc`、`dual`、`gateway` | `http` |
 | 身份认证 | 所有当前模板均包含 JWT，Render 没有认证裁剪选项 | JWT |
 
-四种存储 × Redis 开关 × Casbin 开关 × 三种协议模式共 48 种组合。按选项裁剪源码、驱动、配置、迁移、依赖和文档。这些是内部模板选项，当前 `goseed` CLI 不接受对应创建参数；业务项目中的 `apiserver serve` 监听参数见 [命令契约](docs/cli.md#服务开发与运行入口) 。
+四种存储 × Redis 开关 × Casbin 开关 × 四种协议模式共 64 种组合。按选项裁剪源码、驱动、配置、迁移、依赖和文档。这些是内部模板选项，当前 `goseed` CLI 不接受对应创建参数；业务项目中的 `apiserver serve` 监听参数见 [命令契约](docs/cli.md#服务开发与运行入口) 。
 
 默认 HTTP 模板包含 Handler → Biz → Store 分层、SQLite、JWT、示例 CRUD、配置与日志、健康检查和优雅退出。提供开发密钥初始化、开发 Token 签发、显式迁移、严格输入校验、资源主体隔离、TLS 与 CORS；没有公开的临时签发接口。服务命令与验收边界见 [默认 HTTP 模板](docs/template-http.md) 。
 
@@ -34,9 +34,11 @@ Casbin 变体提供默认拒绝的简单 RBAC，业务路由在 JWT 之后、缓
 
 dual 变体同时提供 Gin HTTP 与 gRPC，两种 Handler 共用同一个 Biz、JWT、可选缓存与授权；启用数据库时共用 Store 与连接池。`serve --address` 覆盖 HTTP，`serve --grpc-address` 覆盖 gRPC；先绑定双端口，任一启动失败回收资源，任一服务返回则停止两侧就绪并并发排空，全部退出后关闭共享依赖。保留两种接口契约和生产 TLS 规则，详见 [双协议模板](docs/template-dual.md) 。
 
-渲染项目包含完整 `go.mod` / `go.sum`、AGENTS/README/ROADMAP、Makefile、配置示例和非 root Dockerfile；HTTP 提供 Swagger 2.0，gRPC 提供 Proto 与固定版本显式生成入口，dual 同时提供两者。按所选数据库提供 SQL 迁移，可以独立构建及运行。
+Gateway 变体通过真实 RPC 转发 HTTP，共用 gRPC Handler 与安全链，裁剪 Gin 和 HTTP 业务 Handler。交付固定 HTTP 映射、ProtoJSON、已生成 Gateway 与 Swagger、内部 RPC 证书验证、启动失败回收和先 HTTP 后 RPC 的顺序排空；64 位整数输出字符串，成功方法统一返回 200。配置与输入边界见 [Gateway 契约](docs/template-gateway.md) 。
 
-`make test` 实际渲染独立项目，执行 readonly 测试、vet、race、lint 与构建，并通过实际服务进程验证初始化、迁移、JWT/CRUD、资源隔离、非法输入、TLS/CORS、启动失败、日志脱敏和重启持久化。gRPC 与 dual 各 16 种组合均编译测试包、交叉构建服务与客户端；SQLite／无数据库的基础组合与 Redis + Casbin 组合执行完整测试、实际 RPC、TLS、Proto 脚本重新生成比对和独立 Go 客户端模块导入验证。dual 额外检查跨协议数据、输入与权限语义、双端口失败回收和同时排空。需先 `make tools`、`make protocol-tools`，同时需要本机回环监听。48 种组合的总测试时限为 30 分钟，单条验证命令和启动失败门槛保持不变。
+渲染项目包含完整 `go.mod` / `go.sum`、AGENTS/README/ROADMAP、Makefile、配置示例和非 root Dockerfile；HTTP 提供 Swagger 2.0，gRPC 提供 Proto 与固定版本显式生成入口，dual 同时提供两者，Gateway 从 Proto 和固定 HTTP 映射生成 Swagger。按所选数据库提供 SQL 迁移，可以独立构建及运行。
+
+`make test` 实际渲染独立项目，执行 readonly 测试、vet、race、lint 与构建，并通过实际服务进程验证初始化、迁移、JWT/CRUD、资源隔离、非法输入、TLS/CORS、启动失败、日志脱敏和重启持久化。gRPC、dual 与 Gateway 各 16 种组合均编译测试包、交叉构建服务与客户端；SQLite／无数据库的基础组合与 Redis + Casbin 组合执行完整测试、实际 RPC、TLS、Proto 脚本重新生成比对和独立 Go 客户端模块导入验证。dual 额外检查跨协议数据、输入与权限语义、双端口失败回收和同时排空；Gateway 额外检查转发身份、ProtoJSON 输入、内部 TLS、HTTP 预算／取消及先 HTTP 后 RPC 排空。需先 `make tools`、`make protocol-tools`，同时需要本机回环监听。64 种组合的总测试时限为 40 分钟，单条验证命令和启动失败门槛保持不变。
 
 ## 构建与检查
 
@@ -58,15 +60,15 @@ make template-db
 make template-redis
 ```
 
-`make tools` 显式安装固定版本 linter 到 `.tools/bin/`。构建与检查使用项目 `.tmp/` 缓存，不安装全局工具，不自动改写已交付源码或依赖清单。`template-container` 实际构建默认与无数据库业务镜像，使用随机回环端口；默认模板用全新数据卷验证生产禁用开发签发、显式迁移、CRUD 与重启持久化，无数据库模板验证非 root、只读根文件系统、无数据卷、JWT 与重启；Casbin 文件策略镜像另验证默认拒绝、只读策略挂载和角色冒充拒绝。gRPC／dual 无数据库 + Casbin 镜像验证生产 TLS、非 root、只读根文件系统、证书／策略只读挂载、健康调用、权限与重启；dual 同时验证两个公开端口。结束清理本次容器、卷及测试镜像，普通检查不启动 Docker。
+`make tools` 显式安装固定版本 linter 到 `.tools/bin/`。构建与检查使用项目 `.tmp/` 缓存，不安装全局工具，不自动改写已交付源码或依赖清单。`template-container` 实际构建默认与无数据库业务镜像，使用随机回环端口；默认模板用全新数据卷验证生产禁用开发签发、显式迁移、CRUD 与重启持久化，无数据库模板验证非 root、只读根文件系统、无数据卷、JWT 与重启；Casbin 文件策略镜像另验证默认拒绝、只读策略挂载和角色冒充拒绝。gRPC／dual／Gateway 无数据库 + Casbin 镜像验证生产 TLS、非 root、只读根文件系统、证书／策略只读挂载、健康调用、权限与重启；dual／Gateway 同时验证两个公开端口，Gateway 验证内部 RPC 的证书信任。结束清理本次容器、卷及测试镜像，普通检查不启动 Docker。
 
-普通检查同时实际渲染 MySQL、PostgreSQL 项目，执行 readonly 测试、vet、race、lint 与构建；没有专用服务时明确跳过其中的外部数据库用例。`template-db` 使用固定摘要的真实 MySQL 8.4.11、PostgreSQL 18.6，全新测试证书/数据卷、随机回环端口和隔离数据库；外部用例禁止跳过，依次验证 SQL 基线、Casbin v1 → v2 迁移升级，以及 gRPC／dual + Casbin 实际调用。覆盖 CRUD、权限、事务与策略回滚、取消／连接复用、启动失败、日志脱敏、数据库 TLS 信任／主机名及重启持久化。结束仅清理本次资源，需要 Docker、Compose 与 OpenSSL。
+普通检查同时实际渲染 MySQL、PostgreSQL 项目，执行 readonly 测试、vet、race、lint 与构建；没有专用服务时明确跳过其中的外部数据库用例。`template-db` 使用固定摘要的真实 MySQL 8.4.11、PostgreSQL 18.6，全新测试证书/数据卷、随机回环端口和隔离数据库；外部用例禁止跳过，依次验证 SQL 基线、Casbin v1 → v2 迁移升级，以及 gRPC／dual／Gateway + Casbin 实际调用。覆盖 CRUD、权限、事务与策略回滚、取消／连接复用、启动失败、日志脱敏、数据库 TLS 信任／主机名及重启持久化。结束仅清理本次资源，需要 Docker、Compose 与 OpenSSL。
 
 普通检查也实际渲染无数据库项目，核对文件与依赖树裁剪、固定清单不变，执行 readonly 测试、vet、race、lint、本机构建与 Linux amd64 纯 Go 构建；真实服务进程覆盖初始化、迁移命令拒绝、JWT、输入边界、TLS/CORS、日志脱敏、重启和优雅退出。
 
 普通检查验证四种存储与 Redis 的组合、缓存命中/主体隔离/失效、受控连接取消和短超时；实际 Redis 用例在缺少专用凭据时明确跳过。`template-redis` 使用固定摘要的 Redis 8.10.2、专用密码与 TLS 证书、随机回环端口，验证 SQLite 与无数据库缓存、TTL、TLS 信任、错误密码、必需／可选故障行为及停机后恢复，禁止跳过真实用例。需要 Docker 与 OpenSSL，退出只清理本次容器与临时凭据，保留依赖镜像缓存；不清空共享 Redis 数据。
 
-普通检查覆盖 Casbin 的八种 HTTP 开启组合及原有关闭组合，验证 readonly 清单、Linux 纯 Go 构建、策略输入、并发快照、取消、默认拒绝、授权与归属隔离、错误导入保留旧策略及撤销。`template-redis` 同时验证 HTTP／gRPC／dual 的 Casbin 组合，权限撤销并重启后，Redis 中仍存在的缓存不能绕过授权；gRPC 验证可选回源、必需模式 Unavailable、健康 NOT_SERVING、恢复与日志脱敏，dual 验证两侧共同执行故障与授权规则。
+普通检查覆盖 Casbin 的八种 HTTP 开启组合及原有关闭组合，验证 readonly 清单、Linux 纯 Go 构建、策略输入、并发快照、取消、默认拒绝、授权与归属隔离、错误导入保留旧策略及撤销。`template-redis` 同时验证 HTTP／gRPC／dual／Gateway 的 Casbin 组合，权限撤销并重启后，Redis 中仍存在的缓存不能绕过授权；gRPC 验证可选回源、必需模式 Unavailable、健康 NOT_SERVING、恢复与日志脱敏，dual／Gateway 验证两侧共同执行故障与授权规则。
 
 ## 技术兼容性验证
 
@@ -95,6 +97,7 @@ make protocol-check
 | Casbin 适配原型 | D1 独立兼容性验证，未作为正式模板实现复用 |
 | gRPC 正式模板 | 16 种组合裁剪／构建；代表项目的真实调用、安全链、取消、健康 Watch、TLS、退出、真实 SQL／Redis、生产容器与 Proto 复现 |
 | dual 正式模板 | 16 种组合编译／构建；代表项目共享业务、跨协议调用与权限、双端口失败清理、并发排空、真实 SQL／Redis、生产双端口 TLS 容器 |
+| Gateway 正式模板 | 16 种组合编译／构建；真实 RPC 转发、输入与身份、Proto／Gateway／Swagger 复现、顺序排空、真实 SQL／Redis、双端口 TLS 容器 |
 | gRPC、Gateway 兼容性原型 | D1 本机回环实际调用和转发、Swagger 2.0 产物解析、固定工具重新生成比对 |
 | Redis 8.10.2 | 专用 TLS 服务；缓存读写/隔离/TTL、请求取消、证书与密码拒绝、故障回源、必需依赖阻断、恢复和关闭 |
 | 其他运行依赖 | 配置读取、日志与 DI 组装、JWT 签发与解析 |
@@ -113,3 +116,4 @@ make protocol-check
 - [可选模板](docs/template-options.md)：数据库裁剪、Redis 缓存、Casbin 策略及真实服务验收。
 - [纯 gRPC 模板](docs/template-grpc.md)：协议目录、配置、安全链、健康服务、退出与验收。
 - [双协议模板](docs/template-dual.md)：共享依赖、独立配置、双端口启动、并发退出与验收。
+- [Gateway 模板](docs/template-gateway.md)：真实 HTTP 转 RPC、ProtoJSON、证书验证、顺序退出与验收。

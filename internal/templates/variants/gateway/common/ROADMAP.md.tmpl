@@ -1,0 +1,5 @@
+# 项目进度
+
+当前模板包含 HTTP → gRPC Gateway、直接 gRPC 服务、JWT 与配置日志。[[if eq .Database "none"]]无数据库模式提供认证问候，不含持久化或迁移。[[else]]包含 [[.Database]]、显式迁移与主体隔离 CRUD。[[end]][[if .Redis]]包含可选 Redis 缓存。[[end]][[if eq .Authz "casbin"]]包含默认拒绝的 Casbin 授权；策略调整后重启服务。[[end]]
+
+后续接入实际业务、账户认证、部署配置与业务验收；生成项目的运行环境需自行验证。开始开发前阅读 [README](README.md) 、[Gateway 说明](docs/gateway.md) 和 [gRPC 说明](docs/grpc.md) 。

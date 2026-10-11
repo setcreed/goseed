@@ -1,0 +1,29 @@
+"""Explicitly regenerate owned protocol files with project-local fixed tools."""
+from pathlib import Path
+import os
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+protoc = root / '.tools/protoc/bin/protoc'
+tools = root / '.tools/bin'
+if not protoc.is_file():
+    raise SystemExit('Install protoc 36.2 inside .tools/protoc and run make proto-tools first')
+if subprocess.check_output([str(protoc), '--version'], text=True).strip() != 'libprotoc 36.2':
+    raise SystemExit('protoc version mismatch')
+for name, module, version in [('protoc-gen-go', 'google.golang.org/protobuf', 'v1.36.12'), ('protoc-gen-go-grpc', 'google.golang.org/grpc/cmd/protoc-gen-go-grpc', 'v1.6.2'), ('protoc-gen-grpc-gateway', 'github.com/grpc-ecosystem/grpc-gateway/v2', 'v2.31.0'), ('protoc-gen-openapiv2', 'github.com/grpc-ecosystem/grpc-gateway/v2', 'v2.31.0')]:
+    metadata = subprocess.check_output(['go', 'version', '-m', str(tools / name)], text=True)
+    if not any(line.split()[:3] == ['mod', module, version] for line in metadata.splitlines()):
+        raise SystemExit('Protocol plugin version mismatch')
+env = os.environ.copy()
+env['PATH'] = str(tools) + os.pathsep + env.get('PATH', '')
+source = root / 'api/proto/example/v1'
+base = root / '.tmp/proto'
+base.mkdir(parents=True, exist_ok=True)
+with tempfile.TemporaryDirectory(dir=base) as temporary:
+    subprocess.run([str(protoc), '-I'+str(source), '-I'+str(root / '.tools/protoc/include'), '--go_out=paths=source_relative:'+temporary, '--go-grpc_out=paths=source_relative:'+temporary, '--go_opt=Mexample.proto=[[.Module]]/pkg/api/example/v1;examplev1', '--go-grpc_opt=Mexample.proto=[[.Module]]/pkg/api/example/v1;examplev1', '--grpc-gateway_out=paths=source_relative,grpc_api_configuration='+str(source / 'http.yaml')+':'+temporary, '--grpc-gateway_opt=Mexample.proto=[[.Module]]/pkg/api/example/v1;examplev1', '--openapiv2_out=json_names_for_fields=false,openapi_configuration='+str(source / 'openapi.yaml')+',grpc_api_configuration='+str(source / 'http.yaml')+':'+temporary, str(source / 'example.proto')], cwd=root, env=env, check=True)
+    destination = root / 'pkg/api/example/v1'
+    for name in ('example.pb.go', 'example_grpc.pb.go', 'example.pb.gw.go'):
+        (destination / name).write_bytes((Path(temporary) / name).read_bytes())
+    (root / 'api/openapi/swagger.json').write_bytes((Path(temporary) / 'example.swagger.json').read_bytes())
+print('Generated protocol files updated')

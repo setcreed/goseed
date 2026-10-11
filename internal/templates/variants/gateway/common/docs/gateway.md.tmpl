@@ -1,0 +1,33 @@
+# Gateway 使用与边界
+
+本项目的 HTTP 服务由 grpc-gateway 提供：HTTP 请求转换为 gRPC 调用，进入同一套 gRPC Handler、Biz 与依赖；项目同时保留直接 gRPC 入口。它不生成 Gin HTTP 业务 Handler。HTTP 默认监听 `127.0.0.1:8080`，gRPC 默认监听 `127.0.0.1:9090`；`serve --address` 与 `serve --grpc-address` 分别覆盖。Gateway 根据本进程实际 gRPC 监听地址建立连接，通配监听会转为回环地址，不接受任意上游配置。
+
+## HTTP 映射与 JSON
+
+Proto 同目录的 `http.yaml` 固定映射业务方法。[[if ne .Database "none"]]SQL 模式提供：
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `POST` | `/v1/examples` | 创建 |
+| `GET` | `/v1/examples` | 按页列出，支持 `page`、`page_size` query |
+| `GET` | `/v1/examples/{id}` | 读取 |
+| `PATCH` | `/v1/examples/{id}` | 更新；路径 `id` 是唯一 ID 来源 |
+| `DELETE` | `/v1/examples/{id}` | 删除 |
+
+[[else]]无数据库模式仅提供 `GET /v1/examples?name=...` 问候入口。
+
+[[end]]请求和响应使用 ProtoJSON，保留 Proto 定义的 snake_case 字段名，64 位整数（包括资源 ID）以十进制 JSON 字符串表示。成功响应统一为 HTTP `200`；删除返回 `{}`。PATCH 使用 optional 字段保留显式 `false` 与空字符串。请求拒绝未知、重复或 null 字段、额外 JSON、非法 UTF-8、非法／重复／未知 query、超限正文，以及正文中提供路径 ID。POST 与 PATCH 只接受 JSON；不启用方法覆盖或表单回退。
+
+错误响应使用数字 gRPC code、脱敏 message 和空 `details`，HTTP 状态遵循标准 gRPC 映射。请求 ID 通过 `X-Request-ID` 响应头回传。入口只转发 `Authorization` 和合法的 `X-Request-ID`，拒绝重复认证头，并忽略客户端伪造的 `Grpc-Metadata-*` 身份。JWT → Casbin → Biz／缓存的安全链在 RPC 入口执行。
+
+## 配置与生命周期
+
+配置文件中的 `gateway.ca_file` 和 `gateway.server_name` 可分别由 `APP_GATEWAY_CA_FILE` 与 `APP_GATEWAY_SERVER_NAME` 覆盖，仅用于 Gateway 验证本进程 RPC 的证书。客户端目标由监听地址决定，不允许关闭证书验证。生产环境 gRPC 必须 TLS；HTTP 与 gRPC 分别使用其自身 TLS 配置及请求、关闭预算。CORS、健康和开发 pprof 遵循项目 HTTP 约定。
+
+启动先绑定两个端口，启动 RPC，并在有限预算内完成健康 RPC 和 TLS 验证，再开放 HTTP。任一步失败都回收监听器、RPC、Gateway 连接和共享依赖；启动不会自动迁移数据库。正常退出先停止两侧就绪并排空 HTTP，HTTP 返回后关闭 Gateway 连接并排空 RPC，最后关闭共享依赖。RPC 意外返回时也会回收 HTTP。[[if ne .Database "none"]]数据库迁移必须显式执行；生产启动不运行 AutoMigrate。[[end]]
+
+## Proto 与验证
+
+普通构建使用已交付的 Proto、gRPC、Gateway 和 Swagger 生成代码，无需 protoc。修改 Proto 或 HTTP 映射时，在项目 `.tools/protoc/` 安装固定版本 protoc（含 include），执行 `make proto-tools` 安装项目内插件，再执行 `make proto-generate`。生成流程不改业务文件或依赖清单。
+
+部署前需验证实际业务及环境。模板验收覆盖存储、Redis 与 Casbin 组合，实际 HTTP 和 RPC 行为、Proto/Gateway/Swagger 生成物复现、输入失败路径、身份与授权顺序、TLS、启动回收和关闭排空。[[if .Redis]]Redis 行为见 [Redis 说明](redis.md) 。[[end]][[if eq .Authz "casbin"]]权限边界见 [授权说明](authz.md) 。[[end]]业务 RPC 与认证细节见 [gRPC 说明](grpc.md) 。

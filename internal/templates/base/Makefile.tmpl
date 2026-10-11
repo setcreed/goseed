@@ -43,6 +43,8 @@ dev: dev-init
 proto-tools:
 	GOBIN=$(CURDIR)/.tools/bin $(GO) install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
 	GOBIN=$(CURDIR)/.tools/bin $(GO) install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
-proto-generate:
+[[if eq .Transport "gateway"]]	GOBIN=$(CURDIR)/.tools/bin $(GO) install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.31.0
+	GOBIN=$(CURDIR)/.tools/bin $(GO) install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@v2.31.0
+[[end]]proto-generate:
 	python3 scripts/proto.py
 [[end]]

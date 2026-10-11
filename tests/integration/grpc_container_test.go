@@ -23,6 +23,8 @@ func TestGRPCContainer(t *testing.T) {
 	verifyProtocolContainer(t, "grpc")
 }
 
+func TestGatewayContainer(t *testing.T) { verifyProtocolContainer(t, "gateway") }
+
 func TestDualContainer(t *testing.T) {
 	verifyProtocolContainer(t, "dual")
 }
@@ -122,8 +124,11 @@ func verifyProtocolContainer(t *testing.T, protocol string) {
 	start := func(mountPolicy bool) string {
 		t.Helper()
 		args := []string{"run", "-d", "--name", name, "--label", "org.goseed.grpc=" + name, "--read-only", "-e", "APP_JWT_SECRET", "-e", "APP_GRPC_TLS_CERT=/app/certs/server.crt", "-e", "APP_GRPC_TLS_KEY=/app/certs/server.key", "-v", cert + ":/app/certs/server.crt:ro", "-v", key + ":/app/certs/server.key:ro", "-p", "127.0.0.1::9090"}
-		if protocol == "dual" {
+		if protocol == "dual" || protocol == "gateway" {
 			args = append(args, "-e", "APP_HTTP_TLS_CERT=/app/certs/server.crt", "-e", "APP_HTTP_TLS_KEY=/app/certs/server.key", "-p", "127.0.0.1::8080")
+		}
+		if protocol == "gateway" {
+			args = append(args, "-e", "APP_GATEWAY_CA_FILE=/app/certs/server.crt")
 		}
 		if mountPolicy {
 			args = append(args, "-v", policy+":/app/configs/policy.csv:ro")
@@ -156,10 +161,28 @@ func verifyProtocolContainer(t *testing.T, protocol string) {
 	options := []string{"--ca", cert}
 	checkHTTP := func(token string, expected int) {
 		t.Helper()
-		if protocol == "dual" {
+		if protocol == "dual" || protocol == "gateway" {
 			base := "https://" + docker("port", name, "8080/tcp")
+			deadline := time.Now().Add(10 * time.Second)
+			for {
+				response, err := httpClient.Get(base + "/readyz")
+				if err == nil {
+					_ = response.Body.Close()
+					if response.StatusCode == 200 {
+						break
+					}
+				}
+				if time.Now().After(deadline) {
+					t.Fatalf("%s HTTP TLS container did not become ready", protocol)
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
 			request(t, httpClient, base, "GET", "/readyz", "", "", 200)
-			request(t, httpClient, base, "GET", "/v1/examples", "", token, expected)
+			if protocol == "gateway" {
+				gatewayRequest(t, httpClient, base, "GET", "/v1/examples", "", token, expected)
+			} else {
+				request(t, httpClient, base, "GET", "/v1/examples", "", token, expected)
+			}
 		}
 	}
 	operation := []string{"--action", "greet", "--name", "container-rpc-private"}

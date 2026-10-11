@@ -59,7 +59,7 @@ subjectAltName=IP:127.0.0.1
         address = run(["docker", "port", name, "6379/tcp"], True).stdout.strip()
         print("Redis tested image: " + run(["docker", "image", "inspect", "--format", "{{json .RepoDigests}}", image], True).stdout.strip(), flush=True)
         env.update(GOSEED_TEMPLATE_REDIS="1", GOSEED_TEST_REDIS_CONTAINER=name, GOSEED_TEST_REDIS_ADDRESS=address, GOSEED_TEST_REDIS_PASSWORD=password, GOSEED_TEST_REDIS_CA_FILE=str(directory / "ca.crt"))
-        run(["go", "test", "-mod=readonly", "-count=1", "-timeout=15m", "-v", "./tests/integration", "-run", "^TestReal(Redis|GRPC|Dual)Projects$"], timeout=960)
+        run(["go", "test", "-mod=readonly", "-count=1", "-timeout=15m", "-v", "./tests/integration", "-run", "^TestReal(Redis|GRPC|Dual|Gateway)Projects$"], timeout=960)
     finally:
         if created:
             cleanup = subprocess.run(["docker", "rm", "-f", name], cwd=root, env=env, capture_output=True, text=True)

@@ -56,7 +56,7 @@ goseed/
 
 D2 的默认 HTTP 模板集中在 `internal/templates/base/`，文件使用 `.tmpl` 后缀，模板变量使用 `[[...]]` 分隔符以避开 Go 复合字面量。隐藏输出文件使用 `dot.<name>.tmpl` 命名，例如 `dot.gitignore.tmpl` 输出 `.gitignore`，避免嵌入系统隐藏元数据。渲染返回完整文件计划，校验并格式化 Go 源码；测试负责写入本次专用临时项目。公开 CLI 的生成写入与参数组合仍在 D5 接入。
 
-可选能力集中在 `internal/templates/variants/`：`sql/` 提供外部 SQL 共用实现，`mysql/`、`postgres/`、`none/` 提供存储差异，`redis/`、`casbin/`、`grpc/`、`dual/` 提供能力叠加。Render 按所选能力合并文件计划，纯 gRPC 裁剪 HTTP 文件，dual 保留两种 Handler；完整依赖清单按组合固定，不在渲染时查询或生成依赖版本。
+可选能力集中在 `internal/templates/variants/`：`sql/` 提供外部 SQL 共用实现，`mysql/`、`postgres/`、`none/` 提供存储差异，`redis/`、`casbin/`、`grpc/`、`dual/`、`gateway/` 提供能力叠加。Render 按所选能力合并文件计划，纯 gRPC 裁剪 HTTP 文件，dual 保留两种 Handler，Gateway 只保留 RPC Handler 并增加真实 HTTP 转发；完整依赖清单按组合固定，不在渲染时查询或生成依赖版本。
 
 Go 工具链固定为 `1.26.4`，主模块为 `github.com/setcreed/goseed`。兼容性测试使用独立 Go 模块，候选业务运行依赖不进入生成器主模块；验证原型不作为未来业务模板的运行依赖。
 
@@ -95,6 +95,7 @@ shop/
 │       ├── contextx/
 │       ├── database/
 │       ├── dual/
+│       ├── gateway/
 │       ├── errno/
 │       ├── log/
 │       ├── middleware/
@@ -119,7 +120,7 @@ shop/
 
 图中的 `goseed.yaml`、`modules_gen.go` 和 `specs/` 属于 D5／D6 的元数据与业务登记设计；部署目录按交付需求创建。当前文件交付范围以 README 与实际模板为准，检查点状态以 ROADMAP 为准。
 
-`pkg/api` 只承载供 Go 客户端导入的生成协议类型，不作为公共工具杂物目录。`api/proto/<module>/v1` 保存业务模块的 Proto，`pkg/api/<module>/v1` 保存对应生成代码；`v1` 表达协议版本，Biz 不默认按版本分目录。gRPC 的服务与拦截器位于 `internal/pkg/rpc/`，dual 的监听与关闭协调位于 `internal/pkg/dual/`；协议运行约束见 [纯 gRPC 模板](template-grpc.md) 与 [双协议模板](template-dual.md) 。
+`pkg/api` 只承载供 Go 客户端导入的生成协议类型，不作为公共工具杂物目录。`api/proto/<module>/v1` 保存业务模块的 Proto，Gateway 在相同目录维护 `http.yaml` 映射，`pkg/api/<module>/v1` 保存对应生成代码；`v1` 表达协议版本，Biz 不默认按版本分目录。gRPC 的服务与拦截器位于 `internal/pkg/rpc/`，dual 的监听与关闭协调位于 `internal/pkg/dual/`，Gateway 的转发与顺序关闭位于 `internal/pkg/gateway/`；协议运行约束见 [纯 gRPC 模板](template-grpc.md) 、[双协议模板](template-dual.md) 与 [Gateway 模板](template-gateway.md) 。
 
 `goseed.yaml` 是版本化生成元数据，包含模板版本、模块路径、能力选择和业务登记。它不是服务运行配置，也不能作为容器中的必需文件。
 

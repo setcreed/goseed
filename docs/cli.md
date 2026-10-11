@@ -137,8 +137,9 @@ fields:
 | HTTP | `serve --address` 覆盖 HTTP | `127.0.0.1:8080` | [HTTP](template-http.md) |
 | gRPC | `serve --address` 覆盖 gRPC | `127.0.0.1:9090` | [gRPC](template-grpc.md) |
 | dual | `serve --address` 覆盖 HTTP，`--grpc-address` 覆盖 gRPC | HTTP 8080、gRPC 9090，均为回环地址 | [双协议](template-dual.md) |
+| gateway | `serve --address` 覆盖 Gateway HTTP，`--grpc-address` 覆盖 gRPC | HTTP 8080、gRPC 9090，均为回环地址 | [Gateway](template-gateway.md) |
 
-监听覆盖只适用于 `serve`；开发、迁移及策略命令拒绝这些参数。生产 gRPC 必须配置 TLS，dual 两侧分别遵循各自协议配置和关闭预算；数据库、Redis、Casbin 的使用契约见 [可选模板](template-options.md) 。
+监听覆盖只适用于 `serve`；开发、迁移及策略命令拒绝这些参数。生产 gRPC 必须配置 TLS，dual／Gateway 两侧分别遵循各自协议配置；dual 并发排空，Gateway 先排空 HTTP 再关闭 RPC；数据库、Redis、Casbin 的使用契约见 [可选模板](template-options.md) 。
 
 开发初始化可创建不入 Git 的本地配置、随机开发密钥和测试 Token；不得覆盖已有密钥或在生产环境开放开发签发入口。生成命令本身不创建真实环境密钥。
 

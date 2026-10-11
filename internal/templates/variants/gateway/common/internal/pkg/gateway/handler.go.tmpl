@@ -1,0 +1,92 @@
+package gateway
+
+import (
+ "bytes"
+ "context"
+ "crypto/rand"
+ "encoding/hex"
+ "encoding/json"
+ "errors"
+ "io"
+ "mime"
+ "net/http"
+ "net/http/pprof"
+ "net/url"
+ "regexp"
+ "strings"
+ "time"
+ "unicode/utf8"
+
+ "[[.Module]]/internal/pkg/config"
+ "[[.Module]]/internal/pkg/server"
+ api "[[.Module]]/pkg/api/example/v1"
+ "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+ "go.uber.org/zap"
+ "google.golang.org/grpc"
+ "google.golang.org/grpc/codes"
+ "google.golang.org/grpc/status"
+ "google.golang.org/protobuf/encoding/protojson"
+)
+
+var requestIDPattern=regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+
+func NewHandler(connection *grpc.ClientConn,settings config.HTTP,ready *server.Readiness,logger *zap.Logger)(http.Handler,error){
+ mux:=runtime.NewServeMux(
+  runtime.WithMarshalerOption(runtime.MIMEWildcard,&runtime.JSONPb{MarshalOptions:protojson.MarshalOptions{UseProtoNames:true,EmitUnpopulated:true},UnmarshalOptions:protojson.UnmarshalOptions{DiscardUnknown:false}}),
+  runtime.WithIncomingHeaderMatcher(func(key string)(string,bool){if strings.EqualFold(key,"X-Request-ID"){return "x-request-id",true};return "",false}),
+  runtime.WithOutgoingHeaderMatcher(func(key string)(string,bool){if key=="x-request-id"{return "X-Request-ID",true};return "",false}),
+  runtime.WithDisableHTTPMethodOverride(),runtime.WithDisablePathLengthFallback(),
+  runtime.WithErrorHandler(func(_ context.Context,_ *runtime.ServeMux,_ runtime.Marshaler,w http.ResponseWriter,_ *http.Request,err error){writeError(w,status.Code(err))}),
+ )
+ if err:=api.RegisterExampleServiceHandler(context.Background(),mux,connection);err!=nil{return nil,errors.New("cannot register gateway routes")}
+ operational:=http.NewServeMux()
+ operational.HandleFunc("/healthz",func(w http.ResponseWriter,_ *http.Request){w.Header().Set("Content-Type","application/json");_,_ = io.WriteString(w,`{"status":"ok"}`)})
+ operational.HandleFunc("/readyz",func(w http.ResponseWriter,r *http.Request){budget,cancel:=context.WithTimeout(r.Context(),200*time.Millisecond);defer cancel();w.Header().Set("Content-Type","application/json");if ready.Check(budget)!=nil{w.WriteHeader(503);_,_ = io.WriteString(w,`{"status":"unavailable"}`);return};_,_ = io.WriteString(w,`{"status":"ready"}`)})
+ if settings.Pprof{operational.HandleFunc("/debug/pprof/",pprof.Index);operational.HandleFunc("/debug/pprof/cmdline",pprof.Cmdline);operational.HandleFunc("/debug/pprof/profile",pprof.Profile);operational.HandleFunc("/debug/pprof/symbol",pprof.Symbol);operational.HandleFunc("/debug/pprof/trace",pprof.Trace)}
+ operational.Handle("/",mux)
+ return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  started:=time.Now();out:=&responseWriter{ResponseWriter:w,status:200};w=out
+  id:="";values:=r.Header.Values("X-Request-ID")
+  if len(values)==1&&requestIDPattern.MatchString(values[0]){id=values[0]}else if len(values)!=0{writeError(w,codes.InvalidArgument);return}else{var random [16]byte;if _,err:=rand.Read(random[:]);err!=nil{writeError(w,codes.Internal);return};id=hex.EncodeToString(random[:])}
+  w.Header().Set("X-Request-ID",id);r.Header.Set("X-Request-ID",id)
+  route:="unknown";if r.URL.Path=="/v1/examples"{route=r.URL.Path}else if strings.HasPrefix(r.URL.Path,"/v1/examples/"){route="/v1/examples/{id}"}else if r.URL.Path=="/healthz"||r.URL.Path=="/readyz"{route=r.URL.Path}
+  defer func(){if recover()!=nil{writeError(w,codes.Internal)};logger.Info("Gateway request completed",zap.String("method",r.Method),zap.String("route",route),zap.String("request_id",id),zap.Int("status",out.status),zap.Duration("duration",time.Since(started)))}()
+  origin:=r.Header.Get("Origin");if origin!=""{allowed:=false;for _,value:=range settings.AllowedOrigins{if origin==value{allowed=true;break}};if !allowed{writeError(w,codes.PermissionDenied);return};w.Header().Set("Access-Control-Allow-Origin",origin);w.Header().Add("Vary","Origin");w.Header().Set("Access-Control-Expose-Headers","X-Request-ID");if r.Method==http.MethodOptions{w.Header().Set("Access-Control-Allow-Methods","GET,POST,PATCH,DELETE,OPTIONS");w.Header().Set("Access-Control-Allow-Headers","Authorization,Content-Type,X-Request-ID");w.WriteHeader(204);return}}
+  if len(r.Header.Values("Authorization"))>1{writeError(w,codes.Unauthenticated);return}
+  r.Header.Del("Grpc-Timeout")
+  budget,cancel:=context.WithTimeout(r.Context(),settings.RequestTimeout);defer cancel();r=r.WithContext(budget)
+  if strings.HasPrefix(r.URL.Path,"/v1/examples"){
+   if err:=validateQuery(r);err!=nil{writeError(w,codes.InvalidArgument);return}
+   if r.Method==http.MethodPost||r.Method==http.MethodPatch{
+    kind,_,err:=mime.ParseMediaType(r.Header.Get("Content-Type"));if err!=nil||kind!="application/json"{writeError(w,codes.InvalidArgument);return}
+    data,err:=io.ReadAll(io.LimitReader(r.Body,settings.MaxBodyBytes+1));if err!=nil{writeError(w,codes.InvalidArgument);return};_ = r.Body.Close()
+    if int64(len(data))>settings.MaxBodyBytes{w.Header().Set("Content-Type","application/json");w.WriteHeader(413);_,_ = io.WriteString(w,`{"code":8,"message":"request body too large","details":[]}`);return}
+    if !validBody(data){writeError(w,codes.InvalidArgument);return};r.Body=io.NopCloser(bytes.NewReader(data))
+   }else if r.ContentLength!=0||len(r.TransferEncoding)>0{writeError(w,codes.InvalidArgument);return}
+  }
+  operational.ServeHTTP(w,r)
+ }),nil
+}
+
+func validateQuery(r *http.Request)error{
+ values,err:=url.ParseQuery(r.URL.RawQuery);if err!=nil{return err}
+ for key,entries:=range values{allowed:=r.Method==http.MethodGet&&r.URL.Path=="/v1/examples"&&[[if eq .Database "none"]]key=="name"[[else]](key=="page"||key=="page_size")[[end]];if !allowed||len(entries)!=1||!utf8.ValidString(entries[0]){return errors.New("invalid query")}}
+ return nil
+}
+
+func validBody(data []byte)bool{
+ if !utf8.Valid(data){return false}
+ decoder:=json.NewDecoder(bytes.NewReader(data));token,err:=decoder.Token();if err!=nil||token!=json.Delim('{'){return false}
+ seen:=map[string]bool{}
+ for decoder.More(){token,err:=decoder.Token();key,ok:=token.(string);if err!=nil||!ok||seen[key]||(key!="name"&&key!="description"&&key!="enabled"){return false};seen[key]=true;var raw json.RawMessage;if decoder.Decode(&raw)!=nil||bytes.Equal(bytes.TrimSpace(raw),[]byte("null")){return false}}
+ token,err=decoder.Token();if err!=nil||token!=json.Delim('}'){return false};return decoder.Decode(new(any))==io.EOF
+}
+
+func writeError(w http.ResponseWriter,code codes.Code){
+ message:="internal server error";switch code{case codes.InvalidArgument:message="invalid request";case codes.Unauthenticated:message="unauthorized";case codes.PermissionDenied:message="forbidden";case codes.NotFound:message="not found";case codes.AlreadyExists:message="conflict";case codes.Unavailable:message="service unavailable";case codes.DeadlineExceeded:message="request timeout";case codes.Canceled:message="request canceled";case codes.Unimplemented:message="method not supported"}
+ w.Header().Set("Content-Type","application/json");w.WriteHeader(runtime.HTTPStatusFromCode(code));_ = json.NewEncoder(w).Encode(struct{Code int32 `json:"code"`;Message string `json:"message"`;Details []any `json:"details"`}{int32(code),message,[]any{}})
+}
+type responseWriter struct{http.ResponseWriter;status int;written bool}
+func(w *responseWriter)WriteHeader(code int){if w.written{return};w.status=code;w.written=true;w.ResponseWriter.WriteHeader(code)}
+func(w *responseWriter)Write(data []byte)(int,error){if !w.written{w.WriteHeader(200)};return w.ResponseWriter.Write(data)}
+func(w *responseWriter)Unwrap()http.ResponseWriter{return w.ResponseWriter}

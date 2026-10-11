@@ -37,6 +37,18 @@ func TestGRPCContracts(t *testing.T) {
 	}
 }
 
+func TestGatewayContracts(t *testing.T) {
+	for _, backend := range []string{"sqlite", "mysql", "postgres", "none"} {
+		for _, redis := range []bool{false, true} {
+			for _, authorization := range []string{"none", "casbin"} {
+				t.Run(backend+"-"+authorization+map[bool]string{false: "", true: "-redis"}[redis], func(t *testing.T) {
+					checkDeliveredOptions(t, Options{Database: backend, Redis: redis, Authz: authorization, Transport: "gateway"})
+				})
+			}
+		}
+	}
+}
+
 func TestDualContracts(t *testing.T) {
 	for _, backend := range []string{"sqlite", "mysql", "postgres", "none"} {
 		for _, redis := range []bool{false, true} {
@@ -90,7 +102,7 @@ func checkDeliveredOptions(t *testing.T, options Options) {
 			t.Fatalf("incorrect Casbin file composition: %s", filename)
 		}
 	}
-	if _, exists := files["internal/pkg/middleware/authz.go"]; exists != (casbin && options.Transport != "grpc") {
+	if _, exists := files["internal/pkg/middleware/authz.go"]; exists != (casbin && options.Transport != "grpc" && options.Transport != "gateway") {
 		t.Fatal("incorrect HTTP authorization middleware composition")
 	}
 	for _, filename := range []string{"internal/pkg/authz/database.go", "migrations/00002_casbin.sql"} {
@@ -168,7 +180,7 @@ func checkDeliveredOptions(t *testing.T, options Options) {
 			}
 		}
 	}
-	if options.Transport == "grpc" || options.Transport == "dual" {
+	if options.Transport == "grpc" || options.Transport == "dual" || options.Transport == "gateway" {
 		for _, filename := range []string{"api/proto/example/v1/example.proto", "pkg/api/example/v1/example.pb.go", "pkg/api/example/v1/example_grpc.pb.go", "internal/pkg/rpc/server.go", "internal/pkg/rpc/interceptors.go", "cmd/exampleclient/main.go", "docs/grpc.md", "scripts/proto.py"} {
 			if _, exists := files[filename]; !exists {
 				t.Fatalf("missing gRPC file %s", filename)
@@ -195,18 +207,20 @@ func checkDeliveredOptions(t *testing.T, options Options) {
 		if options.Transport == "grpc" {
 			return
 		}
-		for _, filename := range []string{"internal/pkg/dual/server.go", "internal/apiserver/handler/http/example/handler.go", "internal/apiserver/router.go", "docs/dual.md"} {
-			if _, exists := files[filename]; !exists {
-				t.Fatalf("missing dual file %s", filename)
+		if options.Transport == "dual" {
+			for _, filename := range []string{"internal/pkg/dual/server.go", "internal/apiserver/handler/http/example/handler.go", "internal/apiserver/router.go", "docs/dual.md"} {
+				if _, exists := files[filename]; !exists {
+					t.Fatalf("missing dual file %s", filename)
+				}
 			}
-		}
-		if !strings.Contains(manifest, "github.com/gin-gonic/gin "+lock.Runtime["github.com/gin-gonic/gin"]) || !strings.Contains(string(files["configs/app.example.yaml"]), "http:") {
-			t.Fatal("dual HTTP dependency/config missing")
-		}
-		dockerfile := string(files["build/docker/Dockerfile"])
-		for _, required := range []string{"APP_HTTP_ADDRESS=0.0.0.0:8080", "APP_GRPC_ADDRESS=0.0.0.0:9090", "EXPOSE 8080 9090"} {
-			if !strings.Contains(dockerfile, required) {
-				t.Fatalf("dual Docker configuration missing %s", required)
+			if !strings.Contains(manifest, "github.com/gin-gonic/gin "+lock.Runtime["github.com/gin-gonic/gin"]) || !strings.Contains(string(files["configs/app.example.yaml"]), "http:") {
+				t.Fatal("dual HTTP dependency/config missing")
+			}
+			dockerfile := string(files["build/docker/Dockerfile"])
+			for _, required := range []string{"APP_HTTP_ADDRESS=0.0.0.0:8080", "APP_GRPC_ADDRESS=0.0.0.0:9090", "EXPOSE 8080 9090"} {
+				if !strings.Contains(dockerfile, required) {
+					t.Fatalf("dual Docker configuration missing %s", required)
+				}
 			}
 		}
 	}
@@ -252,8 +266,15 @@ func checkDeliveredOptions(t *testing.T, options Options) {
 		t.Fatal("Swagger paths missing")
 	}
 	expectedRoutes := []string{"/healthz", "/readyz", "/v1/examples"}
+	if options.Transport == "gateway" {
+		expectedRoutes = []string{"/v1/examples"}
+	}
 	if backend == "none" {
-		if len(routes) != 3 || len(routes["/v1/examples"].(map[string]any)) != 1 {
+		expectedCount := 3
+		if options.Transport == "gateway" {
+			expectedCount = 1
+		}
+		if len(routes) != expectedCount || len(routes["/v1/examples"].(map[string]any)) != 1 {
 			t.Fatal("none document includes unsupported routes or methods")
 		}
 	} else {

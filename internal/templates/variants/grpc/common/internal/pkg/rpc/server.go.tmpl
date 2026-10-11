@@ -44,6 +44,8 @@ func(h *healthService)Check(ctx context.Context,request *healthpb.HealthCheckReq
 func(s *Server)Run(ctx context.Context)error{listener,err:=net.Listen("tcp",s.settings.Address);if err!=nil{s.watchStop();return errors.New("cannot listen on configured gRPC address")};return s.Serve(ctx,listener)}
 // Stop releases a server that could not enter Serve during multi-port startup.
 func(s *Server)Stop(){s.ready.Stop();s.health.Shutdown();s.watchStop();s.grpc.Stop()}
+// Quiesce stops operational readiness and watches while unary calls drain.
+func(s *Server)Quiesce(){s.ready.Stop();s.health.Shutdown();s.watchStop()}
 func(s *Server)Serve(ctx context.Context,listener net.Listener)error{
  defer func(){_ = listener.Close()}();if !s.running.CompareAndSwap(false,true){return errors.New("gRPC server already served")}
  monitor,end:=context.WithCancel(ctx);defer end();updates:=make(chan struct{});go func(){defer close(updates);ticker:=time.NewTicker(500*time.Millisecond);defer ticker.Stop();for{state:=healthpb.HealthCheckResponse_SERVING;budget,cancel:=context.WithTimeout(monitor,200*time.Millisecond);if s.ready.Check(budget)!=nil{state=healthpb.HealthCheckResponse_NOT_SERVING};cancel();s.health.SetServingStatus("",state);s.health.SetServingStatus(ExampleService,state);s.health.SetServingStatus("liveness",healthpb.HealthCheckResponse_SERVING);select{case <-monitor.Done():return;case <-ticker.C:}}}()

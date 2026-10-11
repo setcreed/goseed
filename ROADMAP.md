@@ -2,19 +2,18 @@
 
 ## 当前状态
 
-文档基线、D1、D2、D3 与 D4 的纯 gRPC、dual 功能已完成。HTTP／gRPC／dual 均支持四种存储、可选 Redis 与 Casbin，共 48 种组合；MySQL、PostgreSQL、Redis 已完成真实服务验证，代表生产容器验收通过。首次基线提交为 `01c8d6c`，本地分支为 `main`，未配置远端。主模块为 `github.com/setcreed/goseed`，工具链固定为 Go 1.26.4。
+文档基线、D1、D2、D3 与 D4（HTTP、纯 gRPC、dual、Gateway）已完成。四种协议均支持四种存储、可选 Redis 与 Casbin，共 64 种组合；MySQL、PostgreSQL、Redis 已完成真实服务验证，Gateway 生产容器验收通过。首次基线提交为 `01c8d6c`，本地分支为 `main`，未配置远端。主模块为 `github.com/setcreed/goseed`，工具链固定为 Go 1.26.4。
 
-纯 gRPC 已按 [协议契约](docs/template-grpc.md) 交付共享业务层、安全链、健康服务、TLS、示例客户端与公开 `pkg/api` 协议类型；dual 按 [双协议契约](docs/template-dual.md) 共享同一 Biz 与依赖，提供独立监听覆盖、启动失败回收和并发排空。`Options.Transport` 支持 `http`（默认）、`grpc` 与 `dual`。下一项是 D4 的 Gateway，D4 整体尚未完成。Redis 与 Casbin 默认关闭，分别通过内部 Render 的 `Options.Redis`、`Options.Authz` 选择。缓存按 TTL 最终一致；Casbin 默认拒绝，SQL 策略显式迁移与事务导入，无数据库策略只读，离线更新后重启实例。root CLI 仍仅提供帮助与版本，项目生成写入在 D5 接入。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
+纯 gRPC 已按 [协议契约](docs/template-grpc.md) 交付共享业务层、安全链、健康服务、TLS、示例客户端与公开 `pkg/api` 协议类型；dual 按 [双协议契约](docs/template-dual.md) 共享同一 Biz 与依赖，提供独立监听覆盖、启动失败回收和并发排空。Gateway 按 [Gateway 契约](docs/template-gateway.md) 将 HTTP 请求转发到真实 RPC 服务，复用认证、授权和业务层，并先排空 HTTP 再关闭 RPC。`Options.Transport` 支持 `http`（默认）、`grpc`、`dual` 与 `gateway`。Redis 与 Casbin 默认关闭，分别通过内部 Render 的 `Options.Redis`、`Options.Authz` 选择。缓存按 TTL 最终一致；Casbin 默认拒绝，SQL 策略显式迁移与事务导入，无数据库策略只读，离线更新后重启实例。root CLI 仍仅提供帮助与版本，项目生成写入在 D5 接入。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
 
 ## 进行中
 
-无。下一功能为 D4 Gateway。
+无。下一功能为 D5 全参数项目生成器。
 
 ## 待开始
 
 | 检查点 | 交付 | 依赖 |
 |---|---|---|
-| D4（剩余） | Gateway | 已完成的纯 gRPC、dual 与 D3 能力 |
 | D5 | 全参数项目生成器、项目命名与 dry-run | D2、D3、D4 |
 | D6 | 模块与 CRUD 业务生成器 | D5 |
 | D7 | 首版覆盖核验和使用文档 | D6 |
@@ -29,6 +28,8 @@
 - 待细化：D6 的 CRUD 字段声明完整格式与生成登记接口。
 
 ## 最近完成
+
+- 2026-10-11 22:07 D4 Gateway：`Options.Transport: "gateway"` 通过实际 gRPC 服务转发 HTTP／ProtoJSON 请求，共享 Handler、Biz、认证和授权链；交付双监听配置、内部 TLS 验证、健康探测、HTTP 优先排空及 Gateway／Swagger 产物，裁剪重复 Gin 业务 Handler。16 种变体组合与四协议共 64 种组合契约通过；补齐 Gateway 文档、依赖和容器／数据库／Redis 验收。下一检查点为 D5。入口见 [Gateway 契约](docs/template-gateway.md) 。
 
 - 2026-10-11 19:43 文档同步：README 增加当前模板能力表，明确 48 种组合、固定 JWT 与内部 Render／CLI 边界；命令契约区分生成参数和三种已实现协议的服务监听参数。架构目录补齐认证、缓存、数据库、RPC、dual 和示例客户端，标明 D5／D6 规划目录；双协议文档按存储选择说明共享依赖，无数据库文档不再声称包含 Store／连接池。核对 AGENTS 规则仍适用，无需制造改动；下一功能仍为 Gateway，代码行为未变。
 
@@ -57,9 +58,10 @@
 - 2026-10-11 00:36 模板系统元数据修复：复现 Finder 创建 `.DS_Store` 后渲染失败；改用默认嵌入过滤并支持 `dot.<name>.tmpl` 输出隐藏文件，渲染忽略已知系统元数据。
 - 2026-10-11 00:30 D2 模板渲染：嵌入模板返回确定顺序的完整文件计划，校验名称/模块路径，使用独立分隔符、缺失变量检查和 Go 格式化；准备阶段失败返回空计划，CLI 生成写入仍在 D5 接入。
 - 2026-10-11 00:29 D2 配置与运行契约：确定开发初始化、迁移、Token、配置覆盖、身份与资源归属、CRUD 输入和生命周期验收；默认模板契约提供后续实现入口。
-- 2026-10-11 00:16 文档同步：明确目标默认行为与当前 CLI 能力的文档入口；README 补充真实数据库及协议验证程序范围、纯文档检查命令；实施方案改为引用 ROADMAP 状态，补记首次提交并合并重复验证记录。
 
 ## 最近验证
+
+- 2026-10-11 22:07 D4 Gateway：`make check` 的根模块集成测试、`make fmt-check`、`make vet`、`make lint`、协议复现与 `make contract-check`／`git diff --check` 通过；新增的 Gateway 包 race 与 IPv4／IPv6 通配监听目标回归通过。`make template-db` 的 MySQL／PostgreSQL Gateway 项目、`make template-redis` 的 SQLite／无数据库及 Casbin 组合均实际运行通过且无跳过；启用 Docker 的 Gateway TLS 容器实际测试通过。Redis 重启后的旧 gRPC 健康恢复用例曾暴露瞬时观察竞态，改为有界 5 秒轮询后完整 Redis 套件通过；没有改变生产服务重试行为。
 
 - 2026-10-11 19:43 文档同步：`make contract-check` 通过版本契约、55 个本地链接、Python 语法与 260 个交付文件检查，`git diff --check` 通过；`make test GO_PACKAGES=./internal/templates` 通过，验证文档模板可渲染及交付链接一致。对照 CLI 源码、Render 选项、模板路径和 Makefile，核对当前默认值、监听参数与 48 种组合；仅改文档及一份生成文档模板，没有重跑数据库或容器，沿用 17:51 的运行验收证据。
 
@@ -88,4 +90,3 @@
 - 2026-10-11 00:36 模板元数据：`make test vet GO_PACKAGES=./internal/templates` 通过；回归覆盖 `.DS_Store`、`Thumbs.db` 不进入文件计划及 `.gitignore` 输出保留。
 - 2026-10-11 00:30 D2 模板渲染：`make check` 通过；单元测试覆盖确定性、变量展开、非法名称与模块注入、缺失变量、语法和格式错误，失败不返回部分计划。
 - 2026-10-11 00:29 D2 契约：`make contract-check` 通过 22 个本地链接、版本契约及 35 个交付文件格式；对照现有需求与架构，业务生成 CLI 保持 D5 范围。
-- 2026-10-11 00:16 文档更新：`make contract-check` 通过模块/工具契约、20 个本地文档链接、Python 语法与 34 个交付文件格式；`git diff --check` 通过。README 验证范围逐项核对测试源码及 D1 记录，变更仅涉及 4 份文档，沿用已有运行证据。

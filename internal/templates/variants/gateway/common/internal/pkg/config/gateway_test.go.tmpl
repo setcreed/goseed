@@ -1,0 +1,19 @@
+package config
+
+import (
+ "encoding/base64"
+ "path/filepath"
+ "testing"
+)
+
+func TestGatewayIndependentOverridesAndConstraints(t *testing.T){
+ t.Setenv("APP_ENV","development");t.Setenv("APP_JWT_SECRET",base64.StdEncoding.EncodeToString(make([]byte,32)))
+ [[if or (eq .Database "mysql") (eq .Database "postgres")]]t.Setenv("APP_DATABASE_PASSWORD","placeholder")[[end]]
+ [[if .Redis]]t.Setenv("APP_REDIS_PASSWORD","placeholder")[[end]]
+ t.Setenv("APP_HTTP_ADDRESS","127.0.0.1:8000");t.Setenv("APP_GRPC_ADDRESS","127.0.0.1:9000")
+ filename:=filepath.Join(t.TempDir(),"absent.yaml")
+ settings,err:=Load(filename,false,Overrides{Address:"127.0.0.1:8001",GRPCAddress:"127.0.0.1:9001"});if err!=nil||settings.HTTP.Address!="127.0.0.1:8001"||settings.GRPC.Address!="127.0.0.1:9001"{t.Fatal("independent overrides",err)}
+ if _,err:=Load(filename,false,Overrides{Address:"127.0.0.1:9000"});err==nil{t.Fatal("same ports accepted")}
+ if _,err:=Load(filename,false,Overrides{Address:"127.0.0.1:0",GRPCAddress:"127.0.0.1:0"});err!=nil{t.Fatal("ephemeral ports rejected",err)}
+ [[if .Redis]]t.Setenv("APP_GRPC_REQUEST_TIMEOUT","100ms");if _,err:=Load(filename,false,Overrides{});err==nil{t.Fatal("Redis budget exceeds gRPC request budget")}[[end]]
+}

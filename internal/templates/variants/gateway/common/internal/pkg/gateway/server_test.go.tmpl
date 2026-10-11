@@ -1,0 +1,91 @@
+package gateway
+
+import (
+ "context"
+ "encoding/base64"
+ "io"
+ "net"
+ "net/http"
+ "strings"
+ "testing"
+ "time"
+ "[[.Module]]/internal/pkg/auth"
+ "[[.Module]]/internal/pkg/config"
+ "[[.Module]]/internal/pkg/contextx"
+ "[[.Module]]/internal/pkg/rpc"
+ api "[[.Module]]/pkg/api/example/v1"
+ "go.uber.org/zap"
+ "google.golang.org/grpc"
+)
+
+type testHandler struct{api.UnimplementedExampleServiceServer;entered,aborted chan struct{};release <-chan struct{}}
+func(h *testHandler)[[if eq .Database "none"]]Greet(ctx context.Context,_ *api.GreetRequest)(*api.Greeting,error)[[else]]Get(ctx context.Context,_ *api.GetRequest)(*api.Example,error)[[end]]{
+ if contextx.Subject(ctx)!="alice"||contextx.RequestID(ctx)!="gateway.test"{return nil,context.Canceled}
+ close(h.entered);select{case <-ctx.Done():close(h.aborted);return nil,ctx.Err();case <-h.release:}
+ return &api.[[if eq .Database "none"]]Greeting{Subject:"alice",Message:"drained"}[[else]]Example{Id:1,Name:"drained"}[[end]],nil
+}
+[[if eq .Authz "casbin"]]type allowGateway struct{}
+func(allowGateway)Authorize(ctx context.Context,_,_,_ string)error{return ctx.Err()}[[end]]
+
+func fixture(t *testing.T,release <-chan struct{})(*Server,*testHandler,string){
+ t.Helper();jwt,err:=auth.New(config.JWT{Secret:base64.StdEncoding.EncodeToString(make([]byte,32)),Issuer:"test",Audience:"test",TTL:time.Minute});if err!=nil{t.Fatal(err)};token,err:=jwt.Issue("alice",time.Minute);if err!=nil{t.Fatal(err)}
+ settings:=config.Config{HTTP:config.HTTP{Address:"127.0.0.1:0",RequestTimeout:2*time.Second,ShutdownTimeout:200*time.Millisecond,MaxBodyBytes:1024},GRPC:config.GRPC{Address:"127.0.0.1:0",RequestTimeout:2*time.Second,ShutdownTimeout:200*time.Millisecond,MaxRecvBytes:1024,MaxSendBytes:4096,MaxHeaderBytes:4096,MaxConcurrentStreams:16}}
+ handler:=&testHandler{entered:make(chan struct{}),aborted:make(chan struct{}),release:release}
+ service,err:=rpc.New(settings.GRPC,&rpc.Readiness{},zap.NewNop(),jwt,map[string]string{"/example.v1.ExampleService/[[if eq .Database "none"]]Greet[[else]]Get[[end]]":"read"},func(r grpc.ServiceRegistrar){api.RegisterExampleServiceServer(r,handler)}[[if eq .Authz "casbin"]],allowGateway{}[[end]]);if err!=nil{t.Fatal(err)};t.Cleanup(service.Stop)
+ return New(settings,service,zap.NewNop()),handler,token
+}
+func listen(t *testing.T)net.Listener{t.Helper();listener,err:=net.Listen("tcp","127.0.0.1:0");if err!=nil{t.Fatal(err)};t.Cleanup(func(){_ = listener.Close()});return listener}
+func await(t *testing.T,signal <-chan struct{}){t.Helper();select{case <-signal:case <-time.After(3*time.Second):t.Fatal("gateway timed out")}}
+
+func TestHTTPDrainsBeforeRPCAndForcesCancellation(t *testing.T){
+ for _,forced:=range []bool{false,true}{t.Run(map[bool]string{false:"graceful",true:"forced"}[forced],func(t *testing.T){
+  release:=make(chan struct{});service,handler,token:=fixture(t,release)
+  httpListener,rpcListener:=listen(t),listen(t);ctx,cancel:=context.WithCancel(context.Background());defer cancel();done:=make(chan error,1);go func(){done<-service.Serve(ctx,httpListener,rpcListener)}()
+  client:=http.Client{Timeout:3*time.Second};defer client.CloseIdleConnections()
+  finished:=make(chan struct{});go func(){defer close(finished);request,err:=http.NewRequest("GET","http://"+httpListener.Addr().String()+"/v1/examples[[if ne .Database "none"]]/1[[end]]",nil);if err!=nil{t.Error(err);return};request.Header.Set("Authorization","Bearer "+token);request.Header.Set("X-Request-ID","gateway.test");response,err:=client.Do(request);if err!=nil{if !forced{t.Error(err)};return};defer func(){_ = response.Body.Close()}();data,err:=io.ReadAll(response.Body);if !forced&&(err!=nil||response.StatusCode!=200||!strings.Contains(string(data),"drained")||response.Header.Get("X-Request-ID")!="gateway.test"){t.Error("in-flight RPC was interrupted",err,string(data))}}()
+  await(t,handler.entered);started:=time.Now();cancel()
+  if !forced{select{case <-handler.aborted:t.Fatal("RPC canceled before HTTP drained");case <-done:t.Fatal("server returned before drain");case <-time.After(30*time.Millisecond):};close(release)}
+  select{case err:=<-done:if forced{if err==nil||!strings.Contains(err.Error(),"HTTP shutdown"){t.Fatal("forced HTTP shutdown not reported",err)}}else if err!=nil{t.Fatal(err)};case <-time.After(2*time.Second):t.Fatal("shutdown hung")}
+  if time.Since(started)>700*time.Millisecond{t.Fatal("shutdown exceeded combined budget")};await(t,finished);if forced{await(t,handler.aborted)}
+ })}
+}
+
+func TestStartupFailuresReleaseListeners(t *testing.T){
+ for _,side:=range []string{"http","grpc","certificate","canceled"}{t.Run(side,func(t *testing.T){
+  release:=make(chan struct{});close(release);service,_,_:=fixture(t,release);occupied,available:=listen(t),listen(t);address:=available.Addr().String();_ = available.Close()
+  ctx,cancel:=context.WithCancel(context.Background());defer cancel()
+  switch side{case "http":service.settings.HTTP.Address=occupied.Addr().String();service.settings.GRPC.Address=address;case "grpc":service.settings.HTTP.Address=address;service.settings.GRPC.Address=occupied.Addr().String();case "certificate":service.settings.HTTP.Address=address;service.settings.GRPC.TLSCert="missing";service.settings.Gateway.CAFile="missing";case "canceled":service.settings.HTTP.Address=address;cancel()}
+  if err:=service.Run(ctx);err==nil{t.Fatal("startup failure accepted")};recovered,err:=net.Listen("tcp",address);if err!=nil{t.Fatal("startup leaked HTTP listener",err)};_ = recovered.Close()
+ })}
+}
+
+func TestHTTPBudgetAndCallerCancellationReachRPC(t *testing.T){
+ for _,callerCanceled:=range []bool{false,true}{t.Run(map[bool]string{false:"budget",true:"caller"}[callerCanceled],func(t *testing.T){
+  release:=make(chan struct{});service,handler,token:=fixture(t,release);if !callerCanceled{service.settings.HTTP.RequestTimeout=50*time.Millisecond}
+  httpListener,rpcListener:=listen(t),listen(t);lifetime,stop:=context.WithCancel(context.Background());defer stop();done:=make(chan error,1);go func(){done<-service.Serve(lifetime,httpListener,rpcListener)}();defer func(){stop();if err:=<-done;err!=nil{t.Error(err)}}()
+  caller,cancel:=context.WithCancel(context.Background());defer cancel();client:=http.Client{Timeout:2*time.Second};defer client.CloseIdleConnections();finished:=make(chan struct{})
+  go func(){defer close(finished);request,err:=http.NewRequestWithContext(caller,"GET","http://"+httpListener.Addr().String()+"/v1/examples[[if ne .Database "none"]]/1[[end]]",nil);if err!=nil{t.Error(err);return};request.Header.Set("Authorization","Bearer "+token);request.Header.Set("X-Request-ID","gateway.test");response,err:=client.Do(request);if response!=nil{_ = response.Body.Close()};if !callerCanceled&&(err!=nil||response.StatusCode!=504){t.Error("HTTP budget was not enforced",err)} }()
+  await(t,handler.entered);if callerCanceled{cancel()};await(t,handler.aborted);await(t,finished)
+ })}
+}
+
+func TestUnexpectedRPCServeReturnStopsHTTP(t *testing.T){
+ release:=make(chan struct{});close(release);service,_,_:=fixture(t,release);httpListener,rpcListener:=listen(t),listen(t);ctx,cancel:=context.WithCancel(context.Background());defer cancel();done:=make(chan error,1);go func(){done<-service.Serve(ctx,httpListener,rpcListener)}()
+ client:=http.Client{Timeout:time.Second};defer client.CloseIdleConnections();deadline:=time.Now().Add(3*time.Second)
+ for {response,err:=client.Get("http://"+httpListener.Addr().String()+"/readyz");if err==nil{_ = response.Body.Close();if response.StatusCode==200{break}};if time.Now().After(deadline){t.Fatal("startup timed out")};time.Sleep(time.Millisecond)}
+ _ = rpcListener.Close();select{case err:=<-done:if err==nil{t.Fatal("unexpected RPC close hidden")};case <-time.After(time.Second):t.Fatal("HTTP peer kept running")}
+}
+
+func TestBodyAndQueryBoundaries(t *testing.T){
+ for _,body:=range []string{`{"name":"a","name":"b"}`,`{"name":null}`,`{"id":2}`,`{} {}`,`[]`,`{"unknown":true}`,"{\"name\":\"\xff\"}"}{if validBody([]byte(body)){t.Fatal("invalid body accepted")}}
+ for _,body:=range []string{`{"name":"valid"}`,`{"description":"","enabled":false}`,`{}`}{if !validBody([]byte(body)){t.Fatal("valid body rejected")}}
+ for _,query:=range []string{"unknown=x","[[if eq .Database "none"]]name[[else]]page[[end]]=1&[[if eq .Database "none"]]name[[else]]page[[end]]=2","%zz=x"}{r,err:=http.NewRequest("GET","http://localhost/v1/examples?"+query,nil);if err!=nil{t.Fatal(err)};if validateQuery(r)==nil{t.Fatal("invalid query accepted")}}
+}
+
+func TestWildcardTargetPreservesConfiguredAddressFamily(t *testing.T){
+ for _,test:=range []struct{configured,bound,want string}{
+  {"0.0.0.0:9090","[::]:1234","passthrough:///127.0.0.1:1234"},
+  {"[::]:9090","[::]:1234","passthrough:///[::1]:1234"},
+  {"127.0.0.1:9090","127.0.0.1:1234","passthrough:///127.0.0.1:1234"},
+ }{service:=&Server{settings:config.Config{GRPC:config.GRPC{Address:test.configured,MaxRecvBytes:1024,MaxSendBytes:1024}}};connection,err:=service.connect(test.bound);if err!=nil{t.Fatal(err)};if connection.Target()!=test.want{t.Errorf("target %s want %s",connection.Target(),test.want)};_ = connection.Close()}
+}

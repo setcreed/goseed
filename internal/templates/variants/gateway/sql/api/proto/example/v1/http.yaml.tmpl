@@ -1,0 +1,16 @@
+type: google.api.Service
+config_version: 3
+http:
+  rules:
+    - selector: example.v1.ExampleService.Create
+      post: /v1/examples
+      body: "*"
+    - selector: example.v1.ExampleService.Get
+      get: /v1/examples/{id}
+    - selector: example.v1.ExampleService.List
+      get: /v1/examples
+    - selector: example.v1.ExampleService.Update
+      patch: /v1/examples/{id}
+      body: "*"
+    - selector: example.v1.ExampleService.Delete
+      delete: /v1/examples/{id}

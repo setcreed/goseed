@@ -13,7 +13,7 @@ http:
   tls_cert: ""
   tls_key: ""
   pprof: false
-[[if eq .Transport "dual"]]grpc:
+[[if or (eq .Transport "dual") (eq .Transport "gateway")]]grpc:
   address: 127.0.0.1:9090
   request_timeout: 5s
   shutdown_timeout: 10s
@@ -69,4 +69,9 @@ jwt:
 [[end]]
 [[if and (eq .Authz "casbin") (eq .Database "none")]]authz:
   policy_file: configs/policy.csv
+[[end]]
+
+[[if eq .Transport "gateway"]]gateway:
+  ca_file: ""
+  server_name: ""
 [[end]]

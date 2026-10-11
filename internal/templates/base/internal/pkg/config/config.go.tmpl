@@ -18,13 +18,16 @@ const DefaultPath = "configs/app.yaml"
 type Config struct {
 	Env string
 	HTTP HTTP
-	[[if eq .Transport "dual"]]GRPC GRPC[[end]]
+ [[if eq .Transport "gateway"]]Gateway Gateway[[end]]
+	[[if or (eq .Transport "dual") (eq .Transport "gateway")]]GRPC GRPC[[end]]
 	Log Log
 	[[if ne .Database "none"]]Database Database[[end]]
 	JWT JWT
 	[[if .Redis]]Redis Redis[[end]]
 	[[if and (eq .Authz "casbin") (eq .Database "none")]]Authz Authz[[end]]
 }
+
+[[if eq .Transport "gateway"]]type Gateway struct { CAFile string `mapstructure:"ca_file"`; ServerName string `mapstructure:"server_name"` }[[end]]
 
 type HTTP struct {
 	Address string
@@ -78,7 +81,7 @@ type JWT struct { Secret string; Issuer string; Audience string; TTL time.Durati
  TLS bool
  CAFile string `mapstructure:"ca_file"`
 }[[end]]
-type Overrides struct { Address string; Env string[[if eq .Transport "dual"]];GRPCAddress string[[end]] }
+type Overrides struct { Address string; Env string[[if or (eq .Transport "dual") (eq .Transport "gateway")]];GRPCAddress string[[end]] }
 [[if and (eq .Authz "casbin") (eq .Database "none")]]type Authz struct {PolicyFile string `mapstructure:"policy_file"`}[[end]]
 
 func Load(filename string, explicit bool, overrides Overrides) (Config, error) {
@@ -91,10 +94,11 @@ func Load(filename string, explicit bool, overrides Overrides) (Config, error) {
 		"http.idle_timeout": "60s", "http.request_timeout": "5s", "http.shutdown_timeout": "10s",
 		"http.max_body_bytes": 1048576, "http.max_header_bytes": 1048576,
 		"http.allowed_origins": []string{}, "http.tls_cert": "", "http.tls_key": "", "http.pprof": false,
-		[[if eq .Transport "dual"]]"grpc.address":"127.0.0.1:9090", "grpc.request_timeout":"5s", "grpc.shutdown_timeout":"10s",
+		[[if or (eq .Transport "dual") (eq .Transport "gateway")]]"grpc.address":"127.0.0.1:9090", "grpc.request_timeout":"5s", "grpc.shutdown_timeout":"10s",
 		"grpc.max_recv_bytes":1048576, "grpc.max_send_bytes":2097152, "grpc.max_header_bytes":65536, "grpc.max_concurrent_streams":128,
 		"grpc.tls_cert":"", "grpc.tls_key":"", "grpc.reflection":false,[[end]]
-		"log.level": "info", "log.format": "json",
+		[[if eq .Transport "gateway"]]"gateway.ca_file":"", "gateway.server_name":"",[[end]]
+ "log.level": "info", "log.format": "json",
 		[[if ne .Database "none"]][[if eq .Database "sqlite"]]"database.path": "data/app.db", "database.busy_timeout": "5s",[[else]]
 		"database.host": "127.0.0.1", "database.port": [[if eq .Database "mysql"]]3306[[else]]5432[[end]],
 		"database.user": "[[.Name]]", "database.password": "", "database.name": "[[.Name]]",
@@ -125,13 +129,13 @@ func Load(filename string, explicit bool, overrides Overrides) (Config, error) {
 		if !valid{return Config{},fmt.Errorf("invalid configuration type for %s",key)}
 	}
 	for key:=range defaults {if err:=v.BindEnv(key,"APP_"+strings.ToUpper(strings.ReplaceAll(key,".","_")));err!=nil{return Config{},errors.New("cannot bind configuration environment")}}
-	for _, key := range []string{"http.read_header_timeout","http.read_timeout","http.write_timeout","http.idle_timeout","http.request_timeout","http.shutdown_timeout",[[if eq .Transport "dual"]]"grpc.request_timeout","grpc.shutdown_timeout",[[end]][[if ne .Database "none"]][[if eq .Database "sqlite"]]"database.busy_timeout",[[else]]"database.connect_timeout","database.conn_max_lifetime","database.conn_max_idle_time",[[end]]"database.slow_threshold",[[end]]"jwt.ttl"[[if .Redis]],"redis.ttl","redis.command_timeout","redis.dial_timeout"[[end]]} {
+	for _, key := range []string{"http.read_header_timeout","http.read_timeout","http.write_timeout","http.idle_timeout","http.request_timeout","http.shutdown_timeout",[[if or (eq .Transport "dual") (eq .Transport "gateway")]]"grpc.request_timeout","grpc.shutdown_timeout",[[end]][[if ne .Database "none"]][[if eq .Database "sqlite"]]"database.busy_timeout",[[else]]"database.connect_timeout","database.conn_max_lifetime","database.conn_max_idle_time",[[end]]"database.slow_threshold",[[end]]"jwt.ttl"[[if .Redis]],"redis.ttl","redis.command_timeout","redis.dial_timeout"[[end]]} {
 		value, ok := v.Get(key).(string)
 		if !ok { return Config{}, fmt.Errorf("%s requires a duration string with units",key) }
 		if _, err := time.ParseDuration(value); err != nil { return Config{}, fmt.Errorf("invalid duration for %s",key) }
 	}
 	if overrides.Address != "" { v.Set("http.address", overrides.Address) }
-	[[if eq .Transport "dual"]]if overrides.GRPCAddress != "" {v.Set("grpc.address",overrides.GRPCAddress)}[[end]]
+	[[if or (eq .Transport "dual") (eq .Transport "gateway")]]if overrides.GRPCAddress != "" {v.Set("grpc.address",overrides.GRPCAddress)}[[end]]
 	if overrides.Env != "" { v.Set("env", overrides.Env) }
 	var config Config
 	if err := v.UnmarshalExact(&config); err != nil { return Config{}, errors.New("invalid configuration field types; durations require units") }
@@ -141,9 +145,10 @@ func Load(filename string, explicit bool, overrides Overrides) (Config, error) {
 
 func (c Config) Validate() error {
 	if c.Env != "development" && c.Env != "production" { return errors.New("env must be development or production") }
-	[[if eq .Transport "dual"]]if err:=c.GRPC.Validate(c.Env);err!=nil{return err}
+	[[if or (eq .Transport "dual") (eq .Transport "gateway")]]if err:=c.GRPC.Validate(c.Env);err!=nil{return err}
 	if c.HTTP.Address==c.GRPC.Address {_,port,err:=net.SplitHostPort(c.HTTP.Address);if err==nil&&port!="0"{return errors.New("HTTP and gRPC require separate listen addresses")}}[[end]]
-	host, port, err := net.SplitHostPort(c.HTTP.Address)
+	[[if eq .Transport "gateway"]]if c.GRPC.TLSCert=="" && (c.Gateway.CAFile!="" || c.Gateway.ServerName!=""){return errors.New("gateway CA and server name require gRPC TLS")}[[end]]
+ host, port, err := net.SplitHostPort(c.HTTP.Address)
 	if err != nil || host == "" || port == "" { return errors.New("http.address requires host and port") }
 	if _, err := net.LookupPort("tcp", port); err != nil { return errors.New("invalid http.address port") }
 	if c.HTTP.ReadHeaderTimeout <= 0 || c.HTTP.ReadTimeout < c.HTTP.ReadHeaderTimeout || c.HTTP.RequestTimeout <= 0 || c.HTTP.WriteTimeout <= c.HTTP.RequestTimeout || c.HTTP.IdleTimeout <= 0 || c.HTTP.ShutdownTimeout <= 0 { return errors.New("invalid HTTP timeouts; write timeout must exceed request timeout") }
@@ -173,7 +178,7 @@ func (c Config) Validate() error {
 	if err != nil || len(key) < 32 { return errors.New("jwt.secret requires Base64 encoding of at least 32 bytes") }
 	if strings.TrimSpace(c.JWT.Issuer) == "" || strings.TrimSpace(c.JWT.Audience) == "" || c.JWT.TTL < time.Second || c.JWT.TTL > time.Hour { return errors.New("invalid jwt issuer, audience or ttl") }
 	[[if .Redis]]if err:=c.Redis.Validate(c.Env,c.HTTP.RequestTimeout);err!=nil{return err}[[end]]
-	[[if and .Redis (eq .Transport "dual")]]if err:=c.Redis.Validate(c.Env,c.GRPC.RequestTimeout);err!=nil{return err}[[end]]
+	[[if and .Redis (or (eq .Transport "dual") (eq .Transport "gateway"))]]if err:=c.Redis.Validate(c.Env,c.GRPC.RequestTimeout);err!=nil{return err}[[end]]
 	[[if and (eq .Authz "casbin") (eq .Database "none")]]if strings.TrimSpace(c.Authz.PolicyFile)==""||strings.ContainsAny(c.Authz.PolicyFile,"\x00\r\n"){return errors.New("invalid authz.policy_file")}[[end]]
 	return nil
 }

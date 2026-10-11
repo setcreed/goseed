@@ -2,9 +2,53 @@ package templates
 
 import (
 	"bytes"
+	"encoding/json"
+	"strings"
 	"testing"
 	"testing/fstest"
 )
+
+func TestGatewayPrunesHTTPAndMapsOnlySelectedBusiness(t *testing.T) {
+	for _, backend := range []string{"sqlite", "mysql", "postgres", "none"} {
+		for _, redis := range []bool{false, true} {
+			for _, authorization := range []string{"none", "casbin"} {
+				files, err := Render(Project{Name: "demo", Module: "example.com/demo"}, Options{Database: backend, Redis: redis, Authz: authorization, Transport: "gateway"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				plan := map[string][]byte{}
+				for _, file := range files {
+					plan[file.Path] = file.Content
+					if strings.HasPrefix(file.Path, "internal/apiserver/handler/http/") || strings.HasPrefix(file.Path, "internal/pkg/middleware/") || strings.HasPrefix(file.Path, "internal/pkg/dual/") || file.Path == "internal/apiserver/router.go" {
+						t.Fatal("duplicate HTTP business", file.Path)
+					}
+				}
+				if bytes.Contains(plan["go.mod"], []byte("gin-gonic")) || !bytes.Contains(plan["go.mod"], []byte("grpc-gateway/v2 v2.31.0")) {
+					t.Fatal("Gateway dependency pruning")
+				}
+				for _, path := range []string{"pkg/api/example/v1/example.pb.gw.go", "api/proto/example/v1/http.yaml", "internal/pkg/gateway/server.go", "docs/gateway.md"} {
+					if len(plan[path]) == 0 {
+						t.Fatal("missing Gateway file", path)
+					}
+				}
+				var document struct {
+					Swagger string                    `json:"swagger"`
+					Paths   map[string]map[string]any `json:"paths"`
+				}
+				if json.Unmarshal(plan["api/openapi/swagger.json"], &document) != nil || document.Swagger != "2.0" {
+					t.Fatal("invalid generated Swagger")
+				}
+				if backend == "none" {
+					if len(document.Paths) != 1 || document.Paths["/v1/examples"]["get"] == nil {
+						t.Fatal("no database HTTP mappings")
+					}
+				} else if len(document.Paths) != 2 || document.Paths["/v1/examples"]["post"] == nil || document.Paths["/v1/examples/{id}"]["patch"] == nil {
+					t.Fatal("CRUD HTTP mappings")
+				}
+			}
+		}
+	}
+}
 
 func TestDefaultPlan(t *testing.T) {
 	first, err := Default(Project{Name: "demo", Module: "example.com/demo"})
@@ -68,7 +112,7 @@ func TestInvalidProject(t *testing.T) {
 
 func TestProtocolPlansAndInvalidTransport(t *testing.T) {
 	project := Project{Name: "short", Module: "example.com/different-name"}
-	for _, transport := range []string{"grpc", "dual"} {
+	for _, transport := range []string{"grpc", "dual", "gateway"} {
 		options := Options{Transport: transport, Database: "none", Redis: true, Authz: "casbin"}
 		first, err := Render(project, options)
 		if err != nil {
@@ -87,7 +131,7 @@ func TestProtocolPlansAndInvalidTransport(t *testing.T) {
 			}
 		}
 	}
-	for _, invalid := range []string{"GRPC", "gateway", "../grpc", "grpc\n"} {
+	for _, invalid := range []string{"GRPC", "unknown", "../grpc", "grpc\n"} {
 		if files, err := Render(project, Options{Transport: invalid}); err == nil || files != nil {
 			t.Fatal("invalid transport returned a plan")
 		}

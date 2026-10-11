@@ -1,0 +1,54 @@
+# [[.Name]]
+
+Go 1.26.4 独立 Gateway 项目。HTTP 请求经 grpc-gateway 转发到本进程 gRPC Handler，再进入 Biz；同时保留直接 gRPC 入口。[[if eq .Database "none"]]提供认证问候，Handler → Biz，无 ORM 或虚假持久化。[[else]]提供认证 CRUD，Handler → Biz → Store，使用 [[.Database]]，迁移显式执行。[[end]]
+
+```sh
+make build
+./bin/apiserver dev init
+[[if ne .Database "none"]]./bin/apiserver migrate up
+[[end]][[if eq .Authz "casbin"]]# 先按 docs/authz.md 配置并核对 example 权限策略
+[[end]]./bin/apiserver dev token --subject alice
+./bin/apiserver serve
+```
+
+HTTP 默认监听 `127.0.0.1:8080`，gRPC 默认监听 `127.0.0.1:9090`。可分别用 `serve --address` 和 `serve --grpc-address` 覆盖；Gateway 只连接本进程 gRPC 服务。将开发令牌放入 `TOKEN` 后，可从 HTTP 调用：
+
+```sh
+export TOKEN='上一步签发的令牌'
+curl -i -H "Authorization: Bearer $TOKEN" 'http://127.0.0.1:8080/v1/examples?[[if eq .Database "none"]]name=world[[else]]page=1&page_size=20[[end]]'
+```
+
+[[if ne .Database "none"]]SQL 模式的新增、读取、更新与删除使用 ProtoJSON；`id` 是十进制字符串，更新可显式写入 `false` 或空字符串，成功响应均为 HTTP `200`：
+
+```sh
+ID="$(curl -fsS -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"sample","description":"created through Gateway"}' \
+  http://127.0.0.1:8080/v1/examples | jq -r .id)"
+curl -i -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8080/v1/examples/$ID"
+curl -i -X PATCH -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"enabled":false,"description":""}' "http://127.0.0.1:8080/v1/examples/$ID"
+curl -i -X DELETE -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8080/v1/examples/$ID"
+```
+
+删除成功返回 `200` 和 `{}`。[[end]]
+
+Gateway 到 gRPC 的 TLS 校验参数可在配置文件 `gateway.ca_file`、`gateway.server_name` 中设置，也可分别用 `APP_GATEWAY_CA_FILE`、`APP_GATEWAY_SERVER_NAME` 覆盖。生产环境必须为 gRPC 配置 `APP_GRPC_TLS_CERT` 与 `APP_GRPC_TLS_KEY`；HTTP TLS 使用 `APP_HTTP_TLS_CERT` 与 `APP_HTTP_TLS_KEY`。Gateway 始终验证目标证书，不提供跳过校验的开关。私有 CA 文件需对服务进程可读。生产还需使用 `APP_ENV=production`、真实 JWT 密钥和 JSON 日志。
+
+```yaml
+gateway:
+  ca_file: /etc/goseed/rpc-ca.pem
+  server_name: localhost
+```
+
+部署时也可以通过环境变量覆盖 Gateway 配置，并提供两侧 TLS 证书：
+
+```sh
+export APP_GATEWAY_CA_FILE=/etc/goseed/rpc-ca.pem
+export APP_GATEWAY_SERVER_NAME=localhost
+export APP_GRPC_TLS_CERT=/etc/goseed/server.crt APP_GRPC_TLS_KEY=/etc/goseed/server.key
+export APP_HTTP_TLS_CERT=/etc/goseed/server.crt APP_HTTP_TLS_KEY=/etc/goseed/server.key
+```
+
+需要修改 Proto 或 HTTP 映射时，在项目 `.tools/protoc/` 安装固定版本 protoc（含 `include`），执行 `make proto-tools` 安装项目内插件，再执行 `make proto-generate`。普通 `make build` 使用已交付的 Proto、Gateway 和 Swagger 生成代码，不需要 protoc。
+
+详见 [Gateway 说明](docs/gateway.md) 、[gRPC 说明](docs/grpc.md) 、[项目规范](AGENTS.md) 与 [进度](ROADMAP.md) 。[[if .Redis]]缓存边界见 [Redis 文档](docs/redis.md) 。[[end]][[if eq .Authz "casbin"]]授权策略见 [Casbin 文档](docs/authz.md) 。[[end]]

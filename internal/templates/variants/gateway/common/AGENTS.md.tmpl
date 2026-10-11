@@ -1,0 +1,12 @@
+# [[.Name]] 项目规范
+
+独立 Go 1.26.4 Gateway 业务项目，运行时不依赖生成器。目录入口见 [README](README.md) 与 [ROADMAP](ROADMAP.md) ，协议边界见 [Gateway 说明](docs/gateway.md) 和 [gRPC 说明](docs/grpc.md) ，配置见 [示例](configs/app.example.yaml) 。[[if .Redis]][Redis 说明](docs/redis.md) 。[[end]][[if eq .Authz "casbin"]][授权说明](docs/authz.md) 。[[end]]
+
+- `api/proto/` 保存契约和 HTTP 映射；`pkg/api/` 保存可供其他 Go 服务导入的生成代码。修改 Proto 或映射后显式生成，不手改生成代码。
+- `internal/pkg/gateway/` 将 HTTP 转为 RPC，不承载业务规则；业务入口是实际 gRPC Handler，规则和资源归属在 Biz 校验。[[if ne .Database "none"]]Store 持有数据库。[[end]]`bootstrap/` 组装共享依赖，DI 只在启动层使用。
+- Gateway 访问实际 RPC 服务，不创建第二份 Handler 或 Biz。启动先绑定两侧端口、启动并验证 RPC，再开放 HTTP；关闭先停止两侧就绪并排空 HTTP，HTTP 返回后再关闭 Gateway RPC 连接、排空 RPC，最后关闭共享依赖。
+- 所有 RPC 业务方法登记 JWT／授权权限；身份只从认证链传入，不信任客户端伪造的 `Grpc-Metadata-*`。保持 JWT → Casbin → Biz／缓存顺序。公共健康检查除外，不开放公开 Token 签发或策略管理入口。
+- HTTP 到 RPC 的 Context、取消和请求预算贯穿调用；日志不得记录 Token、正文、query、主体或动态路径。错误 cause 与 panic 均须脱敏。
+- 生产 gRPC 必须启用 TLS。Gateway 的 `gateway.ca_file` 与 `gateway.server_name` 仅控制本进程到本进程 RPC 的证书验证，禁止跳过校验或配置任意上游。
+[[if ne .Database "none"]]- 数据库迁移显式执行；禁止生产启动时 AutoMigrate。[[end]]
+- 普通构建使用已生成 Proto、Gateway 与 Swagger 文件；更新生成物前执行 `make proto-tools`、`make proto-generate`。验证入口见 README 中的 `make check`、`make race` 与协议检查命令。
