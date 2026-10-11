@@ -3,14 +3,18 @@ package bootstrap
 
 import (
 	"[[.Module]]/internal/apiserver"
-	example "[[.Module]]/internal/apiserver/handler/http/example"
+	examplehttp "[[.Module]]/internal/apiserver/handler/http/example"
+[[range .Modules]][[if ne .Name "example"]]
+	[[.HTTPAlias]] "[[ $.Module ]]/internal/apiserver/handler/http/[[.Name]]"
+	[[.Name]]biz "[[ $.Module ]]/internal/apiserver/biz/[[.Name]]"
+	[[if ne $.Database "none"]][[.StoreAlias]] "[[ $.Module ]]/internal/apiserver/store/[[.Name]]"[[end]][[end]][[end]]
 )
 
 const openAPISHA256 = ""
 const modulesSHA256 = ""
 
-func httpModules(examples *example.Handler) []apiserver.HTTPModule {
-	return []apiserver.HTTPModule{{
+func httpModules(examples *examplehttp.Handler) []apiserver.HTTPModule {
+	modules := []apiserver.HTTPModule{{
 		Name: "example",
 		Path: "/v1/examples",
 		Operations: map[string]string{
@@ -21,4 +25,8 @@ func httpModules(examples *example.Handler) []apiserver.HTTPModule {
 		},
 		Register: examples.Register,
 	}}
+[[range .Modules]][[if ne .Name "example"]]
+	[[.HTTPVar]] := [[.HTTPAlias]].New([[.Name]]biz.New([[if ne $.Database "none"]][[.StoreAlias]].New()[[end]]))
+	modules = append(modules, apiserver.HTTPModule{Name: "[[.Name]]", Path: "[[.Path]]", Operations: map[string]string{}, Register: [[.HTTPVar]].Register})[[end]][[end]]
+	return modules
 }

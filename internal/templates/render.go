@@ -37,9 +37,21 @@ type Options struct {
 	Transport string
 }
 
+// ModuleEntry is the manifest projection used to render protocol registries.
+type ModuleEntry struct {
+	Name       string
+	Path       string
+	HTTPAlias  string
+	RPCAlias   string
+	StoreAlias string
+	HTTPVar    string
+	RPCVar     string
+}
+
 type templateData struct {
 	Project
 	Options
+	Modules []ModuleEntry
 }
 
 var namePattern = regexp.MustCompile(`^[a-z][a-z0-9]*$`)
@@ -52,6 +64,11 @@ func Default(project Project) ([]File, error) {
 
 // Render prepares a standalone project with the selected transport and storage.
 func Render(project Project, options Options) ([]File, error) {
+	return RenderWithModules(project, options, []ModuleEntry{{Name: "example", Path: "/v1/examples", HTTPAlias: "examplehttp", RPCAlias: "examplegrpc", HTTPVar: "exampleHTTP", RPCVar: "exampleRPC"}})
+}
+
+// RenderWithModules renders a project using the supplied manifest modules.
+func RenderWithModules(project Project, options Options, modules []ModuleEntry) ([]File, error) {
 	if !namePattern.MatchString(project.Name) {
 		return nil, fmt.Errorf("invalid project name")
 	}
@@ -81,7 +98,45 @@ func Render(project Project, options Options) ([]File, error) {
 	if options.Transport != "http" && options.Transport != "grpc" && options.Transport != "dual" && options.Transport != "gateway" {
 		return nil, fmt.Errorf("unsupported transport")
 	}
-	data := templateData{Project: project, Options: options}
+	if len(modules) == 0 {
+		return nil, fmt.Errorf("at least one module is required")
+	}
+	seenModules := make(map[string]bool, len(modules))
+	hasExample := false
+	for i := range modules {
+		module := &modules[i]
+		if !namePattern.MatchString(module.Name) || seenModules[module.Name] {
+			return nil, fmt.Errorf("invalid or duplicate module name %q", module.Name)
+		}
+		seenModules[module.Name] = true
+		if module.Name == "example" {
+			hasExample = true
+			if module.Path == "" {
+				module.Path = "/v1/examples"
+			}
+		} else if module.Path == "" {
+			module.Path = "/v1/" + module.Name
+		}
+		if module.HTTPAlias == "" {
+			module.HTTPAlias = module.Name + "http"
+		}
+		if module.RPCAlias == "" {
+			module.RPCAlias = module.Name + "grpc"
+		}
+		if module.StoreAlias == "" {
+			module.StoreAlias = module.Name + "store"
+		}
+		if module.HTTPVar == "" {
+			module.HTTPVar = module.Name + "HTTP"
+		}
+		if module.RPCVar == "" {
+			module.RPCVar = module.Name + "RPC"
+		}
+	}
+	if !hasExample {
+		return nil, fmt.Errorf("built-in example module is required")
+	}
+	data := templateData{Project: project, Options: options, Modules: modules}
 	base, err := renderTree(sources, "base", data)
 	if err != nil {
 		return nil, err
@@ -157,6 +212,69 @@ func Render(project Project, options Options) ([]File, error) {
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
 	return finalize(result)
+}
+
+// RenderBusinessModule returns the small, behavior-free source skeleton for a
+// registered module. Resource CRUD generation is handled separately.
+func RenderBusinessModule(project Project, options Options, name string) ([]File, error) {
+	if !modulePattern.MatchString(project.Module) || !namePattern.MatchString(name) || name == "example" {
+		return nil, fmt.Errorf("invalid business module identity")
+	}
+	if options.Database == "" {
+		options.Database = "sqlite"
+	}
+	if options.Database != "sqlite" && options.Database != "mysql" && options.Database != "postgres" && options.Database != "none" {
+		return nil, fmt.Errorf("unsupported database")
+	}
+	if options.Transport == "" {
+		options.Transport = "http"
+	}
+	if options.Transport != "http" && options.Transport != "grpc" && options.Transport != "dual" && options.Transport != "gateway" {
+		return nil, fmt.Errorf("unsupported transport")
+	}
+	files := []File{}
+	bizSource := "package biz\n\n"
+	if options.Database == "none" {
+		bizSource += "type Biz struct{}\n\nfunc New() *Biz { return &Biz{} }\n"
+	} else {
+		bizSource += "// Repository is the persistence boundary for operations added to this module.\ntype Repository interface{}\n\ntype Biz struct { repository Repository }\n\nfunc New(repository Repository) *Biz { return &Biz{repository: repository} }\n"
+		storeSource := "package store\n\nimport " + name + "biz \"" + project.Module + "/internal/apiserver/biz/" + name + "\"\n\ntype Store struct{}\n\nfunc New() *Store { return &Store{} }\n\nvar _ " + name + "biz.Repository = (*Store)(nil)\n"
+		formatted, err := formatGo(storeSource)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, File{Path: "internal/apiserver/store/" + name + "/store.go", Content: formatted})
+	}
+	formatted, err := formatGo(bizSource)
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, File{Path: "internal/apiserver/biz/" + name + "/biz.go", Content: formatted})
+	if options.Transport == "http" || options.Transport == "dual" {
+		handler := "package handler\n\nimport (\n biz \"" + project.Module + "/internal/apiserver/biz/" + name + "\"\n \"github.com/gin-gonic/gin\"\n)\n\ntype Handler struct { biz *biz.Biz }\n\nfunc New(business *biz.Biz) *Handler { return &Handler{biz: business} }\n\nfunc (h *Handler) Register(_ *gin.RouterGroup) {}\n"
+		formatted, err := formatGo(handler)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, File{Path: "internal/apiserver/handler/http/" + name + "/handler.go", Content: formatted})
+	}
+	if options.Transport != "http" {
+		handler := "package handler\n\nimport (\n biz \"" + project.Module + "/internal/apiserver/biz/" + name + "\"\n \"google.golang.org/grpc\"\n)\n\nvar Permissions = map[string]string{}\n\ntype Handler struct { biz *biz.Biz }\n\nfunc New(business *biz.Biz) *Handler { return &Handler{biz: business} }\n\nfunc (h *Handler) Register(_ grpc.ServiceRegistrar) {}\n"
+		formatted, err := formatGo(handler)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, File{Path: "internal/apiserver/handler/grpc/" + name + "/handler.go", Content: formatted})
+	}
+	return files, nil
+}
+
+func formatGo(source string) ([]byte, error) {
+	formatted, err := format.Source([]byte(source))
+	if err != nil {
+		return nil, fmt.Errorf("format module skeleton: %w", err)
+	}
+	return formatted, nil
 }
 
 func finalize(files []File) ([]File, error) {

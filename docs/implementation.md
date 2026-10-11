@@ -64,7 +64,7 @@ Redis 验证命中、失效、回源、超时、连接故障、必需状态失�
 
 ## 检查点 D6：业务生成器
 
-命令、字段声明、文件归属和登记规则已在 [命令契约](cli.md#生成业务模块) 定义。`internal/openapi.Merge` 已实现多份 Swagger 2.0 YAML 的确定性合并、重复定义/操作冲突检查、规范化 JSON 和 SHA-256；HTTP、dual 与 Gateway 项目会把内置 Swagger 同时保存为 `example.yaml` 源文件和规范化索引。`generator.LoadProject` 严格读取版本化元数据及登记源文件，校验现有索引的 SHA-256，并计算当前源文件的合并结果以标记待更新状态；`PrepareOpenAPIRefresh` 生成只读可审阅计划，并在执行前复核源文件和目标字节，原子替换 Swagger 索引及摘要，后续替换失败时恢复已更新文件。新项目清单使用带名称和类型的结构化模块项，旧版字符串项按普通模块兼容读取；资源项校验 `specs/` 路径与字段规范版本。四种协议的生成登记索引现带清单摘要，加载时拒绝清单或摘要不匹配；纯 gRPC 项目验证其不包含 HTTP OpenAPI。业务模块命令尚未接入；下一步是让登记索引由清单确定性渲染，并把清单、索引和 OpenAPI 更新纳入同一安全写回计划，再实现 `gen module`。
+命令、字段声明、文件归属和登记规则已在 [命令契约](cli.md#生成业务模块) 定义。`internal/openapi.Merge` 已实现多份 Swagger 2.0 YAML 的确定性合并、重复定义/操作冲突检查、规范化 JSON 和 SHA-256；HTTP、dual 与 Gateway 项目会把内置 Swagger 同时保存为 `example.yaml` 源文件和规范化索引。`generator.LoadProject` 严格读取版本化元数据及登记源文件，校验现有索引的 SHA-256，并计算当前源文件的合并结果以标记待更新状态；`PrepareOpenAPIRefresh` 生成只读可审阅计划，并在执行前复核源文件和目标字节，原子替换 Swagger 索引及摘要，后续替换失败时恢复已更新文件。新项目清单使用带名称和类型的结构化模块项，旧版字符串项按普通模块兼容读取；资源项校验 `specs/` 路径与字段规范版本。四种协议登记索引按清单确定性渲染并带模块摘要。`generator.PrepareModule` 与 `goseed gen module` 已接入行为骨架生成、协议登记、OpenAPI 更新和 dry-run；计划执行前重验所有输入与目标，创建新源码后更新登记文件，后续失败回滚本次创建和此前更新。骨架不伪造业务操作，纯 gRPC 项目不生成 HTTP OpenAPI。下一步实现资源 spec 严格解析、完整主体隔离 CRUD、显式迁移草稿和 `gen resource`。
 
 交付协议适配骨架、主体隔离 CRUD、显式迁移草稿、字段校验、测试、元数据登记与冲突保护。新业务文件由开发者维护；`goseed.yaml`、`modules_gen.go` 与聚合的 `api/openapi/swagger.json` 是可再生成登记/汇总文件，带摘要/标记并在更新前校验改动。
 

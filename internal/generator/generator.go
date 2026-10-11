@@ -258,7 +258,19 @@ func renderMetadata(project templates.Project, options templates.Options) ([]byt
 	if options.Transport == "" {
 		options.Transport = "http"
 	}
-	return []byte(fmt.Sprintf("version: 1\ntemplate_version: %s\nname: %s\nmodule: %s\ndatabase: %s\nauthentication: jwt\nauthorization: %s\nredis: %t\ntransport: %s\nmodules:\n  - name: example\n    type: module\n", TemplateVersion, project.Name, project.Module, options.Database, options.Authz, options.Redis, options.Transport)), nil
+	return renderMetadataModules(project, options, []ModuleMetadata{{Name: "example", Type: "module"}}), nil
+}
+
+func renderMetadataModules(project templates.Project, options templates.Options, modules []ModuleMetadata) []byte {
+	var output strings.Builder
+	fmt.Fprintf(&output, "version: 1\ntemplate_version: %s\nname: %s\nmodule: %s\ndatabase: %s\nauthentication: jwt\nauthorization: %s\nredis: %t\ntransport: %s\nmodules:\n", TemplateVersion, project.Name, project.Module, optionOr(options.Database, "sqlite"), optionOr(options.Authz, "none"), options.Redis, optionOr(options.Transport, "http"))
+	for _, module := range modules {
+		fmt.Fprintf(&output, "  - name: %s\n    type: %s\n", module.Name, module.Type)
+		if module.Type == "resource" {
+			fmt.Fprintf(&output, "    spec: %s\n    field_version: %d\n", module.Spec, module.FieldVersion)
+		}
+	}
+	return []byte(output.String())
 }
 
 func optionOr(value, fallback string) string {

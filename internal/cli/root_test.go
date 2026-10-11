@@ -67,6 +67,72 @@ func TestDryRunReportsPlanWithoutWriting(t *testing.T) {
 	}
 }
 
+func TestGenModuleDryRunAndWrite(t *testing.T) {
+	dir := projectDir(t)
+	t.Chdir(dir)
+	create := NewCommand("test")
+	if err := create.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var dryOutput bytes.Buffer
+	dry := NewCommand("test")
+	dry.SetArgs([]string{"gen", "module", "orders", "--dry-run"})
+	dry.SetOut(&dryOutput)
+	if err := dry.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(dryOutput.String(), "internal/apiserver/bootstrap/modules_gen.go") || !strings.Contains(dryOutput.String(), "Dry run") {
+		t.Fatalf("unexpected module dry-run output: %s", dryOutput.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, "internal/apiserver/biz/orders/biz.go")); !os.IsNotExist(err) {
+		t.Fatal("module dry-run wrote business files")
+	}
+	var output bytes.Buffer
+	command := NewCommand("test")
+	command.SetArgs([]string{"gen", "module", "orders"})
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "Generated module orders") {
+		t.Fatalf("unexpected module output: %s", output.String())
+	}
+	for _, path := range []string{"internal/apiserver/biz/orders/biz.go", "internal/apiserver/handler/http/orders/handler.go", "internal/apiserver/store/orders/store.go", "api/openapi/orders.yaml"} {
+		if _, err := os.Stat(filepath.Join(dir, path)); err != nil {
+			t.Errorf("generated module file %s: %v", path, err)
+		}
+	}
+}
+
+func TestGenModuleDryRunReportsOutputConflicts(t *testing.T) {
+	dir := projectDir(t)
+	t.Chdir(dir)
+	create := NewCommand("test")
+	if err := create.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	conflict := filepath.Join(dir, "internal/apiserver/biz/orders/biz.go")
+	if err := os.MkdirAll(filepath.Dir(conflict), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(conflict, []byte("keep"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	command := NewCommand("test")
+	command.SetArgs([]string{"gen", "module", "orders", "--dry-run"})
+	command.SetOut(&output)
+	if err := command.Execute(); err == nil {
+		t.Fatal("conflicted module generation succeeded")
+	}
+	if !strings.Contains(output.String(), "! output already exists internal/apiserver/biz/orders/biz.go") {
+		t.Fatalf("dry-run omitted the output conflict: %s", output.String())
+	}
+	if data, err := os.ReadFile(conflict); err != nil || string(data) != "keep" {
+		t.Fatal("dry-run changed the conflicting file")
+	}
+}
+
 func TestInvalidParametersAndExistingDirectoryDoNotWrite(t *testing.T) {
 	tests := []struct {
 		name string

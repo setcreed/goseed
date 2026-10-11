@@ -4,11 +4,11 @@
 
 文档基线、D1、D2、D3、D4（HTTP、纯 gRPC、dual、Gateway）与 D5 项目生成器已完成。四种协议均支持四种存储、可选 Redis 与 Casbin，共 64 种组合；MySQL、PostgreSQL、Redis 已完成真实服务验证，Gateway 生产容器验收通过。根命令已支持当前目录生成、能力选择、结构化版本化元数据和 dry-run；业务模块与 CRUD 生成属于 D6。HTTP、dual 与 Gateway 初始项目现在同时生成 `example.yaml` OpenAPI 源及规范化汇总索引；生成器可校验项目状态，并为已登记源变化安全刷新汇总索引与摘要。首次基线提交为 `01c8d6c`，本地分支为 `main`，未配置远端。主模块为 `github.com/setcreed/goseed`，工具链固定为 Go 1.26.4。
 
-纯 gRPC 已按 [协议契约](docs/template-grpc.md) 交付共享业务层、安全链、健康服务、TLS、示例客户端与公开 `pkg/api` 协议类型；dual 按 [双协议契约](docs/template-dual.md) 共享同一 Biz 与依赖，提供独立监听覆盖、启动失败回收和并发排空。Gateway 按 [Gateway 契约](docs/template-gateway.md) 将 HTTP 请求转发到真实 RPC 服务，复用认证、授权和业务层，并先排空 HTTP 再关闭 RPC。`Options.Transport` 支持 `http`（默认）、`grpc`、`dual` 与 `gateway`。Redis 与 Casbin 默认关闭，分别通过内部 Render 的 `Options.Redis`、`Options.Authz` 选择。缓存按 TTL 最终一致；Casbin 默认拒绝，SQL 策略显式迁移与事务导入，无数据库策略只读，离线更新后重启实例。项目生成命令以 [命令契约](docs/cli.md) 为准；D6 命令、字段、文件所有权和登记契约已确定，HTTP/dual 路由及四种协议的 RPC Service/权限、Gateway HTTP 映射已接入登记索引。OpenAPI 确定性合并器已完成，项目初始模板会写入规范化 Swagger 和摘要；新增模块的源文件读取及索引更新流程、业务生成命令仍待实现。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
+纯 gRPC 已按 [协议契约](docs/template-grpc.md) 交付共享业务层、安全链、健康服务、TLS、示例客户端与公开 `pkg/api` 协议类型；dual 按 [双协议契约](docs/template-dual.md) 共享同一 Biz 与依赖，提供独立监听覆盖、启动失败回收和并发排空。Gateway 按 [Gateway 契约](docs/template-gateway.md) 将 HTTP 请求转发到真实 RPC 服务，复用认证、授权和业务层，并先排空 HTTP 再关闭 RPC。`Options.Transport` 支持 `http`（默认）、`grpc`、`dual` 与 `gateway`。Redis 与 Casbin 默认关闭，分别通过内部 Render 的 `Options.Redis`、`Options.Authz` 选择。缓存按 TTL 最终一致；Casbin 默认拒绝，SQL 策略显式迁移与事务导入，无数据库策略只读，离线更新后重启实例。项目生成命令以 [命令契约](docs/cli.md) 为准；D6 模块命令已可生成行为骨架并更新结构化清单、四协议登记和 OpenAPI 汇总，资源 CRUD 生成仍待实现。HTTP/dual 路由及四种协议的 RPC Service/权限、Gateway HTTP 映射已接入登记索引；OpenAPI 合并、源摘要校验和索引安全刷新已实现。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
 
 ## 进行中
 
-D6 进行中：HTTP/dual 路由及四种协议的 RPC Service/权限、Gateway HTTP 映射已接入登记索引；OpenAPI 多源合并、初始模块源生成、摘要校验及 OpenAPI 索引安全刷新已实现，dual 索引同时登记 HTTP 与 RPC。新项目使用结构化模块项，旧版字符串项可读，资源登记字段受校验；四种协议登记索引带有并验证模块清单摘要。当前检查点是让登记索引由清单确定性渲染，并将模块清单、`modules_gen.go` 和 OpenAPI 更新接入同一安全写回计划，随后交付 `gen module` 与 `gen resource`。
+D6 进行中：`gen module` 已生成无虚构业务行为的 Biz/Handler 骨架；按数据库生成仓储/Store 扩展点，并按项目协议动态登记模块。模块清单、协议索引、OpenAPI 源和汇总在同一 dry-run 计划内验证，写入失败回滚新增文件和已更新索引。四种协议的 SQLite 与无数据库代表项目均完成实际测试。下一步实现资源 spec 严格解析和 `gen resource`，验证主体隔离 CRUD 与显式迁移。
 
 ## 待开始
 
@@ -24,9 +24,11 @@ D6 进行中：HTTP/dual 路由及四种协议的 RPC Service/权限、Gateway H
 - 跟踪：go-redis 的纯取消 issue 仍开放；当前明确短命令预算、关闭命令与拨号重试，受控连接及真实服务取消已通过，但不承诺瞬时中断或全部取消竞争已消除。官方证据见 [依赖核验](docs/dependencies.md) 。
 - 待核验：pgx 缓冲响应与取消竞争的人工延迟 Write 场景；基础运行中 deadline 与随后池复用已通过，未声明解决上游报告。官方证据与版本边界见 [依赖核验](docs/dependencies.md) 。
 - 待确认：goseed 自身许可证；仅在公开发布前必须确定。主模块已确定为 `github.com/setcreed/goseed`，Go 工具链固定为 1.26.4。
-- 待实现：将结构化模块清单更新、各协议 `modules_gen.go` 动态登记和 OpenAPI 多源合并接入统一安全写回计划；实现模块源码模板、资源 spec 严格解析、dry-run 生成计划及 `gen module`／`gen resource` 命令。Gateway HTTP 映射及 query/body 输入规则已由模块登记描述驱动。
+- 待实现：资源 spec 严格解析、`gen resource` dry-run 计划、协议 CRUD 产物、显式迁移草稿和业务隔离验证。当前 `gen module` 生成的是无业务操作的结构骨架；Gateway HTTP 映射及 query/body 输入规则继续由模块登记描述驱动。
 
 ## 最近完成
+
+- 2026-10-12 07:27 D6 `gen module`：新增当前项目模块生成命令，按四种协议渲染登记索引并生成 Biz/Handler 骨架；SQL 选项生成仓储/Store 扩展点，无数据库不生成 Store。合并模块 OpenAPI 源，dry-run 显示新增、更新和冲突；多文件写入前重验输入与目标，更新失败回滚登记索引和本次新增文件。资源 CRUD 命令仍待实现。
 
 - 2026-10-12 07:01 D6 模块清单摘要校验：四种协议模板登记索引新增模块清单摘要；项目加载校验清单与登记摘要一致，手工改变摘要或清单时拒绝继续。动态登记内容重渲染和统一写回计划仍待实现。
 
@@ -82,6 +84,8 @@ D6 进行中：HTTP/dual 路由及四种协议的 RPC Service/权限、Gateway H
 - 2026-10-11 00:30 D2 模板渲染：嵌入模板返回确定顺序的完整文件计划，校验名称/模块路径，使用独立分隔符、缺失变量检查和 Go 格式化；准备阶段失败返回空计划，CLI 生成写入仍在 D5 接入。
 
 ## 最近验证
+
+- 2026-10-12 07:31 D6 `gen module`：生成 HTTP、gRPC、dual、Gateway 四种协议的 SQLite 与无数据库代表项目，均执行 `go test -mod=readonly ./...` 通过；覆盖 dry-run 无写入、已有文件冲突、过期计划拒绝、更新失败后回滚和 Go 关键词模块名。定向生成器/模板/CLI 测试、`go vet ./...`、核心包 lint（0 issues）、`make contract-check`（68 个本地链接、326 个交付文件）、`make fmt-check` 与 `git diff --check` 通过。首次测试路径误用缓存触发网络下载失败，修正到 `.tmp` 缓存后测试通过；沙箱拒绝回环监听时只运行编译检查，获准回环验证后八个代表项目完整测试通过。清理本次 `.tmp/d6-module-smoke-20261012`、`.tmp/d6-module-smoke-final` 和误建根目录缓存。
 
 - 2026-10-12 07:01 模块清单摘要校验：`go test ./internal/generator ./internal/cli ./internal/templates`、`go vet ./...`、核心包 `golangci-lint`（0 issues）通过；覆盖四协议项目加载、篡改摘要拒绝和篡改模块清单拒绝。验证复用项目已有 `.tmp` Go 缓存。
 

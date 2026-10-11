@@ -215,6 +215,54 @@ func TestHTTPModuleRegistryIsTransportScoped(t *testing.T) {
 	}
 }
 
+func TestManifestModulesRenderIntoProtocolRegistries(t *testing.T) {
+	project := Project{Name: "short", Module: "example.com/short"}
+	modules := []ModuleEntry{{Name: "example"}, {Name: "orders"}}
+	for _, transport := range []string{"http", "grpc", "dual", "gateway"} {
+		files, err := RenderWithModules(project, Options{Transport: transport, Database: "sqlite"}, modules)
+		if err != nil {
+			t.Fatalf("%s render: %v", transport, err)
+		}
+		var registry []byte
+		for _, file := range files {
+			if file.Path == "internal/apiserver/bootstrap/modules_gen.go" {
+				registry = file.Content
+			}
+		}
+		expectedValues := [][]byte{[]byte("handler/"), []byte("orders")}
+		if transport != "grpc" {
+			expectedValues = append(expectedValues, []byte("/v1/orders"))
+		}
+		for _, expected := range expectedValues {
+			if !bytes.Contains(registry, expected) {
+				t.Fatalf("%s registry omitted %q:\n%s", transport, expected, registry)
+			}
+		}
+		if transport == "grpc" && bytes.Contains(registry, []byte("httpModules")) {
+			t.Fatal("gRPC registry contains HTTP registration")
+		}
+		if transport == "http" && bytes.Contains(registry, []byte("rpcModules")) {
+			t.Fatal("HTTP registry contains RPC registration")
+		}
+	}
+}
+
+func TestBusinessModuleSkeletonUsesSafePackageIdentifiers(t *testing.T) {
+	project := Project{Name: "short", Module: "example.com/short"}
+	files, err := RenderBusinessModule(project, Options{Database: "postgres", Transport: "dual"}, "type")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		if strings.HasSuffix(file.Path, ".go") && bytes.Contains(file.Content, []byte("package type\n")) {
+			t.Fatalf("Go keyword leaked into package declaration: %s", file.Path)
+		}
+	}
+	if len(files) != 4 {
+		t.Fatalf("dual SQL module expected Biz, Store and two Handler files, got %d", len(files))
+	}
+}
+
 func TestCasbinPlansAndInvalidOptions(t *testing.T) {
 	project := Project{Name: "demo", Module: "example.com/demo"}
 	for _, backend := range []string{"sqlite", "mysql", "postgres", "none"} {

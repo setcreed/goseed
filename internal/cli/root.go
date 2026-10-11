@@ -56,6 +56,7 @@ func NewCommand(version string) *cobra.Command {
 			return err
 		},
 	}
+	command.AddCommand(newGenCommand())
 	flags := command.Flags()
 	flags.StringVar(&name, "name", "", "project and service name (defaults to the current directory name)")
 	flags.StringVar(&module, "module", "", "Go module path (defaults to example.com/<name>)")
@@ -65,4 +66,45 @@ func NewCommand(version string) *cobra.Command {
 	flags.StringVar(&transport, "transport", "http", "transport: http, grpc, dual, or gateway")
 	flags.BoolVar(&dryRun, "dry-run", false, "validate and display the generation plan without writing files")
 	return command
+}
+
+func newGenCommand() *cobra.Command {
+	gen := &cobra.Command{Use: "gen", Short: "Generate business modules", Args: cobra.NoArgs}
+	module := &cobra.Command{
+		Use:          "module <name>",
+		Short:        "Generate a behavior-free business module skeleton",
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("get current directory: %w", err)
+			}
+			plan, err := generator.PrepareModule(root, args[0])
+			if err != nil {
+				return err
+			}
+			dryRun, err := cmd.Flags().GetBool("dry-run")
+			if err != nil {
+				return err
+			}
+			if err := plan.Report(cmd.OutOrStdout(), dryRun); err != nil {
+				return fmt.Errorf("write module plan: %w", err)
+			}
+			if len(plan.Conflicts) > 0 {
+				return fmt.Errorf("generation conflicts; resolve them before generating")
+			}
+			if dryRun {
+				return nil
+			}
+			if err := plan.Write(); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Generated module %s in %s.\n", args[0], root)
+			return err
+		},
+	}
+	module.Flags().Bool("dry-run", false, "validate and display the module plan without writing files")
+	gen.AddCommand(module)
+	return gen
 }
