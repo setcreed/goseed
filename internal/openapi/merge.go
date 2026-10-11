@@ -1,0 +1,323 @@
+// Package openapi merges module-owned Swagger 2.0 YAML documents.
+package openapi
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"reflect"
+	"regexp"
+	"sort"
+	"strings"
+
+	"go.yaml.in/yaml/v3"
+)
+
+var moduleNamePattern = regexp.MustCompile(`^[a-z][a-z0-9]*$`)
+
+var componentSections = map[string]bool{
+	"definitions": true, "parameters": true, "responses": true, "securityDefinitions": true,
+}
+
+var httpMethods = map[string]bool{
+	"get": true, "put": true, "post": true, "delete": true, "options": true, "head": true, "patch": true,
+}
+
+var yamlTags = map[string]bool{
+	"!!map": true, "!!seq": true, "!!str": true, "!!null": true, "!!bool": true, "!!int": true, "!!float": true,
+}
+
+// Source is a module-owned Swagger 2.0 YAML document.
+type Source struct {
+	Name string
+	YAML []byte
+}
+
+// Result contains canonical merged JSON and its SHA-256 digest.
+type Result struct {
+	JSON   []byte
+	Digest string
+}
+
+// Merge combines module documents in module-name order. Reusable definitions
+// may be shared only when their values are identical; operations cannot overlap.
+func Merge(sources []Source) (Result, error) {
+	if len(sources) == 0 {
+		return Result{}, errors.New("no OpenAPI sources")
+	}
+	ordered := append([]Source(nil), sources...)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Name < ordered[j].Name })
+
+	merged := make(map[string]any)
+	seenNames := make(map[string]bool, len(ordered))
+	for _, source := range ordered {
+		if !moduleNamePattern.MatchString(source.Name) || seenNames[source.Name] {
+			return Result{}, fmt.Errorf("invalid or duplicate OpenAPI module name %q", source.Name)
+		}
+		seenNames[source.Name] = true
+		document, err := decode(source.Name, source.YAML)
+		if err != nil {
+			return Result{}, err
+		}
+		version, ok := document["swagger"].(string)
+		if !ok || version != "2.0" {
+			return Result{}, fmt.Errorf("OpenAPI source %q must declare swagger: \"2.0\"", source.Name)
+		}
+		paths, ok := document["paths"].(map[string]any)
+		if !ok {
+			return Result{}, fmt.Errorf("OpenAPI source %q must contain a paths mapping", source.Name)
+		}
+		for _, key := range sortedKeys(document) {
+			value := document[key]
+			if key == "paths" {
+				if err := mergePaths(merged, paths, source.Name); err != nil {
+					return Result{}, err
+				}
+				continue
+			}
+			if componentSections[key] {
+				incoming, ok := value.(map[string]any)
+				if !ok {
+					return Result{}, fmt.Errorf("OpenAPI source %q section %q must be a mapping", source.Name, key)
+				}
+				if err := mergeNamedSection(merged, key, incoming, source.Name); err != nil {
+					return Result{}, err
+				}
+				continue
+			}
+			if key == "tags" {
+				if err := mergeTags(merged, value, source.Name); err != nil {
+					return Result{}, err
+				}
+				continue
+			}
+			if previous, exists := merged[key]; exists && !reflect.DeepEqual(previous, value) {
+				return Result{}, fmt.Errorf("OpenAPI source %q conflicts on top-level field %q", source.Name, key)
+			}
+			merged[key] = value
+		}
+	}
+	if err := validateOperationIDs(merged); err != nil {
+		return Result{}, err
+	}
+
+	var output bytes.Buffer
+	encoder := json.NewEncoder(&output)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(merged); err != nil {
+		return Result{}, fmt.Errorf("encode merged OpenAPI document: %w", err)
+	}
+	data := output.Bytes()
+	digest := sha256.Sum256(data)
+	return Result{JSON: bytes.Clone(data), Digest: hex.EncodeToString(digest[:])}, nil
+}
+
+func decode(name string, data []byte) (map[string]any, error) {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	var document yaml.Node
+	if err := decoder.Decode(&document); err != nil {
+		return nil, fmt.Errorf("parse OpenAPI source %q: %w", name, err)
+	}
+	if len(document.Content) != 1 || document.Content[0].Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("OpenAPI source %q must be one YAML mapping document", name)
+	}
+	if err := validateNode(document.Content[0]); err != nil {
+		return nil, fmt.Errorf("parse OpenAPI source %q: %w", name, err)
+	}
+	var extra yaml.Node
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("OpenAPI source %q must contain only one YAML document", name)
+		}
+		return nil, fmt.Errorf("parse OpenAPI source %q: %w", name, err)
+	}
+	var value map[string]any
+	if err := document.Content[0].Decode(&value); err != nil {
+		return nil, fmt.Errorf("decode OpenAPI source %q: %w", name, err)
+	}
+	if value == nil {
+		return nil, fmt.Errorf("OpenAPI source %q must not be empty", name)
+	}
+	return value, nil
+}
+
+func validateNode(node *yaml.Node) error {
+	if node.Anchor != "" || node.Kind == yaml.AliasNode {
+		return errors.New("YAML anchors and aliases are not supported")
+	}
+	if !yamlTags[node.ShortTag()] {
+		return fmt.Errorf("YAML tag %q is not supported", node.ShortTag())
+	}
+	if node.Kind == yaml.MappingNode {
+		seen := make(map[string]bool, len(node.Content)/2)
+		for i := 0; i < len(node.Content); i += 2 {
+			key := node.Content[i]
+			if key.ShortTag() == "!!merge" {
+				return errors.New("YAML merge keys are not supported")
+			}
+			if key.Kind != yaml.ScalarNode || key.ShortTag() != "!!str" {
+				return errors.New("OpenAPI YAML mapping keys must be strings")
+			}
+			if seen[key.Value] {
+				return fmt.Errorf("duplicate YAML key %q", key.Value)
+			}
+			seen[key.Value] = true
+		}
+	}
+	for _, child := range node.Content {
+		if err := validateNode(child); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func mergePaths(merged, incoming map[string]any, source string) error {
+	current, exists := merged["paths"]
+	if !exists {
+		current = map[string]any{}
+		merged["paths"] = current
+	}
+	paths := current.(map[string]any)
+	for _, path := range sortedKeys(incoming) {
+		value := incoming[path]
+		item, ok := value.(map[string]any)
+		if !ok {
+			return fmt.Errorf("OpenAPI source %q path %q must be a mapping", source, path)
+		}
+		previous, exists := paths[path]
+		if !exists {
+			paths[path] = item
+			continue
+		}
+		previousItem, ok := previous.(map[string]any)
+		if !ok {
+			return fmt.Errorf("OpenAPI path %q has an invalid existing path item", path)
+		}
+		for _, key := range sortedKeys(item) {
+			operation := item[key]
+			if previousOperation, exists := previousItem[key]; exists {
+				if httpMethods[key] {
+					return fmt.Errorf("OpenAPI source %q duplicates operation %s %s", source, strings.ToUpper(key), path)
+				}
+				if !reflect.DeepEqual(previousOperation, operation) {
+					return fmt.Errorf("OpenAPI source %q conflicts on path item %q field %q", source, path, key)
+				}
+				continue
+			}
+			previousItem[key] = operation
+		}
+	}
+	return nil
+}
+
+func mergeNamedSection(merged map[string]any, section string, incoming map[string]any, source string) error {
+	current, exists := merged[section]
+	if !exists {
+		current = map[string]any{}
+		merged[section] = current
+	}
+	target := current.(map[string]any)
+	for _, name := range sortedKeys(incoming) {
+		value := incoming[name]
+		if previous, exists := target[name]; exists {
+			if !reflect.DeepEqual(previous, value) {
+				return fmt.Errorf("OpenAPI source %q conflicts on %s entry %q", source, section, name)
+			}
+			continue
+		}
+		target[name] = value
+	}
+	return nil
+}
+
+func validateOperationIDs(document map[string]any) error {
+	paths, ok := document["paths"].(map[string]any)
+	if !ok {
+		return errors.New("merged OpenAPI document has no paths mapping")
+	}
+	seen := make(map[string]string)
+	for _, path := range sortedKeys(paths) {
+		operations, ok := paths[path].(map[string]any)
+		if !ok {
+			return fmt.Errorf("OpenAPI path %q must be a mapping", path)
+		}
+		for _, method := range sortedKeys(operations) {
+			if !httpMethods[method] {
+				continue
+			}
+			operation, ok := operations[method].(map[string]any)
+			if !ok {
+				return fmt.Errorf("OpenAPI operation %s %s must be a mapping", strings.ToUpper(method), path)
+			}
+			value, exists := operation["operationId"]
+			if !exists {
+				continue
+			}
+			name, ok := value.(string)
+			if !ok || name == "" {
+				return fmt.Errorf("OpenAPI operation %s %s has an invalid operationId", strings.ToUpper(method), path)
+			}
+			if previous, exists := seen[name]; exists {
+				return fmt.Errorf("OpenAPI operationId %q is shared by %s and %s %s", name, previous, strings.ToUpper(method), path)
+			}
+			seen[name] = strings.ToUpper(method) + " " + path
+		}
+	}
+	return nil
+}
+
+func sortedKeys(values map[string]any) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func mergeTags(merged map[string]any, incomingValue any, source string) error {
+	incoming, ok := incomingValue.([]any)
+	if !ok {
+		return fmt.Errorf("OpenAPI source %q section %q must be a sequence", source, "tags")
+	}
+	currentValue, exists := merged["tags"]
+	if !exists {
+		currentValue = []any{}
+	}
+	current := currentValue.([]any)
+	byName := make(map[string]any, len(current)+len(incoming))
+	for _, tag := range append(current, incoming...) {
+		mapping, ok := tag.(map[string]any)
+		if !ok {
+			return fmt.Errorf("OpenAPI source %q tags must contain mappings", source)
+		}
+		name, ok := mapping["name"].(string)
+		if !ok || name == "" {
+			return fmt.Errorf("OpenAPI source %q tag must have a name", source)
+		}
+		if previous, exists := byName[name]; exists {
+			if !reflect.DeepEqual(previous, tag) {
+				return fmt.Errorf("OpenAPI source %q conflicts on tag %q", source, name)
+			}
+			continue
+		}
+		byName[name] = tag
+	}
+	names := make([]string, 0, len(byName))
+	for name := range byName {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	result := make([]any, 0, len(names))
+	for _, name := range names {
+		result = append(result, byName[name])
+	}
+	merged["tags"] = result
+	return nil
+}

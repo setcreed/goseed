@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 	"text/template"
+
+	"github.com/setcreed/goseed/internal/openapi"
 )
 
 //go:embed base variants
@@ -85,7 +87,7 @@ func Render(project Project, options Options) ([]File, error) {
 		return nil, err
 	}
 	if options.Database == "sqlite" && !options.Redis && options.Authz == "none" && options.Transport == "http" {
-		return base, nil
+		return finalize(base)
 	}
 	// Variant directories intentionally replace matching base files, and add
 	// backend-specific fixtures. Sorting keeps the complete plan deterministic.
@@ -154,7 +156,37 @@ func Render(project Project, options Options) ([]File, error) {
 		result = append(result, file)
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
-	return result, nil
+	return finalize(result)
+}
+
+func finalize(files []File) ([]File, error) {
+	swaggerIndex, registryIndex := -1, -1
+	for i := range files {
+		switch files[i].Path {
+		case "api/openapi/swagger.json":
+			swaggerIndex = i
+		case "internal/apiserver/bootstrap/modules_gen.go":
+			registryIndex = i
+		}
+	}
+	if swaggerIndex == -1 {
+		return files, nil
+	}
+	result, err := openapi.Merge([]openapi.Source{{Name: "example", YAML: files[swaggerIndex].Content}})
+	if err != nil {
+		return nil, fmt.Errorf("merge bundled OpenAPI document: %w", err)
+	}
+	if registryIndex == -1 {
+		return nil, fmt.Errorf("OpenAPI document has no module registration index")
+	}
+	marker := []byte(`const openAPISHA256 = ""`)
+	if bytes.Count(files[registryIndex].Content, marker) != 1 {
+		return nil, fmt.Errorf("module registration index must contain one OpenAPI digest marker")
+	}
+	replacement := []byte(fmt.Sprintf("const openAPISHA256 = %q", result.Digest))
+	files[registryIndex].Content = bytes.Replace(files[registryIndex].Content, marker, replacement, 1)
+	files[swaggerIndex].Content = result.JSON
+	return files, nil
 }
 
 func render(source fs.FS, project Project) ([]File, error) {

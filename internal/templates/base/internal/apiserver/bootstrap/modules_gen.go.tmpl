@@ -6,6 +6,8 @@ import (
 	example "[[.Module]]/internal/apiserver/handler/http/example"
 )
 
+const openAPISHA256 = ""
+
 func httpModules(examples *example.Handler) []apiserver.HTTPModule {
 	return []apiserver.HTTPModule{{
 		Name: "example",

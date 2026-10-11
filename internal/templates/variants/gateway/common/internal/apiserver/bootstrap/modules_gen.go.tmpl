@@ -8,6 +8,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+const openAPISHA256 = ""
+
 func rpcModules(examples *example.Handler) (map[string]string, func(grpc.ServiceRegistrar)) {
 	register := func(registrar grpc.ServiceRegistrar) {
 		examples.Register(registrar)

@@ -122,7 +122,7 @@ shop/
 
 `pkg/api` 只承载供 Go 客户端导入的生成协议类型，不作为公共工具杂物目录。`api/proto/<module>/v1` 保存业务模块的 Proto，Gateway 在相同目录维护 `http.yaml` 映射，`pkg/api/<module>/v1` 保存对应生成代码；`v1` 表达协议版本，Biz 不默认按版本分目录。gRPC 的服务与拦截器位于 `internal/pkg/rpc/`，dual 的监听与关闭协调位于 `internal/pkg/dual/`，Gateway 的转发与顺序关闭位于 `internal/pkg/gateway/`；协议运行约束见 [纯 gRPC 模板](template-grpc.md) 、[双协议模板](template-dual.md) 与 [Gateway 模板](template-gateway.md) 。
 
-`goseed.yaml` 是版本化生成元数据，包含元数据版本、模板版本、项目名、模块路径、能力选择和模块登记；资源登记记录 spec 路径与字段规范版本。它不是服务运行配置，也不能作为容器中的必需文件；后续业务生成器读取它并拒绝不兼容的模板版本或能力。模块清单是登记权威来源；`modules_gen.go` 带生成标记、模块清单摘要及 OpenAPI 汇总摘要，每次生成前必须验证摘要及其内容与清单一致。`api/openapi/<module>.yaml` 是各模块的 OpenAPI 源文件，`api/openapi/swagger.json` 是按确定顺序合并的生成索引。三个索引/元数据文件只允许生成器按既定规则更新；手工业务代码只调用生成的注册入口，不手工添加登记项。
+`goseed.yaml` 是版本化生成元数据，包含元数据版本、模板版本、项目名、模块路径、能力选择和模块登记；资源登记记录 spec 路径与字段规范版本。它不是服务运行配置，也不能作为容器中的必需文件；后续业务生成器读取它并拒绝不兼容的模板版本或能力。模块清单是登记权威来源；`modules_gen.go` 带生成标记、模块清单摘要及 OpenAPI 汇总摘要，每次生成前必须验证摘要及其内容与清单一致。`api/openapi/<module>.yaml` 是各模块的 OpenAPI 源文件，`api/openapi/swagger.json` 是按确定顺序合并的生成索引。初始项目生成时也将内置 Swagger 规范规范化为确定性 JSON，并把最终字节的 SHA-256 写入 HTTP 登记索引。三个索引/元数据文件只允许生成器按既定规则更新；手工业务代码只调用生成的注册入口，不手工添加登记项。
 
 新增模块源码、Proto 源、spec、迁移、文档和测试都是创建后由开发者维护的文件。生成器只创建，不覆盖这些文件；不重新生成旧业务代码。这样登记索引可以增量重建，而业务实现仍保持普通 Go 源码和项目所有权。
 

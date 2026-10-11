@@ -2,7 +2,8 @@
   "go": "1.26.4",
   "module": "github.com/setcreed/goseed",
   "generator": {
-    "github.com/spf13/cobra": "v1.10.2"
+    "github.com/spf13/cobra": "v1.10.2",
+    "go.yaml.in/yaml/v3": "v3.0.5"
   },
   "runtime": {
     "github.com/casbin/casbin/v3": "v3.11.0",

@@ -1,6 +1,6 @@
 # 依赖与工具核验
 
-运行库维护核验日期：2026-10-10。版本清单以 [dependencies.lock.json](../dependencies.lock.json) 为准；原始官方仓库响应快照见 [dependency-audit.json](dependency-audit.json) 。固定直接依赖、间接依赖与校验和保存在主模块、兼容性模块及独立业务模板的依赖清单中。
+运行库维护核验日期：2026-10-10；YAML parser 补充核验日期：2026-10-11。版本清单以 [dependencies.lock.json](../dependencies.lock.json) 为准；原始官方仓库响应快照见 [dependency-audit.json](dependency-audit.json) 。固定直接依赖、间接依赖与校验和保存在主模块、兼容性模块及独立业务模板的依赖清单中。
 
 依赖维护证据来自 D1 及下列正式接入补充核验，模板运行验证记录以 ROADMAP 为准。主模块只引入 Cobra，默认业务模板只包含 HTTP、SQLite、JWT 与实际需要的配置/日志/DI/ORM/迁移依赖；独立兼容性模块核验的其他能力不自动进入默认项目。
 
@@ -13,6 +13,7 @@
 | 依赖 | Release/tag | 许可证 | 最近提交 | Issue 样本 |
 |---|---|---|---|---|
 | Cobra | [v1.10.2](https://github.com/spf13/cobra/releases/tag/v1.10.2)，2025-12-04 | Apache-2.0 | [2026-07-11](https://github.com/spf13/cobra/commit/adbc8813901bba65827259daa8e22ff94ec1f30e) | [#2505](https://github.com/spf13/cobra/issues/2505)、[#2520](https://github.com/spf13/cobra/issues/2520) |
+| YAML parser（生成器） | [v3.0.5](https://pkg.go.dev/go.yaml.in/yaml/v3@v3.0.5) | MIT、Apache-2.0 | YAML 组织维护；v3 仅安全修复，常规开发在 v4 | [维护策略](https://github.com/yaml/go-yaml#project-status)；生成器专用，不进入业务项目 |
 | Gin | [v1.12.0](https://github.com/gin-gonic/gin/releases/tag/v1.12.0)，2026-02-28 | MIT | [2026-10-10](https://github.com/gin-gonic/gin/commit/0f09c3a9b4626d9fe9979cf4d0521d6ae32ab646) | [#4851](https://github.com/gin-gonic/gin/issues/4851)、[#4877](https://github.com/gin-gonic/gin/issues/4877) |
 | Viper | [v1.21.0](https://github.com/spf13/viper/releases/tag/v1.21.0)，2025-09-08 | MIT | [2025-10-15](https://github.com/spf13/viper/commit/528f7416c4b56a4948673984b190bf8713f0c3c4) | [#2146](https://github.com/spf13/viper/issues/2146)、[#2140](https://github.com/spf13/viper/issues/2140) |
 | Zap | [v1.28.0](https://github.com/uber-go/zap/releases/tag/v1.28.0)，2026-04-28 | MIT | [2026-09-16](https://github.com/uber-go/zap/commit/4892335e05f14bce8a98a69a577fcf3844a42623) | [#1593](https://github.com/uber-go/zap/issues/1593)、[#1333](https://github.com/uber-go/zap/issues/1333) |
@@ -36,7 +37,8 @@
 ## 选型结论与工程约束
 
 - Go 固定为 1.26.4，主模块为 `github.com/setcreed/goseed`。工具链来自 [Go 官方下载档案](https://go.dev/dl/)；构建、检查与测试入口显式设置 `GOTOOLCHAIN=go1.26.4`，不让依赖自动提升版本。
-- Cobra 处理命令树、帮助和参数，标准库用于模板、文件和格式化；主模块不引入业务运行依赖。Cobra 样本有近期人工代码维护，但所查两个 issue 没有维护者响应证据。
+- Cobra 处理命令树、帮助和参数，标准库用于模板、文件和格式化；YAML parser 仅解析业务生成器输入，不进入生成项目运行依赖。主模块不引入业务运行依赖。Cobra 样本有近期人工代码维护，但所查两个 issue 没有维护者响应证据。
+- YAML parser 固定 `go.yaml.in/yaml/v3 v3.0.5`，只用于生成器读取 OpenAPI YAML 与后续资源 spec。原 `go-yaml/yaml` 仓库已归档，YAML 组织接管维护；官方说明 v3 保持稳定并接收安全修复，后续功能在 v4。当前 v4 仍是候选版，官方仓库在 2026-09 有 maintainer 发起的 [#429](https://github.com/yaml/go-yaml/pull/429) 与 [#430](https://github.com/yaml/go-yaml/pull/430)，这证明的是 v4 分支活动，不代表 v3 有常规功能维护。当前采用已发布 v3 以保持解析依赖稳定；v4 稳定后重新评估。
 - Gin、Zap、Goose、gRPC、Gateway、Protobuf Go 有近期人工源码维护；Zap、Goose、gRPC、protoc、golangci-lint 的样本存在 collaborator/member 回复。详细日期、作者及评论身份可在快照核对。
 - Viper 沿用成熟的配置 API，但当前样本以 2025 年 CI 更新及机器人关闭 issue 为主，不能称为近期人工响应活跃。首版只用独立实例与强类型配置，不增加热更新；若后续发现 API 缺陷，再评估替换。do v2 有近期维护，但 [健康检查 issue](https://github.com/samber/do/issues/317) 尚未解决；只用 provider/构造组装，生命周期与健康状态由应用管理。
 - SQLite 选择 `github.com/libtnb/sqlite v1.2.2`，底层 modernc；[GORM 官方接入文档](https://gorm.io/docs/connecting_to_the_database.html) 提供这个纯 Go 选项。小型维护团队不能视为大型社区：最近 3 个提交是依赖机器人，但 [单连接死锁问题](https://github.com/libtnb/sqlite/issues/24) 有人工响应并关闭。用隔离驱动接入和实际行为测试控制替换成本。未选 `glebarez/sqlite`，其 [维护者说明](https://github.com/glebarez/sqlite/issues/152) 表示缺少维护时间并征集维护者。

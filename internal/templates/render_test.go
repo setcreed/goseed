@@ -2,6 +2,8 @@ package templates
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -73,6 +75,19 @@ func TestDefaultPlan(t *testing.T) {
 			t.Fatalf("unexpanded variable: %s", file.Path)
 		}
 	}
+	var swagger, registry []byte
+	for _, file := range first {
+		switch file.Path {
+		case "api/openapi/swagger.json":
+			swagger = file.Content
+		case "internal/apiserver/bootstrap/modules_gen.go":
+			registry = file.Content
+		}
+	}
+	digest := sha256.Sum256(swagger)
+	if len(swagger) == 0 || !bytes.Contains(registry, []byte("const openAPISHA256 = \""+hex.EncodeToString(digest[:])+"\"")) {
+		t.Fatal("default module registration index does not contain the rendered OpenAPI digest")
+	}
 }
 
 func TestVariantPlansAndInvalidOptions(t *testing.T) {
@@ -121,6 +136,13 @@ func TestProtocolPlansAndInvalidTransport(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if transport == "dual" {
+			for _, file := range first {
+				if file.Path == "internal/apiserver/bootstrap/modules_gen.go" && (!bytes.Contains(file.Content, []byte("httpModules")) || !bytes.Contains(file.Content, []byte("rpcModules"))) {
+					t.Fatal("dual registration index must include HTTP and RPC modules")
+				}
+			}
+		}
 		second, err := Render(project, options)
 		if err != nil || len(first) == 0 || len(first) != len(second) {
 			t.Fatal("inconsistent protocol plan")
@@ -131,6 +153,28 @@ func TestProtocolPlansAndInvalidTransport(t *testing.T) {
 			}
 			if i > 0 && first[i-1].Path >= file.Path {
 				t.Fatal("plan order or duplicate")
+			}
+		}
+		if transport == "grpc" {
+			for _, file := range first {
+				if file.Path == "api/openapi/swagger.json" {
+					t.Fatal("gRPC-only project unexpectedly contains HTTP OpenAPI")
+				}
+			}
+		} else {
+			var swagger, registry []byte
+			for _, file := range first {
+				switch file.Path {
+				case "api/openapi/swagger.json":
+					swagger = file.Content
+				case "internal/apiserver/bootstrap/modules_gen.go":
+					registry = file.Content
+				}
+			}
+			digest := sha256.Sum256(swagger)
+			want := []byte(`const openAPISHA256 = "` + hex.EncodeToString(digest[:]) + `"`)
+			if len(swagger) == 0 || !bytes.Contains(registry, want) {
+				t.Fatalf("%s registration index does not contain the rendered OpenAPI digest", transport)
 			}
 		}
 	}

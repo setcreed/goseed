@@ -1,5 +1,6 @@
 """Explicitly regenerate owned protocol files with project-local fixed tools."""
 from pathlib import Path
+import json
 import os
 import subprocess
 import tempfile
@@ -25,5 +26,7 @@ with tempfile.TemporaryDirectory(dir=base) as temporary:
     destination = root / 'pkg/api/example/v1'
     for name in ('example.pb.go', 'example_grpc.pb.go', 'example.pb.gw.go'):
         (destination / name).write_bytes((Path(temporary) / name).read_bytes())
-    (root / 'api/openapi/swagger.json').write_bytes((Path(temporary) / 'example.swagger.json').read_bytes())
+    swagger = json.loads((Path(temporary) / 'example.swagger.json').read_text(encoding='utf-8'))
+    canonical = json.dumps(swagger, ensure_ascii=False, sort_keys=True, indent=2) + '\n'
+    (root / 'api/openapi/swagger.json').write_text(canonical, encoding='utf-8')
 print('Generated protocol files updated')
