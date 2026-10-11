@@ -241,7 +241,7 @@ func renderMetadata(project templates.Project, options templates.Options) ([]byt
 	if options.Transport == "" {
 		options.Transport = "http"
 	}
-	return []byte(fmt.Sprintf("version: 1\ntemplate_version: %s\nname: %s\nmodule: %s\ndatabase: %s\nauthentication: jwt\nauthorization: %s\nredis: %t\ntransport: %s\nmodules:\n  - example\n", TemplateVersion, project.Name, project.Module, options.Database, options.Authz, options.Redis, options.Transport)), nil
+	return []byte(fmt.Sprintf("version: 1\ntemplate_version: %s\nname: %s\nmodule: %s\ndatabase: %s\nauthentication: jwt\nauthorization: %s\nredis: %t\ntransport: %s\nmodules:\n  - name: example\n    type: module\n", TemplateVersion, project.Name, project.Module, options.Database, options.Authz, options.Redis, options.Transport)), nil
 }
 
 func optionOr(value, fallback string) string {

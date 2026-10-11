@@ -138,7 +138,7 @@ fields:
 
 ## 业务生成登记与文件归属
 
-`goseed.yaml` 是生成器维护的版本化元数据和模块清单，模块登记包含名称、类型（`module` 或 `resource`）；资源项另记录 spec 相对路径与字段规范版本。它不是服务运行配置。`internal/apiserver/bootstrap/modules_gen.go` 是由该清单确定性生成的启动登记索引，统一接入依赖组装并输出协议注册描述：HTTP 描述包含模块名、操作权限和 `func(*gin.RouterGroup)` 路由回调；gRPC 描述包含 FullMethod 权限和 `func(grpc.ServiceRegistrar)` 注册回调；Gateway 描述包含模块名、HTTP 路径、允许的 query 参数、JSON body 方法及 `func(context.Context, *runtime.ServeMux, *grpc.ClientConn) error` 映射回调。对应协议不存在时裁剪其描述类型与依赖。`example` 作为内置登记项参与同一索引。
+`goseed.yaml` 是生成器维护的版本化元数据和模块清单，模块登记包含名称、类型（`module` 或 `resource`）；资源项另记录 `specs/` 下的 spec 相对路径与字段规范版本。新项目使用结构化登记项；已生成的版本 1 项目若使用旧字符串登记，读取时按 `type: module` 兼容解释。它不是服务运行配置。`internal/apiserver/bootstrap/modules_gen.go` 是由该清单确定性生成的启动登记索引，统一接入依赖组装并输出协议注册描述：HTTP 描述包含模块名、操作权限和 `func(*gin.RouterGroup)` 路由回调；gRPC 描述包含 FullMethod 权限和 `func(grpc.ServiceRegistrar)` 注册回调；Gateway 描述包含模块名、HTTP 路径、允许的 query 参数、JSON body 方法及 `func(context.Context, *runtime.ServeMux, *grpc.ClientConn) error` 映射回调。对应协议不存在时裁剪其描述类型与依赖。`example` 作为内置登记项参与同一索引。
 
 模块/资源源码、spec、Proto 源、迁移、模块 Markdown 文档和测试在首次生成后归开发者维护。各模块的 `api/openapi/<module>.yaml` 是 Swagger 2.0 源文件，`api/openapi/swagger.json` 是由所有源确定性合并的生成索引。输入必须是单个 YAML 映射文档，拒绝重复键、别名、merge key 和自定义标签；所有输入的 `swagger` 必须为 `2.0`。来源按模块名排序；`paths` 合并不同操作，同一路径的同一操作及全局重复的 `operationId` 冲突时报错；`definitions`、`parameters`、`responses` 和 `securityDefinitions` 按名称合并，重名内容必须一致；`tags` 按名称合并且重名内容必须一致。其他顶层字段必须语义一致。输出使用 UTF-8、两空格缩进的确定性 JSON，并以最终字节计算 SHA-256。生成器仅创建新业务文件，遇到任何已存在的模块文件均报冲突；后续增加其他模块时，只更新 `goseed.yaml`、`modules_gen.go` 和 `api/openapi/swagger.json` 这三个明确的生成登记/汇总文件。`modules_gen.go` 中记录模块清单和 Swagger 汇总的摘要；每次写入前验证清单、索引摘要及索引生成标记，任何不一致或手工修改均停止并报告修复对象，不覆盖或自动修复。命令不重新生成既有模块源码，不对既有数据库结构做差异推断。
 

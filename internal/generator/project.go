@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/setcreed/goseed/internal/openapi"
 	"go.yaml.in/yaml/v3"
@@ -19,16 +20,24 @@ var projectModuleName = regexp.MustCompile(`^[a-z][a-z0-9]*$`)
 
 // ProjectMetadata is the versioned generation manifest written into a project.
 type ProjectMetadata struct {
-	Version         int      `yaml:"version"`
-	TemplateVersion int      `yaml:"template_version"`
-	Name            string   `yaml:"name"`
-	Module          string   `yaml:"module"`
-	Database        string   `yaml:"database"`
-	Authentication  string   `yaml:"authentication"`
-	Authorization   string   `yaml:"authorization"`
-	Redis           bool     `yaml:"redis"`
-	Transport       string   `yaml:"transport"`
-	Modules         []string `yaml:"modules"`
+	Version         int              `yaml:"version"`
+	TemplateVersion int              `yaml:"template_version"`
+	Name            string           `yaml:"name"`
+	Module          string           `yaml:"module"`
+	Database        string           `yaml:"database"`
+	Authentication  string           `yaml:"authentication"`
+	Authorization   string           `yaml:"authorization"`
+	Redis           bool             `yaml:"redis"`
+	Transport       string           `yaml:"transport"`
+	Modules         []ModuleMetadata `yaml:"-"`
+}
+
+// ModuleMetadata describes one generated business namespace.
+type ModuleMetadata struct {
+	Name         string `yaml:"name"`
+	Type         string `yaml:"type"`
+	Spec         string `yaml:"spec,omitempty"`
+	FieldVersion int    `yaml:"field_version,omitempty"`
 }
 
 // ProjectState is a verified snapshot of the generation-owned OpenAPI inputs
@@ -76,15 +85,17 @@ func LoadProject(root string) (ProjectState, error) {
 		return state, nil
 	}
 
+	moduleNames := make([]string, 0, len(metadata.Modules))
 	for _, module := range metadata.Modules {
-		name := "api/openapi/" + module + ".yaml"
+		moduleNames = append(moduleNames, module.Name)
+		name := "api/openapi/" + module.Name + ".yaml"
 		source, err := readProjectFile(absoluteRoot, name)
 		if err != nil {
-			return ProjectState{}, fmt.Errorf("read OpenAPI source for module %q: %w", module, err)
+			return ProjectState{}, fmt.Errorf("read OpenAPI source for module %q: %w", module.Name, err)
 		}
-		state.Sources = append(state.Sources, openapi.Source{Name: module, YAML: source})
+		state.Sources = append(state.Sources, openapi.Source{Name: module.Name, YAML: source})
 	}
-	if err := rejectUnregisteredOpenAPISources(absoluteRoot, metadata.Modules); err != nil {
+	if err := rejectUnregisteredOpenAPISources(absoluteRoot, moduleNames); err != nil {
 		return ProjectState{}, err
 	}
 	merged, err := openapi.Merge(state.Sources)
@@ -137,8 +148,53 @@ func parseProjectMetadata(data []byte) (ProjectMetadata, error) {
 	var metadata ProjectMetadata
 	strict := yaml.NewDecoder(bytes.NewReader(data))
 	strict.KnownFields(true)
-	if err := strict.Decode(&metadata); err != nil {
+	// Module entries are decoded separately to retain compatibility with v1
+	// projects generated before entries carried an explicit type.
+	var raw struct {
+		Version         int       `yaml:"version"`
+		TemplateVersion int       `yaml:"template_version"`
+		Name            string    `yaml:"name"`
+		Module          string    `yaml:"module"`
+		Database        string    `yaml:"database"`
+		Authentication  string    `yaml:"authentication"`
+		Authorization   string    `yaml:"authorization"`
+		Redis           bool      `yaml:"redis"`
+		Transport       string    `yaml:"transport"`
+		Modules         yaml.Node `yaml:"modules"`
+	}
+	strict.KnownFields(true)
+	if err := strict.Decode(&raw); err != nil {
 		return ProjectMetadata{}, fmt.Errorf("decode goseed.yaml: %w", err)
+	}
+	metadata = ProjectMetadata{Version: raw.Version, TemplateVersion: raw.TemplateVersion, Name: raw.Name, Module: raw.Module, Database: raw.Database, Authentication: raw.Authentication, Authorization: raw.Authorization, Redis: raw.Redis, Transport: raw.Transport}
+	if raw.Modules.Kind != 0 {
+		list := &raw.Modules
+		if list.Kind != yaml.SequenceNode {
+			return ProjectMetadata{}, fmt.Errorf("goseed.yaml modules must be a sequence")
+		}
+		for _, item := range list.Content {
+			var module ModuleMetadata
+			switch item.Kind {
+			case yaml.ScalarNode:
+				if item.ShortTag() != "!!str" {
+					return ProjectMetadata{}, fmt.Errorf("module names must be strings or mappings")
+				}
+				module = ModuleMetadata{Name: item.Value, Type: "module"}
+			case yaml.MappingNode:
+				for i := 0; i < len(item.Content); i += 2 {
+					key := item.Content[i].Value
+					if key != "name" && key != "type" && key != "spec" && key != "field_version" {
+						return ProjectMetadata{}, fmt.Errorf("unknown module entry field %q", key)
+					}
+				}
+				if err := item.Decode(&module); err != nil {
+					return ProjectMetadata{}, fmt.Errorf("decode module entry: %w", err)
+				}
+			default:
+				return ProjectMetadata{}, fmt.Errorf("module entries must be strings or mappings")
+			}
+			metadata.Modules = append(metadata.Modules, module)
+		}
 	}
 	if metadata.Version != 1 || metadata.TemplateVersion != 1 {
 		return ProjectMetadata{}, fmt.Errorf("unsupported goseed.yaml or template version")
@@ -161,16 +217,32 @@ func parseProjectMetadata(data []byte) (ProjectMetadata, error) {
 	seen := make(map[string]bool, len(metadata.Modules))
 	hasExample := false
 	for _, module := range metadata.Modules {
-		if !projectModuleName.MatchString(module) || seen[module] {
-			return ProjectMetadata{}, fmt.Errorf("invalid or duplicate module name %q in goseed.yaml", module)
+		if !projectModuleName.MatchString(module.Name) || seen[module.Name] {
+			return ProjectMetadata{}, fmt.Errorf("invalid or duplicate module name %q in goseed.yaml", module.Name)
 		}
-		seen[module] = true
-		hasExample = hasExample || module == "example"
+		if module.Type != "module" && module.Type != "resource" {
+			return ProjectMetadata{}, fmt.Errorf("unsupported module type %q", module.Type)
+		}
+		if module.Type == "resource" && (!validResourceSpec(module.Spec) || module.FieldVersion != 1) {
+			return ProjectMetadata{}, fmt.Errorf("resource %q requires spec and field_version 1", module.Name)
+		}
+		if module.Type == "module" && (module.Spec != "" || module.FieldVersion != 0) {
+			return ProjectMetadata{}, fmt.Errorf("module %q cannot declare resource fields", module.Name)
+		}
+		seen[module.Name] = true
+		hasExample = hasExample || module.Name == "example" && module.Type == "module"
 	}
 	if !hasExample {
 		return ProjectMetadata{}, fmt.Errorf("goseed.yaml must retain the built-in example module")
 	}
 	return metadata, nil
+}
+
+func validResourceSpec(spec string) bool {
+	if !filepath.IsLocal(filepath.FromSlash(spec)) || filepath.Ext(spec) != ".yaml" || !strings.HasPrefix(filepath.ToSlash(spec), "specs/") {
+		return false
+	}
+	return true
 }
 
 func validateMetadataNode(node *yaml.Node) error {

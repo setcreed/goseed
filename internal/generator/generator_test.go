@@ -20,7 +20,7 @@ func TestPrepareAddsVersionedGenerationMetadata(t *testing.T) {
 		t.Fatalf("unexpected conflicts: %v", plan.Conflicts)
 	}
 	metadata := string(fileContent(t, plan.Files, "goseed.yaml"))
-	for _, expected := range []string{"version: 1", "template_version: 1", "name: shop", "module: github.com/acme/shop", "database: postgres", "authentication: jwt", "authorization: casbin", "redis: true", "transport: gateway", "  - example"} {
+	for _, expected := range []string{"version: 1", "template_version: 1", "name: shop", "module: github.com/acme/shop", "database: postgres", "authentication: jwt", "authorization: casbin", "redis: true", "transport: gateway", "  - name: example", "    type: module"} {
 		if !strings.Contains(metadata, expected) {
 			t.Errorf("metadata missing %q:\n%s", expected, metadata)
 		}
@@ -43,6 +43,9 @@ func TestLoadProjectVerifiesOpenAPISourcesAndGeneratedIndex(t *testing.T) {
 	}
 	if len(state.Sources) != 1 || state.Sources[0].Name != "example" || state.OpenAPI.Digest == "" {
 		t.Fatalf("unexpected verified state: %+v", state)
+	}
+	if len(state.Metadata.Modules) != 1 || state.Metadata.Modules[0] != (ModuleMetadata{Name: "example", Type: "module"}) {
+		t.Fatalf("unexpected parsed module metadata: %+v", state.Metadata.Modules)
 	}
 
 	sourcePath := filepath.Join(root, "api/openapi/example.yaml")
@@ -118,6 +121,34 @@ func TestLoadProjectRejectsInvalidMetadataAndRegistryDigest(t *testing.T) {
 			t.Fatalf("modified aggregate index was not rejected: %v", err)
 		}
 	})
+}
+
+func TestProjectMetadataSupportsTypedModulesAndLegacyEntries(t *testing.T) {
+	legacy := []byte("version: 1\ntemplate_version: 1\nname: shop\nmodule: example.com/shop\ndatabase: none\nauthentication: jwt\nauthorization: none\nredis: false\ntransport: grpc\nmodules:\n  - example\n")
+	metadata, err := parseProjectMetadata(legacy)
+	if err != nil || len(metadata.Modules) != 1 || metadata.Modules[0] != (ModuleMetadata{Name: "example", Type: "module"}) {
+		t.Fatalf("legacy module entry was not normalized: %+v, %v", metadata.Modules, err)
+	}
+	typed := []byte("version: 1\ntemplate_version: 1\nname: shop\nmodule: example.com/shop\ndatabase: mysql\nauthentication: jwt\nauthorization: none\nredis: false\ntransport: http\nmodules:\n  - name: example\n    type: module\n  - name: product\n    type: resource\n    spec: specs/product.yaml\n    field_version: 1\n")
+	metadata, err = parseProjectMetadata(typed)
+	if err != nil || len(metadata.Modules) != 2 || metadata.Modules[1].Type != "resource" {
+		t.Fatalf("typed module entries were not parsed: %+v, %v", metadata.Modules, err)
+	}
+}
+
+func TestProjectMetadataRejectsInvalidTypedModuleEntries(t *testing.T) {
+	for name, modules := range map[string]string{
+		"unknown field":            "  - name: example\n    type: module\n    ignored: true\n",
+		"resource path traversal":  "  - name: example\n    type: module\n  - name: product\n    type: resource\n    spec: specs/../../outside.yaml\n    field_version: 1\n",
+		"resource missing version": "  - name: example\n    type: module\n  - name: product\n    type: resource\n    spec: specs/product.yaml\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			content := "version: 1\ntemplate_version: 1\nname: shop\nmodule: example.com/shop\ndatabase: sqlite\nauthentication: jwt\nauthorization: none\nredis: false\ntransport: http\nmodules:\n" + modules
+			if _, err := parseProjectMetadata([]byte(content)); err == nil {
+				t.Fatal("invalid module metadata was accepted")
+			}
+		})
+	}
 }
 
 func TestLoadProjectHandlesProtocolSpecificOpenAPI(t *testing.T) {
