@@ -52,7 +52,7 @@ func New(settings config.Config, version string) (*App,error) {
 	})
 	rpcServer,err := do.Invoke[*rpc.Server](injector)
 	if err != nil { [[if .Redis]]_ = caching.Close();[[end]][[if ne .Database "none"]]_ = db.Close();[[end]] _ = logger.Sync(); return nil,err }
-	return &App{Server:gateway.New(settings,rpcServer,logger),RPC:rpcServer,Logger:logger,[[if ne .Database "none"]]Database:db,[[end]][[if .Redis]]Cache:caching,[[end]][[if eq .Authz "casbin"]]Authorization:authorization,[[end]]},nil
+	return &App{Server:gateway.New(settings,rpcServer,logger,gatewayModules()),RPC:rpcServer,Logger:logger,[[if ne .Database "none"]]Database:db,[[end]][[if .Redis]]Cache:caching,[[end]][[if eq .Authz "casbin"]]Authorization:authorization,[[end]]},nil
 }
 
 func (a *App) Run(ctx context.Context) error { rpc.InstallProtocolLogger(a.Logger); defer func(){ [[if .Redis]]_ = a.Cache.Close();[[end]][[if ne .Database "none"]]_ = a.Database.Close();[[end]] _ = a.Logger.Sync() }(); return a.Server.Run(ctx) }

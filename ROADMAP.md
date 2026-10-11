@@ -4,11 +4,11 @@
 
 文档基线、D1、D2、D3、D4（HTTP、纯 gRPC、dual、Gateway）与 D5 项目生成器已完成。四种协议均支持四种存储、可选 Redis 与 Casbin，共 64 种组合；MySQL、PostgreSQL、Redis 已完成真实服务验证，Gateway 生产容器验收通过。根命令已支持当前目录生成、能力选择、版本化元数据和 dry-run；业务模块与 CRUD 生成属于 D6。首次基线提交为 `01c8d6c`，本地分支为 `main`，未配置远端。主模块为 `github.com/setcreed/goseed`，工具链固定为 Go 1.26.4。
 
-纯 gRPC 已按 [协议契约](docs/template-grpc.md) 交付共享业务层、安全链、健康服务、TLS、示例客户端与公开 `pkg/api` 协议类型；dual 按 [双协议契约](docs/template-dual.md) 共享同一 Biz 与依赖，提供独立监听覆盖、启动失败回收和并发排空。Gateway 按 [Gateway 契约](docs/template-gateway.md) 将 HTTP 请求转发到真实 RPC 服务，复用认证、授权和业务层，并先排空 HTTP 再关闭 RPC。`Options.Transport` 支持 `http`（默认）、`grpc`、`dual` 与 `gateway`。Redis 与 Casbin 默认关闭，分别通过内部 Render 的 `Options.Redis`、`Options.Authz` 选择。缓存按 TTL 最终一致；Casbin 默认拒绝，SQL 策略显式迁移与事务导入，无数据库策略只读，离线更新后重启实例。项目生成命令以 [命令契约](docs/cli.md) 为准；D6 命令、字段、文件所有权和登记契约已确定，HTTP/dual 路由及 gRPC-only、dual、Gateway RPC Service/权限已接入登记索引，待接入 Gateway HTTP 映射与 OpenAPI 汇总。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
+纯 gRPC 已按 [协议契约](docs/template-grpc.md) 交付共享业务层、安全链、健康服务、TLS、示例客户端与公开 `pkg/api` 协议类型；dual 按 [双协议契约](docs/template-dual.md) 共享同一 Biz 与依赖，提供独立监听覆盖、启动失败回收和并发排空。Gateway 按 [Gateway 契约](docs/template-gateway.md) 将 HTTP 请求转发到真实 RPC 服务，复用认证、授权和业务层，并先排空 HTTP 再关闭 RPC。`Options.Transport` 支持 `http`（默认）、`grpc`、`dual` 与 `gateway`。Redis 与 Casbin 默认关闭，分别通过内部 Render 的 `Options.Redis`、`Options.Authz` 选择。缓存按 TTL 最终一致；Casbin 默认拒绝，SQL 策略显式迁移与事务导入，无数据库策略只读，离线更新后重启实例。项目生成命令以 [命令契约](docs/cli.md) 为准；D6 命令、字段、文件所有权和登记契约已确定，HTTP/dual 路由及四种协议的 RPC Service/权限、Gateway HTTP 映射已接入登记索引，OpenAPI 汇总与生成命令仍待实现。需求以 [产品需求](docs/requirements.md) 为准，实施顺序见 [实施方案](docs/implementation.md) ，默认模板契约见 [默认 HTTP 模板](docs/template-http.md) ，变体契约见 [可选模板](docs/template-options.md) 。
 
 ## 进行中
 
-D6 进行中：HTTP/dual 路由及 gRPC-only、dual、Gateway 的 RPC Service/权限已接入登记索引；HTTP、无数据库 HTTP、dual、gRPC-only、Gateway 代表项目集成通过。当前检查点是把 Gateway HTTP 映射和 OpenAPI 汇总也接入索引。
+D6 进行中：HTTP/dual 路由及四种协议的 RPC Service/权限、Gateway HTTP 映射已接入登记索引；HTTP、无数据库 HTTP、dual、gRPC-only、Gateway 代表项目集成通过。当前检查点是把各模块 OpenAPI 文档确定性汇总进登记索引。
 
 ## 待开始
 
@@ -24,9 +24,11 @@ D6 进行中：HTTP/dual 路由及 gRPC-only、dual、Gateway 的 RPC Service/�
 - 跟踪：go-redis 的纯取消 issue 仍开放；当前明确短命令预算、关闭命令与拨号重试，受控连接及真实服务取消已通过，但不承诺瞬时中断或全部取消竞争已消除。官方证据见 [依赖核验](docs/dependencies.md) 。
 - 待核验：pgx 缓冲响应与取消竞争的人工延迟 Write 场景；基础运行中 deadline 与随后池复用已通过，未声明解决上游报告。官方证据与版本边界见 [依赖核验](docs/dependencies.md) 。
 - 待确认：goseed 自身许可证；仅在公开发布前必须确定。主模块已确定为 `github.com/setcreed/goseed`，Go 工具链固定为 1.26.4。
-- 待实现：Gateway HTTP 映射、OpenAPI 汇总、D6 严格 YAML 解析与 `gen module`／`gen resource` 生成计划；目前 Gateway 映射仍静态绑定示例 API。
+- 待实现：OpenAPI 汇总、D6 严格 YAML 解析与 `gen module`／`gen resource` 生成计划。Gateway HTTP 映射及 query/body 输入规则已由模块登记描述驱动。
 
 ## 最近完成
+
+- 2026-10-11 23:24 D6 Gateway HTTP 登记接入：Gateway 启动组装从 `modules_gen.go` 读取模块名、路径、query 参数、JSON body 方法和 gRPC-Gateway 注册回调；请求日志路由与 query 校验使用同一登记描述，移除 Handler 对示例路径和字段的绑定。SQLite 与无数据库 Gateway 代表项目通过集成验证；OpenAPI 汇总及 D6 命令仍未实现。
 
 - 2026-10-11 23:17 D6 RPC 登记接入：gRPC-only、dual 与 Gateway 的启动组装改用 `modules_gen.go` 返回的 RPC Service 注册回调和 FullMethod 权限映射；HTTP-only 渲染不带 gRPC 登记依赖。
 

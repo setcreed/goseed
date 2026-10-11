@@ -32,7 +32,8 @@ func fixture(t *testing.T,release <-chan struct{})(*Server,*testHandler,string){
  settings:=config.Config{HTTP:config.HTTP{Address:"127.0.0.1:0",RequestTimeout:2*time.Second,ShutdownTimeout:200*time.Millisecond,MaxBodyBytes:1024},GRPC:config.GRPC{Address:"127.0.0.1:0",RequestTimeout:2*time.Second,ShutdownTimeout:200*time.Millisecond,MaxRecvBytes:1024,MaxSendBytes:4096,MaxHeaderBytes:4096,MaxConcurrentStreams:16}}
  handler:=&testHandler{entered:make(chan struct{}),aborted:make(chan struct{}),release:release}
  service,err:=rpc.New(settings.GRPC,&rpc.Readiness{},zap.NewNop(),jwt,map[string]string{"/example.v1.ExampleService/[[if eq .Database "none"]]Greet[[else]]Get[[end]]":"read"},func(r grpc.ServiceRegistrar){api.RegisterExampleServiceServer(r,handler)}[[if eq .Authz "casbin"]],allowGateway{}[[end]]);if err!=nil{t.Fatal(err)};t.Cleanup(service.Stop)
- return New(settings,service,zap.NewNop()),handler,token
+	registration:=Registration{Name:"example",Path:"/v1/examples",Queries:map[string][]string{"GET":{[[if eq .Database "none"]]"name"[[else]]"page","page_size"[[end]]}},BodyMethods:map[string]bool{[[if ne .Database "none"]]"POST":true,"PATCH":true[[end]]},Register:api.RegisterExampleServiceHandler}
+	return New(settings,service,zap.NewNop(),[]Registration{registration}),handler,token
 }
 func listen(t *testing.T)net.Listener{t.Helper();listener,err:=net.Listen("tcp","127.0.0.1:0");if err!=nil{t.Fatal(err)};t.Cleanup(func(){_ = listener.Close()});return listener}
 func await(t *testing.T,signal <-chan struct{}){t.Helper();select{case <-signal:case <-time.After(3*time.Second):t.Fatal("gateway timed out")}}
@@ -77,9 +78,11 @@ func TestUnexpectedRPCServeReturnStopsHTTP(t *testing.T){
 }
 
 func TestBodyAndQueryBoundaries(t *testing.T){
- for _,body:=range []string{`{"name":"a","name":"b"}`,`{"name":null}`,`{"id":2}`,`{} {}`,`[]`,`{"unknown":true}`,"{\"name\":\"\xff\"}"}{if validBody([]byte(body)){t.Fatal("invalid body accepted")}}
- for _,body:=range []string{`{"name":"valid"}`,`{"description":"","enabled":false}`,`{}`}{if !validBody([]byte(body)){t.Fatal("valid body rejected")}}
- for _,query:=range []string{"unknown=x","[[if eq .Database "none"]]name[[else]]page[[end]]=1&[[if eq .Database "none"]]name[[else]]page[[end]]=2","%zz=x"}{r,err:=http.NewRequest("GET","http://localhost/v1/examples?"+query,nil);if err!=nil{t.Fatal(err)};if validateQuery(r)==nil{t.Fatal("invalid query accepted")}}
+	for _,body:=range []string{`{"name":"a","name":"b"}`,`{"name":null}`,`{} {}`,`[]`,"{\"name\":\"\xff\"}"}{if validBody([]byte(body)){t.Fatal("invalid body accepted")}}
+	for _,body:=range []string{`{"name":"valid"}`,`{"field":"value"}`,`{}`}{if !validBody([]byte(body)){t.Fatal("valid body rejected")}}
+	registration:=Registration{Path:"/v1/examples",Queries:map[string][]string{"GET":{[[if eq .Database "none"]]"name"[[else]]"page","page_size"[[end]]}}}
+	for _,query:=range []string{"unknown=x","[[if eq .Database "none"]]name[[else]]page[[end]]=1&[[if eq .Database "none"]]name[[else]]page[[end]]=2","%zz=x"}{r,err:=http.NewRequest("GET","http://localhost/v1/examples?"+query,nil);if err!=nil{t.Fatal(err)};if validateQuery(r,registration)==nil{t.Fatal("invalid query accepted")}}
+	item,err:=http.NewRequest("GET","http://localhost/v1/examples/1?page=1",nil);if err!=nil{t.Fatal(err)};if validateQuery(item,registration)==nil{t.Fatal("collection query accepted on item route")}
 }
 
 func TestWildcardTargetPreservesConfiguredAddressFamily(t *testing.T){

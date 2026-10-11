@@ -31,6 +31,9 @@ func TestGatewayPrunesHTTPAndMapsOnlySelectedBusiness(t *testing.T) {
 						t.Fatal("missing Gateway file", path)
 					}
 				}
+				if !bytes.Contains(plan["internal/apiserver/bootstrap/modules_gen.go"], []byte("gatewayModules")) || bytes.Contains(plan["internal/pkg/gateway/handler.go"], []byte("/v1/examples")) {
+					t.Fatal("Gateway route registration is not module-driven")
+				}
 				var document struct {
 					Swagger string                    `json:"swagger"`
 					Paths   map[string]map[string]any `json:"paths"`

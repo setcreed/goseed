@@ -20,8 +20,8 @@ import (
  healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
-type Server struct { settings config.Config; rpc *rpc.Server; logger *zap.Logger }
-func New(settings config.Config, service *rpc.Server, logger *zap.Logger)*Server{return &Server{settings:settings,rpc:service,logger:logger}}
+type Server struct { settings config.Config; rpc *rpc.Server; logger *zap.Logger; modules []Registration }
+func New(settings config.Config, service *rpc.Server, logger *zap.Logger, modules []Registration)*Server{return &Server{settings:settings,rpc:service,logger:logger,modules:modules}}
 
 func(s *Server)Run(ctx context.Context)error{
  if err:=ctx.Err();err!=nil{s.rpc.Stop();return err}
@@ -43,7 +43,7 @@ func(s *Server)Serve(ctx context.Context,httpListener,grpcListener net.Listener)
   response,err:=healthpb.NewHealthClient(connection).Check(ctx,&healthpb.HealthCheckRequest{})
   if err!=nil||response.Status!=healthpb.HealthCheckResponse_SERVING{return errors.New("RPC dependency unavailable")};return nil
  }}
- handler,err:=NewHandler(connection,s.settings.HTTP,ready,s.logger)
+ handler,err:=NewHandler(connection,s.settings.HTTP,ready,s.logger,s.modules)
  if err!=nil{s.rpc.Stop();return err}
  httpServer,err:=server.New(handler,s.settings.HTTP,ready,s.logger)
  if err!=nil{s.rpc.Stop();return err}
