@@ -176,4 +176,4 @@ fields:
 
 `goseed.yaml` 记录元数据版本、模板版本、项目名、模块路径、数据库、JWT、授权、Redis、协议和初始 `example` 模块；业务服务不依赖或读取该文件。该元数据供后续业务生成器检查能力兼容性。
 
-根命令生成项目后，README 列出实际可执行的命令；`gen module` 已提供业务骨架生成，`gen resource` 仍只有内部只读目标计划，完整 CLI 与 CRUD 按施工清单继续实施。
+根命令生成项目后，README 列出实际可执行的命令；`gen module` 已提供业务骨架生成。资源阶段已提供内部 CRUD 核心与 HTTP/dual 适配器、工厂、Swagger 源和模块文档渲染，但 `gen resource` 仍未开放写入：gRPC/Gateway 适配、登记与索引安全刷新、完整写入和公共 CLI 按施工清单继续实施。

@@ -10,7 +10,7 @@ Go 工具链固定为 **1.26.4**，主模块为 **`github.com/setcreed/goseed`**
 
 内部模板渲染入口为 `internal/templates.Default` 与 `Render(Project, Options)`，返回校验后的文件计划，展开项目名称及模块路径，并格式化 Go 源码。`Project.Name` 与 `Project.Module` 分别指定项目名和 Go 模块路径，二者独立校验，不要求名称与模块路径末段相同。渲染不联网、不直接写入文件。
 
-内部 `generator.PrepareResource` 已提供只读资源目标计划：校验 spec、当前组装入口、协议工具、迁移版本和文件冲突，预览输出目标，并在输入变化后拒绝旧计划。`CoreFiles()` 返回协议无关的 Model、Biz、完整 Store 与测试，支持按主体隔离的 CRUD、字段出现性、零值更新、Unicode 校验、int64、分页、UTC DTO 与更新事务回滚；选择 Redis 时仅检查共享依赖，不生成新缓存。`SchemaStore()` 保留只读 schema 原型，不能与完整 Store 混用；选择迁移时 `MigrationDraft()` 返回当前方言 SQL 草稿。查询均返回内容副本，不写文件、不连接数据库。资源 Handler、完整工厂、Write 和公共 CLI 尚未接入；边界见 [资源接入方案](docs/resource-generation.md) 。
+内部 `generator.PrepareResource` 已提供只读资源目标计划：校验 spec、当前组装入口、协议工具、迁移版本和文件冲突，预览输出目标，并在输入变化后拒绝旧计划。`CoreFiles()` 返回协议无关的 Model、Biz、完整 Store 与测试；HTTP/dual 项目的 `HTTPFiles()` 返回严格 JSON Handler、检查 schema 的模块工厂、Swagger 源和模块说明。模板生成行为覆盖主体隔离 CRUD、字段出现性、零值更新、Unicode 校验、int64、分页、UTC DTO 与更新事务回滚；选择 Redis 时仅检查共享依赖，不生成新缓存。`SchemaStore()` 保留只读 schema 原型，不能与完整 Store 混用；选择迁移时 `MigrationDraft()` 返回当前方言 SQL 草稿。查询均返回内容副本，不写文件、不连接数据库。资源写入、协议登记/汇总刷新、gRPC/Gateway Handler 与公共 CLI 尚未接入；R06 HTTP Handler 已在真实 SQLite 路由栈验证，边界见 [资源接入方案](docs/resource-generation.md) 。
 
 SQL 模板从嵌入迁移推导期望版本，启动只读核对完整已应用集合；显式迁移拒绝未知版本和中间断档。资源 schema 原型检查保留列、类型、非空、单列自增主键、长度与 owner 排序规则；启动组装向模块工厂提供限时 Context。人工 schema 需遵循草稿结构，检查不推断任意 SQL 等价，也不自动修表。MySQL DDL 失败可能保留部分 schema，需审阅后处理。
 

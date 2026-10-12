@@ -38,6 +38,24 @@ func TestResourceSchemaDraft(t *testing.T) {
 			if !bytes.Equal(plan.CoreFiles()[0].Content, first) {
 				t.Fatal("caller changed business sources")
 			}
+			httpFiles := plan.HTTPFiles()
+			if len(httpFiles) != 5 {
+				t.Fatalf("HTTP files missing: %d", len(httpFiles))
+			}
+			var handler bool
+			for _, file := range httpFiles {
+				if file.Path == "internal/apiserver/handler/http/orders/handler.go" {
+					handler = true
+				}
+			}
+			if !handler {
+				t.Fatal("resource HTTP handler missing")
+			}
+			firstHTTP := bytes.Clone(httpFiles[0].Content)
+			httpFiles[0].Content[0] = 'X'
+			if !bytes.Equal(plan.HTTPFiles()[0].Content, firstHTTP) {
+				t.Fatal("caller changed HTTP sources")
+			}
 			if !bytes.Contains(store.Content, []byte("CheckResourceSchema(ctx, s.db")) {
 				t.Fatal("read-only schema store missing")
 			}

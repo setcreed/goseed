@@ -53,6 +53,10 @@ R05 的内部 `CoreFiles()` 提供 Model、Biz、完整 SQL Store 与对应测�
 
 R05 不生成完整协议工厂；R06/R07 在构造 Biz 前调用完整 Store 的 CheckSchema，并复用同一个 Store/Biz。纯 schema 预览 `SchemaStore()` 保持 R04 原型，不应与 CoreFiles 的完整 Store 混合写入同一路径。Go 字段名还须避开 ID、Owner、CreatedAt、UpdatedAt、TableName，不能只按 YAML 原名检查保留字段。
 
+R06 的 HTTP/dual 渲染由 `RenderResourceHTTP` 与 `ResourcePlan.HTTPFiles()` 提供，包括 Handler 与输入边界测试、开发者维护的单次组装工厂、`api/openapi/<name>.yaml` 源和 `docs/<name>.md`。Handler 注册 POST/GET/PATCH/DELETE，并复用既有 JWT、请求 ID、限流/超时、访问日志、错误响应与 Casbin 路由中间件；工厂从共享数据库创建资源 Store，先以启动 Context 调用只读 `CheckSchema`，再创建 Biz 与 Handler。开启 Redis 时 Biz 注入共享 Client 的检查接口，不另建缓存。JSON 先验证 UTF-8、对象形状、顶层重复/未知键与 null，再反序列化到强类型 DTO；owner 不在字段允许列表。ID 和分页范围与 Biz 一致，百分号错误的 query 编码拒绝。成功状态为创建 201、查询/更新 200、删除 204。
+
+R06 Swagger 源只声明资源 paths 与操作级 Bearer 安全，继承基础源中的共享元信息；准备计划将新源与既有所有模块源交给 `openapi.Merge` 做重复路径、operationId 与定义冲突检查。生成器不覆盖旧文档源，也不在 R06 写入合并索引或登记文件。模块说明从同一资源字段声明列出创建必需性、约束、端点、分页规则和可执行 curl 示例。真实 SQLite 路由集成测试使用两个资源及两个大小写不同的主体，验证 JWT、CRUD、主体隔离、零值更新和无效 JSON；R09 再接入登记投影与安全多文件写入，公共 `gen resource` 暂不可用。
+
 ## 纯模块描述与权限目录
 
 模块工厂文件增加不访问外部服务的 `<name>Permissions() modulePermissions`，描述所选协议的 HTTP method → operation 与 RPC FullMethod → operation。模块工厂与生成登记从同一函数取值，避免另写一份权限字符串；内置模块由固定启动层提供相同纯描述。描述只能声明权限，不构造 Store/Biz/Handler，不访问配置、数据库或 Redis。

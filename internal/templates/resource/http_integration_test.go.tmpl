@@ -1,0 +1,63 @@
+package apiserver
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	ordersbiz "[[.Module]]/internal/apiserver/biz/orders"
+	ordershttp "[[.Module]]/internal/apiserver/handler/http/orders"
+	ordersstore "[[.Module]]/internal/apiserver/store/orders"
+	notesbiz "[[.Module]]/internal/apiserver/biz/notes"
+	noteshttp "[[.Module]]/internal/apiserver/handler/http/notes"
+	notesstore "[[.Module]]/internal/apiserver/store/notes"
+	"[[.Module]]/internal/pkg/auth"
+	"[[.Module]]/internal/pkg/config"
+	"[[.Module]]/internal/pkg/database"
+	"[[.Module]]/internal/pkg/server"
+	"go.uber.org/zap"
+)
+
+[[if eq .Authz "casbin"]]type generatedResourceAuthorizer struct{}
+func (generatedResourceAuthorizer) Authorize(context.Context,string,string,string) error { return nil }
+[[end]][[if .Redis]]type generatedResourceDependency struct{}
+func (generatedResourceDependency) Check(ctx context.Context) error { return ctx.Err() }[[end]]
+
+func TestGeneratedResourceHTTP(t *testing.T) {
+	ctx := context.Background()
+	db, err := database.Open(ctx, config.Database{Path:filepath.Join(t.TempDir(), "resources.db"), MaxOpen:4, MaxIdle:2, BusyTimeout:time.Second, SlowThreshold:time.Second}, zap.NewNop())
+	if err != nil { t.Fatal(err) }; defer func(){ _ = db.Close() }()
+	if err := db.Migrate(ctx); err != nil { t.Fatal(err) }
+	orders := ordersstore.New(db.DB); notes := notesstore.New(db.DB)
+	if err := orders.CheckSchema(ctx); err != nil { t.Fatal(err) }; if err := notes.CheckSchema(ctx); err != nil { t.Fatal(err) }
+	secret := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("s", 32)))
+	jwt, err := auth.New(config.JWT{Secret:secret, Issuer:"test", Audience:"test-api", TTL:time.Minute}); if err != nil { t.Fatal(err) }
+	alice, err := jwt.Issue("Alice", time.Minute); if err != nil { t.Fatal(err) }; bob, err := jwt.Issue("alice", time.Minute); if err != nil { t.Fatal(err) }
+	modules := []HTTPModule{
+		{Name:"orders", Path:"/v1/orders", Operations:map[string]string{"GET":"read","POST":"create","PATCH":"update","DELETE":"delete"}, Register:ordershttp.New(ordersbiz.New(orders[[if .Redis]],generatedResourceDependency{}[[end]])).Register},
+		{Name:"notes", Path:"/v1/notes", Operations:map[string]string{"GET":"read","POST":"create","PATCH":"update","DELETE":"delete"}, Register:noteshttp.New(notesbiz.New(notes[[if .Redis]],generatedResourceDependency{}[[end]])).Register},
+	}
+	ready := &server.Readiness{CheckDependency:db.Pool.PingContext}
+	router := NewRouter(config.HTTP{RequestTimeout:time.Second, MaxBodyBytes:4096}, ready, zap.NewNop(), jwt, modules[[if eq .Authz "casbin"]], generatedResourceAuthorizer{}[[end]])
+	server := httptest.NewServer(router); defer server.Close()
+	request := func(method,path,body,token string) *httptest.ResponseRecorder { t.Helper(); req,err:=http.NewRequest(method,server.URL+path,strings.NewReader(body)); if err!=nil { t.Fatal(err) }; req.Header.Set("Content-Type","application/json"); if token!="" { req.Header.Set("Authorization","Bearer "+token) }; response,err:=server.Client().Do(req); if err!=nil { t.Fatal(err) }; defer func(){ _ = response.Body.Close() }(); result:=httptest.NewRecorder(); result.Code=response.StatusCode; payload,err:=io.ReadAll(response.Body); if err!=nil { t.Fatal(err) }; result.Body.Write(payload); return result }
+	if response:=request(http.MethodGet,"/v1/orders", "", ""); response.Code!=http.StatusUnauthorized { t.Fatalf("missing JWT: %d",response.Code) }
+	created := request(http.MethodPost,"/v1/orders",`[[.CreateJSON]]`,alice)
+	if created.Code!=http.StatusCreated { t.Fatalf("create orders: %d %s",created.Code,created.Body.String()) }
+	var item struct { ID uint64 `json:"id"` }; if err:=json.Unmarshal(created.Body.Bytes(),&item);err!=nil||item.ID==0||strings.Contains(created.Body.String(),`"owner":`){t.Fatalf("invalid or private response: %s",created.Body.String())}
+	path := "/v1/orders/"+strconv.FormatUint(item.ID,10)
+	if response:=request(http.MethodGet,path,"",bob);response.Code!=http.StatusNotFound{t.Fatalf("cross-subject read: %d",response.Code)}
+	patch := request(http.MethodPatch,path,`[[.ZeroJSON]]`,alice);if patch.Code!=http.StatusOK{t.Fatalf("zero-value update: %d %s",patch.Code,patch.Body.String())}
+	if response:=request(http.MethodPost,"/v1/notes",`[[.CreateJSON]]`,alice);response.Code!=http.StatusCreated{t.Fatalf("create notes: %d %s",response.Code,response.Body.String())}
+	for _,body:=range []string{`{"owner":"alice"}`,`{"[[ (index .Fields 0).Name ]]":null}`,`{"[[ (index .Fields 0).Name ]]":1,"[[ (index .Fields 0).Name ]]":2}`,`{"unknown":1}`} { if response:=request(http.MethodPost,"/v1/orders",body,alice);response.Code!=http.StatusBadRequest{t.Fatalf("invalid body %s: %d",body,response.Code)} }
+	if response:=request(http.MethodDelete,path,"",bob);response.Code!=http.StatusNotFound{t.Fatalf("cross-subject delete: %d",response.Code)}
+	if response:=request(http.MethodDelete,path,"",alice);response.Code!=http.StatusNoContent{t.Fatalf("delete: %d %s",response.Code,response.Body.String())}
+}

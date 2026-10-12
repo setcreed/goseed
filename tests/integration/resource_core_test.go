@@ -20,7 +20,7 @@ var coreFields = []templates.ResourceField{
 func TestResourceCoreProjects(t *testing.T) {
 	for _, optional := range []bool{false, true} {
 		t.Run(fmt.Sprint(optional), func(t *testing.T) {
-			options := templates.Options{Database: "sqlite", Redis: optional}
+			options := templates.Options{Database: "sqlite", Redis: optional, Transport: "http"}
 			if optional {
 				options.Authz = "casbin"
 			}
@@ -32,7 +32,9 @@ func TestResourceCoreProjects(t *testing.T) {
 		{{SchemaField: templates.SchemaField{Name: "number", Type: "int64"}, Required: true}},
 		{{SchemaField: templates.SchemaField{Name: "owner_info", Type: "string", MaxLength: 1}, Required: true}},
 	} {
-		t.Run(fields[0].Name, func(t *testing.T) { verifyResourceCoreProject(t, templates.Options{Database: "sqlite"}, fields, nil) })
+		t.Run(fields[0].Name, func(t *testing.T) {
+			verifyResourceCoreProject(t, templates.Options{Database: "sqlite", Transport: "http"}, fields, nil)
+		})
 	}
 }
 
@@ -92,6 +94,13 @@ func verifyResourceCoreProject(t *testing.T, options templates.Options, fields [
 			t.Fatal(err)
 		}
 		files = append(files, core...)
+		if options.Transport == "http" || options.Transport == "dual" {
+			httpFiles, err := templates.RenderResourceHTTP(project, options, name, fields)
+			if err != nil {
+				t.Fatal(err)
+			}
+			files = append(files, httpFiles...)
+		}
 		schema := make([]templates.SchemaField, len(fields))
 		for j, field := range fields {
 			schema[j] = field.SchemaField
@@ -101,6 +110,36 @@ func verifyResourceCoreProject(t *testing.T, options templates.Options, fields [
 			t.Fatal(err)
 		}
 		files = append(files, templates.File{Path: fmt.Sprintf("migrations/%05d_%s.sql", base+i+1, name), Content: sql})
+	}
+	if options.Transport == "http" || options.Transport == "dual" {
+		registry, err := templates.RenderWithModules(project, options, []templates.ModuleEntry{{Name: "example"}, {Name: "orders", Type: "resource"}, {Name: "notes", Type: "resource"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range registry {
+			if file.Path != "internal/apiserver/bootstrap/modules_gen.go" {
+				continue
+			}
+			for i := range files {
+				if files[i].Path == file.Path {
+					files[i] = file
+					break
+				}
+			}
+		}
+	}
+	if options.Database == "sqlite" && options.Transport == "http" {
+		integrationFile, err := templates.RenderResourceHTTPIntegrationTest(project, options, fields)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(directory, integrationFile.Path)
+		if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, integrationFile.Content, 0644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	for _, file := range files {
 		path := filepath.Join(directory, file.Path)
@@ -116,6 +155,13 @@ func verifyResourceCoreProject(t *testing.T, options templates.Options, fields [
 	}
 	verifyReadonly(t, directory)
 	output := runWith(t, directory, env, "go", "test", "-mod=readonly", "-race", "-count=1", "-v", "./internal/apiserver/model", "./internal/apiserver/biz/orders", "./internal/apiserver/biz/notes", "./internal/apiserver/store/orders", "./internal/apiserver/store/notes")
+	if options.Transport == "http" || options.Transport == "dual" {
+		output = runWith(t, directory, env, "go", "test", "-mod=readonly", "-race", "-count=1", "./internal/apiserver/handler/http/orders", "./internal/apiserver/handler/http/notes")
+		runWith(t, directory, env, "go", "test", "-mod=readonly", "-run", "^$", "./internal/apiserver/bootstrap")
+	}
+	if options.Database == "sqlite" && options.Transport == "http" {
+		runWith(t, directory, env, "go", "test", "-mod=readonly", "-race", "-count=1", "-run", "^TestGeneratedResourceHTTP$", "./internal/apiserver")
+	}
 	if env != nil && strings.Contains(string(output), "--- SKIP:") {
 		t.Fatal("external resource verification skipped")
 	}

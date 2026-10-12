@@ -210,6 +210,8 @@ Redis 验证命中、失效、回源、超时、连接故障、必需状态失�
 
 **验收与交付**：文件 SQLite 实际进程验证两个资源、两主体、JWT/Casbin 和输入边界，增加第二资源后旧模块仍可调用、原字节保持。纯 HTTP 不带 RPC 依赖，readonly test/vet/lint 通过后独立 `feat:` 提交。
 
+**R06 当前交付**：HTTP/dual Handler、严格 JSON/ID/分页边界、一次性模块工厂、Swagger 请求/响应 schema 与字段说明已由只读渲染入口提供；新 Swagger 源会和既有来源合并校验。五类字段形态经过 SQLite 与两资源请求验证，基础方案和 Casbin 中间件接线通过本机回环 HTTP Server 验收。R06 不改写运行登记或旧源码；新资源注册、写入时旧文件保留与完整 `gen resource` 命令留给 R09 集成验证，Casbin 策略与运行服务的最终全链路回归按 R10 执行。
+
 #### D6-R07：gRPC、dual 与多模块协议复现
 
 **目标与范围**：增加资源 Proto、RPC Handler、工厂权限映射，以及升级 gRPC/dual 的项目内协议脚本。当前 `variants/grpc/common/scripts/proto.py.tmpl` 只处理内置模块，需要支持多模块。

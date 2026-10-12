@@ -29,7 +29,7 @@ goseed 是面向中小型 Go 后端业务的项目与业务代码生成器。生
 - `cmd/goseed/`：生成器入口，不承载生成逻辑。
 - `internal/cli/`：命令解析、用户输出和参数校验。
 - `internal/generator/`：生成计划、冲突检查、渲染、文件写入与模块登记。
-- `internal/templates/`：嵌入模板，按基础项目和可选能力组织；`resource/core/` 保存协议无关的资源 Model/Biz/Store 与测试，仅通过资源渲染入口选用，不进入空白项目的初始业务。
+- `internal/templates/`：嵌入模板，按基础项目和可选能力组织；`resource/core/` 保存协议无关的资源 Model/Biz/Store 与测试，`resource/` 保存按协议选择的适配器模板，仅通过资源渲染入口选用，不进入空白项目的初始业务。
 - `tests/integration/`：对实际生成项目执行编译、调用和组合验证。
 - `tests/compatibility/`：独立 Go 模块，核验候选运行依赖；策略适配原型仅用于技术验证，不是正式业务实现。
 - `docs/`：长期设计与操作文档；新增文档需从本文件或 README 提供入口。

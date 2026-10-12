@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/setcreed/goseed/internal/openapi"
 	"github.com/setcreed/goseed/internal/templates"
 )
 
@@ -48,6 +49,7 @@ type ResourcePlan struct {
 	schemaStore    templates.File
 	migrationDraft *templates.File
 	coreFiles      []templates.File
+	httpFiles      []templates.File
 }
 
 // PrepareResource validates resource inputs and plans output paths without
@@ -187,6 +189,24 @@ func PrepareResource(root, name string, options ResourceOptions) (ResourcePlan, 
 	plan.coreFiles, err = templates.RenderResourceCore(templates.Project{Name: state.Metadata.Name, Module: state.Metadata.Module}, templates.Options{Database: state.Metadata.Database, Transport: state.Metadata.Transport, Authz: state.Metadata.Authorization, Redis: state.Metadata.Redis}, name, coreFields)
 	if err != nil {
 		return ResourcePlan{}, err
+	}
+	if state.Metadata.Transport == "http" || state.Metadata.Transport == "dual" {
+		plan.httpFiles, err = templates.RenderResourceHTTP(templates.Project{Name: state.Metadata.Name, Module: state.Metadata.Module}, templates.Options{Database: state.Metadata.Database, Transport: state.Metadata.Transport, Authz: state.Metadata.Authorization, Redis: state.Metadata.Redis}, name, coreFields)
+		if err != nil {
+			return ResourcePlan{}, err
+		}
+		sources := make([]openapi.Source, 0, len(state.Sources)+1)
+		for _, source := range state.Sources {
+			sources = append(sources, openapi.Source{Name: source.Name, YAML: source.YAML})
+		}
+		for _, file := range plan.httpFiles {
+			if file.Path == "api/openapi/"+name+".yaml" {
+				sources = append(sources, openapi.Source{Name: name, YAML: file.Content})
+			}
+		}
+		if _, err := openapi.Merge(sources); err != nil {
+			return ResourcePlan{}, fmt.Errorf("merge resource OpenAPI source: %w", err)
+		}
 	}
 	if options.Migration {
 		path, err := nextResourceMigration(name, plan.migrations)
@@ -379,6 +399,17 @@ func (p ResourcePlan) CoreFiles() []templates.File {
 	}
 	return files
 }
+
+// HTTPFiles returns the HTTP adapter, developer-owned factory, module guide,
+// and module Swagger source as independent copies. It does not write or update
+// the project registry or merged OpenAPI index.
+func (p ResourcePlan) HTTPFiles() []templates.File {
+	files := make([]templates.File, len(p.httpFiles))
+	for i, file := range p.httpFiles {
+		files[i] = templates.File{Path: file.Path, Content: append([]byte(nil), file.Content...)}
+	}
+	return files
+}
 func (p ResourcePlan) MigrationDraft() (templates.File, bool) {
 	if p.migrationDraft == nil {
 		return templates.File{}, false
@@ -404,7 +435,13 @@ func (p ResourcePlan) Report(w io.Writer) error {
 	for _, conflict := range p.conflicts {
 		fmt.Fprintf(&output, "  ! %s\n", conflict)
 	}
-	output.WriteString("Target preview only: protocol rendering and writing are not available yet.\nBusiness core is available through CoreFiles.\nNo files written.\n")
+	output.WriteString("Target preview only: complete generation and writing are not available yet.\nBusiness core is available through CoreFiles.\n")
+	if len(p.httpFiles) > 0 {
+		output.WriteString("HTTP adapter, factory, module guide, and Swagger source are available through HTTPFiles.\n")
+	} else {
+		output.WriteString("Selected protocol adapter rendering is not available yet.\n")
+	}
+	output.WriteString("No files written.\n")
 	_, err := output.WriteTo(w)
 	return err
 }

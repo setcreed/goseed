@@ -1,0 +1,41 @@
+package [[.Name]]
+
+import (
+	"bytes"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+)
+
+func TestStrictJSONInput(t *testing.T) {
+	gin.SetMode(gin.ReleaseMode)
+	valid := `{[[range $i,$field := .Fields]][[if $i]],[[end]]"[[$field.Name]]":[[if eq $field.Type "string"]]"x"[[else if eq $field.Type "bool"]]true[[else]]1[[end]][[end]]}`
+	cases := []struct { body string; ok bool }{
+		{valid, true}, {`{"owner":"other"}`, false}, {`{"unknown":1}`, false},
+		{`{"[[ (index .Fields 0).Name ]]":null}`, false},
+		{`{"[[ (index .Fields 0).Name ]]":1,"[[ (index .Fields 0).Name ]]":2}`, false},
+		{`[]`, false}, {`null`, false}, {`{} {}`, false},
+	}
+	for _, test := range cases {
+		request := httptest.NewRequest("POST", "/", bytes.NewBufferString(test.body)); request.Header.Set("Content-Type", "application/json")
+		context, _ := gin.CreateTestContext(httptest.NewRecorder()); context.Request = request
+		var destination map[string]any
+		err := decode(context, &destination)
+		if (err == nil) != test.ok { t.Fatalf("body %q: err=%v, want ok=%t", test.body, err, test.ok) }
+	}
+}
+
+func TestResourceIDsAndPagination(t *testing.T) {
+	gin.SetMode(gin.ReleaseMode)
+	for _, raw := range []string{"", "0", "-1", "1.0", "9223372036854775808"} {
+		context, _ := gin.CreateTestContext(httptest.NewRecorder()); context.Params = gin.Params{{Key:"id",Value:raw}}
+		if _, err := parseID(context); err == nil { t.Fatalf("accepted id %q", raw) }
+	}
+	for _, query := range []string{"?page=0", "?page=1&page=2", "?unknown=1", "?page_size=101", "?page=%"} {
+		context, _ := gin.CreateTestContext(httptest.NewRecorder()); context.Request = httptest.NewRequest("GET", "/"+query, nil)
+		if _, _, err := parsePage(context); err == nil { t.Fatalf("accepted query %q", query) }
+	}
+	context, _ := gin.CreateTestContext(httptest.NewRecorder()); context.Request = httptest.NewRequest("GET", "/?page=2&page_size=10", nil)
+	page, size, err := parsePage(context); if err != nil || page != 2 || size != 10 { t.Fatalf("valid pagination: %d %d %v", page, size, err) }
+}
