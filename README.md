@@ -10,7 +10,9 @@ Go 工具链固定为 **1.26.4**，主模块为 **`github.com/setcreed/goseed`**
 
 内部模板渲染入口为 `internal/templates.Default` 与 `Render(Project, Options)`，返回校验后的文件计划，展开项目名称及模块路径，并格式化 Go 源码。`Project.Name` 与 `Project.Module` 分别指定项目名和 Go 模块路径，二者独立校验，不要求名称与模块路径末段相同。渲染不联网、不直接写入文件。
 
-内部 `generator.PrepareResource` 已提供只读资源目标计划：校验 spec、当前组装入口、协议工具、迁移版本和文件冲突，预览输出目标，并在输入变化后拒绝旧计划。该入口尚不渲染 CRUD、不提供 Write，也未接入公共 CLI；接口与接入边界见 [资源接入方案](docs/resource-generation.md) 。
+内部 `generator.PrepareResource` 已提供只读资源目标计划：校验 spec、当前组装入口、协议工具、迁移版本和文件冲突，预览输出目标，并在输入变化后拒绝旧计划。`SchemaStore()` 返回只读表结构核验源码，选择迁移时 `MigrationDraft()` 返回当前数据库方言 SQL 草稿和下一版本；均返回内容副本，不写文件、不连接数据库。该入口尚不渲染 CRUD、不提供 Write，也未接入公共 CLI；接口与接入边界见 [资源接入方案](docs/resource-generation.md) 。
+
+SQL 模板从嵌入迁移推导期望版本，启动只读核对完整已应用集合；显式迁移拒绝未知版本和中间断档。资源 schema 原型检查保留列、类型、非空、单列自增主键、长度与 owner 排序规则；启动组装向模块工厂提供限时 Context。人工 schema 需遵循草稿结构，检查不推断任意 SQL 等价，也不自动修表。MySQL DDL 失败可能保留部分 schema，需审阅后处理。
 
 模块工厂通过 `<name>Permissions()` 纯函数声明协议权限；启用 Casbin 时，启动和离线策略导入共用 `bootstrap.PermissionCatalog()`，显式接受已登记业务资源并默认拒绝未知权限。组装入口已升级到版本 2；旧项目缺入口或纯描述时拒绝继续生成，需要人工升级。使用与边界见 [授权契约](docs/template-options.md#casbin-可选能力) 。
 
@@ -70,7 +72,7 @@ make template-redis
 
 `make tools` 显式安装固定版本 linter 到 `.tools/bin/`。构建与检查使用项目 `.tmp/` 缓存，不安装全局工具，不自动改写已交付源码或依赖清单。`template-container` 实际构建默认与无数据库业务镜像，使用随机回环端口；默认模板用全新数据卷验证生产禁用开发签发、显式迁移、CRUD 与重启持久化，无数据库模板验证非 root、只读根文件系统、无数据卷、JWT 与重启；Casbin 文件策略镜像另验证默认拒绝、只读策略挂载和角色冒充拒绝。gRPC／dual／Gateway 无数据库 + Casbin 镜像验证生产 TLS、非 root、只读根文件系统、证书／策略只读挂载、健康调用、权限与重启；dual／Gateway 同时验证两个公开端口，Gateway 验证内部 RPC 的证书信任。结束清理本次容器、卷及测试镜像，普通检查不启动 Docker。
 
-普通检查同时实际渲染 MySQL、PostgreSQL 项目，执行 readonly 测试、vet、race、lint 与构建；没有专用服务时明确跳过其中的外部数据库用例。`template-db` 使用固定摘要的真实 MySQL 8.4.11、PostgreSQL 18.6，全新测试证书/数据卷、随机回环端口和隔离数据库；外部用例禁止跳过，依次验证 SQL 基线、Casbin v1 → v2 迁移升级，以及 gRPC／dual／Gateway + Casbin 实际调用。覆盖 CRUD、权限、事务与策略回滚、取消／连接复用、启动失败、日志脱敏、数据库 TLS 信任／主机名及重启持久化。结束仅清理本次资源，需要 Docker、Compose 与 OpenSSL。
+普通检查同时实际渲染 MySQL、PostgreSQL 项目，执行 readonly 测试、vet、race、lint 与构建；没有专用服务时明确跳过其中的外部数据库用例。`template-db` 使用固定摘要的真实 MySQL 8.4.11、PostgreSQL 18.6，全新测试证书/数据卷、随机回环端口和隔离数据库；外部用例禁止跳过，依次验证 SQL 基线、Casbin v1 → v2 迁移升级，以及 gRPC／dual／Gateway + Casbin 实际调用。追加迁移用例验证可选 Casbin 与两个资源表的顺序升级、schema 不兼容、owner 排序、Unicode 长度、32 字段宽表、失败迁移及重启；SQLite 对应用例由 `TestMigrationVersionProjects` 执行。覆盖 CRUD、权限、事务与策略回滚、取消／连接复用、启动失败、日志脱敏、数据库 TLS 信任／主机名及重启持久化。结束仅清理本次资源，需要 Docker、Compose 与 OpenSSL。
 
 普通检查也实际渲染无数据库项目，核对文件与依赖树裁剪、固定清单不变，执行 readonly 测试、vet、race、lint、本机构建与 Linux amd64 纯 Go 构建；真实服务进程覆盖初始化、迁移命令拒绝、JWT、输入边界、TLS/CORS、日志脱敏、重启和优雅退出。
 

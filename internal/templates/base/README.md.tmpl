@@ -45,7 +45,7 @@ APP_ENV=production APP_HTTP_ADDRESS=0.0.0.0:8080 ./bin/apiserver serve
 
 显式 `--config` 缺失会报错。若已有开发配置，生产启动还需设置 `APP_LOG_FORMAT=json`，并提供生产密钥。`serve --env production` 只覆盖环境，不替换密钥或日志配置。
 
-数据库启动检查迁移版本与 schema，就绪检查 Ping；[[if eq .Database "sqlite"]]文件默认以 0600 创建，目录以 0750 创建，每连接启用 WAL、外键与 busy timeout。SQLite 默认用于单实例，应为数据目录提供持久化存储和匹配的写入权限。[[else]]连接池、连接预算、连接寿命、空闲寿命和慢查询阈值见配置示例。默认 TLS 至少 1.2，校验服务端证书与 host，可用 `APP_DATABASE_CA_FILE` 增加私有 CA；生产拒绝关闭 TLS，开发关闭 TLS 时不能配置 CA。不接受自由 DSN，不记录凭据或原始连接错误。[[if eq .Database "mysql"]]使用 MySQL 8.4 的 utf8mb4 二进制排序规则；DDL 不能事务回滚，迁移失败须核对实际 schema 后处理。[[else]]文本使用 C 排序规则，迁移支持事务。[[end]][[end]]备份恢复、容量、账号权限及业务上线标准由部署方验证。
+数据库期望版本从嵌入 SQL 推导；启动只读核对完整迁移集合与 schema，未知版本、中间断档或缺少迁移会拒绝启动。显式 `migrate up` 只接受已应用集合为嵌入版本的有序前缀，不自动修复异常历史；`migrate status` 只读返回当前已应用最大版本，不代表 schema 已通过核验。就绪检查 Ping；[[if eq .Database "sqlite"]]文件默认以 0600 创建，目录以 0750 创建，每连接启用 WAL、外键与 busy timeout。SQLite 默认用于单实例，应为数据目录提供持久化存储和匹配的写入权限。[[else]]连接池、连接预算、连接寿命、空闲寿命和慢查询阈值见配置示例。默认 TLS 至少 1.2，校验服务端证书与 host，可用 `APP_DATABASE_CA_FILE` 增加私有 CA；生产拒绝关闭 TLS，开发关闭 TLS 时不能配置 CA。不接受自由 DSN，不记录凭据或原始连接错误。[[if eq .Database "mysql"]]使用 MySQL 8.4 的 utf8mb4 二进制排序规则；DDL 不能事务回滚，迁移失败须核对实际 schema 后处理。[[else]]文本使用 C 排序规则，迁移支持事务。[[end]][[end]]备份恢复、容量、账号权限及业务上线标准由部署方验证。
 
 HTTP 有请求体/Header 大小限制及超时预算。TLS 证书/私钥通过 `http.tls_cert/tls_key` 成对提供；CORS 仅接受 `http.allowed_origins` 中的确切来源；pprof 默认关闭，仅允许开发环境回环监听。
 

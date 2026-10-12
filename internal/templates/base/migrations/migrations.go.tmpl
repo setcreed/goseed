@@ -1,9 +1,31 @@
 package migrations
 
-import "embed"
+import (
+ "embed"
+ "fmt"
+ "io/fs"
+ "path"
+ "slices"
+ "strconv"
+ "strings"
+)
 
 // Files is the sole source for explicitly applied schema changes.
 //go:embed *.sql
 var Files embed.FS
 
-const Version int64 = [[if eq .Authz "casbin"]]2[[else]]1[[end]]
+// Versions derives the contract from the same SQL files that Goose applies.
+func Versions()([]int64,error){return versions(Files)}
+func ExpectedVersion()(int64,error){values,err:=Versions();if err!=nil{return 0,err};return values[len(values)-1],nil}
+
+func versions(source fs.FS)([]int64,error){
+ entries,err:=fs.ReadDir(source,".");if err!=nil{return nil,fmt.Errorf("cannot read embedded migrations: %w",err)}
+ values:=make([]int64,0,len(entries));seen:=make(map[int64]bool)
+ for _,entry:=range entries {
+  if path.Ext(entry.Name())!=".sql"{continue}
+  prefix,_,separated:=strings.Cut(entry.Name(),"_");version,err:=strconv.ParseInt(prefix,10,64)
+  if entry.IsDir()||!separated||err!=nil||version<1{return nil,fmt.Errorf("invalid migration filename %s",entry.Name())}
+  if seen[version]{return nil,fmt.Errorf("duplicate migration version %d",version)};seen[version]=true;values=append(values,version)
+ }
+ if len(values)==0{return nil,fmt.Errorf("no embedded SQL migrations")};slices.Sort(values);return values,nil
+}

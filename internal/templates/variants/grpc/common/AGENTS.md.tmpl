@@ -9,4 +9,4 @@
 - Context 贯穿调用，错误不披露 cause，日志不记录正文、主体或 metadata。[[if ne .Database "none"]]迁移显式执行，禁止 AutoMigrate。[[end]]
 - 验证入口 make check、make race，协议生成入口 make proto-tools 与 make proto-generate。外部服务测试使用本次随机隔离库，不修改已有业务库。
 
-模块扩展由固定启动入口调用 `newModuleServices(moduleDependencies)`，共享依赖只用于 Bootstrap 组装。`bootstrap/module_<name>.go` 为开发者维护的模块工厂，显式构造 Store、Biz 和 Handler，返回构造错误；双协议共用同一 Biz，模块不自行关闭应用共享池。`bootstrap/modules_gen.go` 是生成器维护的登记索引，不手工修改；自定义构造、HTTP 权限、RPC 权限与 Gateway 映射放在模块工厂中。
+模块扩展由固定启动入口调用 `newModuleServices(moduleDependencies)`，共享依赖只用于 Bootstrap 组装。启动 Context 仅用于组装与 schema 核验，不传给 Biz 或留作请求 Context。`bootstrap/module_<name>.go` 为开发者维护的模块工厂，显式构造 Store、Biz 和 Handler，返回构造错误；双协议共用同一 Biz，模块不自行关闭应用共享池。`bootstrap/modules_gen.go` 是生成器维护的登记索引，不手工修改；自定义构造、HTTP 权限、RPC 权限与 Gateway 映射放在模块工厂中。

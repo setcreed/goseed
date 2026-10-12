@@ -6,7 +6,7 @@
 
 内部入口确定为 `PrepareResource(root, name string, options ResourceOptions) (ResourcePlan, error)`；`ResourceOptions` 只包含 `Spec string` 与 `Migration bool`，项目能力从校验后的元数据读取，不接受第二套数据库/协议覆盖参数。计划拥有输入快照、新增目标、登记更新、迁移与协议工具需求、冲突信息；查询与预览返回副本，不能由调用方修改已验证输入。
 
-计划分为只读目标规划与完整生成两层：目标规划提供输入快照、`Targets()`、`Tools()`、`Conflicts()`、`Specification()`、`Report()` 和 `Revalidate()`，不提供 Write 或公共 CLI，不把未渲染目标冒充完整交付。R05 至 R08 提供实际源码与协议产物后，R09 补齐完整准备/Write；执行前再次校验同一份计划。最终预览必须包含登记差异，只读目标预览明确标为目标规划。
+计划分为只读目标规划与完整生成两层：目标规划提供输入快照、`Targets()`、`Tools()`、`Conflicts()`、`Specification()`、`Report()` 和 `Revalidate()`，不提供 Write 或公共 CLI，不把未渲染目标冒充完整交付。R04 增加 `SchemaStore()` 与 `MigrationDraft() (templates.File, bool)`，返回独立内容副本；后者只在选择迁移时存在，Store 仅含只读 schema 检查，不代表 CRUD。R05 至 R08 提供实际源码与协议产物后，R09 补齐完整准备/Write；执行前再次校验同一份计划。最终预览必须包含登记差异，只读目标预览明确标为目标规划。
 
 | 输出 | 路径/规则 | 所有权 |
 |---|---|---|
@@ -61,9 +61,25 @@ API DTO 在 Biz 包定义，不依赖 Gin、gRPC 或 GORM；Handler 只做协议
 
 迁移版本不再是模板固定常量。`migrations.ExpectedVersion() (int64, error)` 从 embed FS 的 SQL 文件名解析正整数版本，检查文件名和版本重复，返回最大值；保留现有 Goose SQL 格式，不要求号码连续，也不创建额外版本登记文件。生成草稿采用现有最大版本加 1，检查溢出及同号冲突。
 
+`migrations.Versions()` 返回排序后的唯一版本列表。数据库按每个版本的最新 Goose 记录判断是否已应用，忽略初始化版本 0；启动要求应用集合与嵌入集合完整相等。显式 migrate up 仅接受嵌入列表的已应用前缀，拒绝未知版本、缺中间版本和已有更高版本，避免以最大版本掩盖异常历史。检查不创建 Goose 表、不写入记录；取消和 deadline 继续传播。
+
 服务启动只读核对实际迁移记录与期望版本、内置基础表及所选策略表；每个资源 Store 提供 `CheckSchema(context.Context) error`，工厂在构造 Biz 前调用，校验资源表、必要列、类型/非空和长度约束的方言兼容性。启动依赖增加限时 Context，传入所有工厂；核验失败回收应用资源，返回不含 DSN 的错误，不自动修表。
 
 `--migration` 草稿为当前数据库创建明确表名、主键、owner、时间与声明字段；SQLite/MySQL/PostgreSQL 使用各自已锁定驱动和方言，不由客户端选择。迁移只有显式审阅执行后才改变数据库，不能以 schema 校验触发隐式迁移。
+
+资源与字段 SQL 标识符限 63 个 ASCII 字符，标识符始终按方言引用，拒绝截断造成的碰撞；基准见 [PostgreSQL 18 标识符规则](https://www.postgresql.org/docs/18/sql-syntax-lexical.html) 与 [MySQL 8.4 长度限制](https://dev.mysql.com/doc/refman/8.4/en/identifier-length.html) 。自动命名的索引/约束使用短摘要名称，不拼成长标识符。MySQL 可写字符串使用 TEXT 加字符长度 CHECK，避免 32 个长 VARCHAR 的行宽限制；PostgreSQL 使用 VARCHAR，SQLite 使用 TEXT 加字符长度 CHECK。三种数据库均显式声明非空、主键和 owner/id 索引；长度约束按 Unicode 字符数。
+
+通用数据库层提供 `CheckResourceSchema(ctx, db, table, fields)`，只读检查保留列、声明列的类型/非空、单列主键、自增与长度边界。owner 必须保持大小写与空白区分：SQLite owner 列限定为 TEXT NOT NULL，可显式加 COLLATE BINARY，并使用草稿短名 owner/id 索引的 BINARY 排序；MySQL 要求 utf8mb4_0900_bin，PostgreSQL 要求 C，避免人工 schema 弱化主体隔离。SQLite 不接受 owner 的其他列级子句，不能用索引排序覆盖掩盖列本身的 NOCASE。SQLite/MySQL 的长度 CHECK 按草稿中的短约束名和规范表达式核验；支持等价引用/空白/外层括号，不推断任意 SQL 表达式的等价性，不执行探测写入。资源 Store 的 CheckSchema 调用此入口；R04 先交付 schema Store 与 SQL 草稿的内部渲染接口，CRUD 和公共资源写入由后续任务接入。
+
+| 列 | SQLite | MySQL | PostgreSQL |
+|---|---|---|---|
+| id | INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT；NOT NULL 可置后，不接受其他列级子句 | 有符号 BIGINT，自增单列主键 | BIGINT identity 单列主键 |
+| owner | TEXT，命名长度 CHECK 128，BINARY | VARCHAR(128)，utf8mb4_0900_bin | VARCHAR(128)，C |
+| string 字段 | TEXT，命名长度 CHECK | TEXT，命名且 ENFORCED 的 CHAR_LENGTH CHECK | VARCHAR(max_length) |
+| bool／int64 字段 | BOOLEAN／BIGINT | BOOLEAN（元数据为 TINYINT）／有符号 BIGINT | BOOLEAN／BIGINT |
+| created_at／updated_at | DATETIME | DATETIME(6) | TIMESTAMPTZ |
+
+所有声明列均非空。schema 检查不证明任意手工 DDL 等价；人工迁移应遵循上述草稿结构，额外兼容语法需显式扩展并验证。固定启动层把限时 `moduleDependencies.Context` 交给模块工厂，后续资源工厂用它调用 Store.CheckSchema；Context 不进入 Biz，不留作请求 Context。完整资源工厂随 R05/R09 接入。
 
 不带 `--migration` 时可以生成源码；模块文档说明表结构和人工显式迁移入口。用户可自行编写迁移或管理外部 schema，服务仍必须通过同样的只读核验；没有资源表的项目拒绝启动，不能宣称生成即可运行。不提供已有 schema 差异推断或覆盖历史 SQL。
 

@@ -1,0 +1,43 @@
+package database_test
+
+import (
+ "context"
+ "errors"
+ [[if eq .Database "sqlite"]]"path/filepath"[[end]]
+ "testing"
+ [[if eq .Database "sqlite"]]"time"[[end]]
+
+ [[if eq .Database "sqlite"]]"[[.Module]]/internal/pkg/config"[[else]]"[[.Module]]/internal/testutil"[[end]]
+ "[[.Module]]/internal/pkg/database"
+ "[[.Module]]/migrations"
+ "go.uber.org/zap"
+)
+
+func TestMigrationHistory(t *testing.T){
+ for _,scenario:=range []string{"unknown","negative","missing","down-up"}{
+  t.Run(scenario,func(t *testing.T){
+   ctx:=context.Background()
+   [[if eq .Database "sqlite"]]settings:=config.Database{Path:filepath.Join(t.TempDir(),"history.db"),MaxOpen:2,MaxIdle:1,BusyTimeout:time.Second}[[else]]settings:=testutil.Configuration(t).Database[[end]]
+   db,err:=database.Open(ctx,settings,zap.NewNop());if err!=nil{t.Fatal(err)};defer func(){_ = db.Close()}()
+   if err:=db.Migrate(ctx);err!=nil{t.Fatal(err)}
+   expected,err:=migrations.ExpectedVersion();if err!=nil{t.Fatal(err)}
+   version:=int64(1);active:=false
+   switch scenario{case "unknown":version=expected+1;active=true;case "negative":version=-1;active=true}
+   insert:=func(version int64,active bool){t.Helper();if err:=db.DB.WithContext(ctx).Exec("INSERT INTO goose_db_version(version_id,is_applied) VALUES(?,?)",version,active).Error;err!=nil{t.Fatal(err)}}
+   insert(version,active)
+   if scenario=="down-up"{insert(1,true);if err:=db.CheckSchema(ctx);err!=nil{t.Fatal("latest state not used",err)};if err:=db.Migrate(ctx);err!=nil{t.Fatal(err)};return}
+   var before,after int64
+   if err:=db.Pool.QueryRowContext(ctx,"SELECT count(*) FROM goose_db_version").Scan(&before);err!=nil{t.Fatal(err)}
+   if err:=db.CheckSchema(ctx);err==nil{t.Fatal("invalid history accepted at startup")}
+   // With only one migration, a Down record produces an empty valid prefix.
+   // Goose must reject re-applying the existing table; all other cases must
+   // fail the preflight history check before any migration bookkeeping.
+   if err:=db.Migrate(ctx);err==nil{t.Fatal("invalid history accepted for migration")}
+   if err:=db.Pool.QueryRowContext(ctx,"SELECT count(*) FROM goose_db_version").Scan(&after);err!=nil||before!=after{t.Fatal("failed validation changed history",before,after,err)}
+   canceled,cancel:=context.WithCancel(ctx);cancel()
+   if _,err:=db.Version(canceled);!errors.Is(err,context.Canceled){t.Fatal("status cancellation lost",err)}
+   if err:=db.CheckSchema(canceled);!errors.Is(err,context.Canceled){t.Fatal("schema cancellation lost",err)}
+   if err:=db.Migrate(canceled);!errors.Is(err,context.Canceled){t.Fatal("migration cancellation lost",err)}
+  })
+ }
+}

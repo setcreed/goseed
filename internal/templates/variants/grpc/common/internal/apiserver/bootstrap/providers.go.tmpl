@@ -2,7 +2,7 @@ package bootstrap
 
 import (
 	"context"
-	[[if or (ne .Database "none") .Redis (eq .Authz "casbin")]]"time"[[end]]
+	"time"
 
 	examplebiz "[[.Module]]/internal/apiserver/biz/example"
 	examplehandler "[[.Module]]/internal/apiserver/handler/grpc/example"
@@ -21,6 +21,7 @@ import (
 
 // moduleDependencies contains application-owned resources used only during assembly.
 type moduleDependencies struct {
+    Context context.Context
     Logger *zap.Logger
     [[if ne .Database "none"]]Database *gorm.DB[[end]]
     [[if .Redis]]Cache *cache.Client[[end]]
@@ -32,7 +33,7 @@ func New(settings config.Config, version string) (*App,error) {
 	logger,err := logx.New(settings.Log,version)
 	if err != nil { return nil,err }
 	[[if eq .Authz "casbin"]]catalog,err:=PermissionCatalog();if err!=nil{_ = logger.Sync();return nil,err}[[end]]
-	[[if or (ne .Database "none") .Redis (eq .Authz "casbin")]]startup,cancel:=context.WithTimeout(context.Background(),10*time.Second);defer cancel()[[end]]
+	startup,cancel:=context.WithTimeout(context.Background(),10*time.Second);defer cancel()
 	[[if ne .Database "none"]]db,err:=database.Open(startup,settings.Database,logger)
 	if err!=nil { _ = logger.Sync(); return nil,err }
 	if err:=db.CheckSchema(startup);err!=nil {_ = db.Close(); _ = logger.Sync(); return nil,err}[[end]]
@@ -46,7 +47,7 @@ func New(settings config.Config, version string) (*App,error) {
 	[[if .Redis]]caching,err:=cache.Open(startup,settings.Redis,logger);if err!=nil{[[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}
 	do.ProvideValue(injector,caching)[[end]]
 	do.ProvideValue(injector,authentication)
-	modules,err:=newModuleServices(moduleDependencies{Logger:logger,[[if ne .Database "none"]]Database:db.DB,[[end]][[if .Redis]]Cache:caching,[[end]]})
+	modules,err:=newModuleServices(moduleDependencies{Context:startup,Logger:logger,[[if ne .Database "none"]]Database:db.DB,[[end]][[if .Redis]]Cache:caching,[[end]]})
 	if err!=nil{[[if .Redis]]_ = caching.Close();[[end]][[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}
 	do.ProvideValue(injector,examplehandler.New(examplebiz.[[if .Redis]]NewCached([[if ne .Database "none"]]examplestore.New(db.DB),[[end]]caching)[[else]]New([[if ne .Database "none"]]examplestore.New(db.DB)[[end]])[[end]]))
 	do.ProvideValue(injector,&rpc.Readiness{[[if .Redis]]CheckDependency:func(ctx context.Context)error{[[if ne .Database "none"]]if err:=db.Pool.PingContext(ctx);err!=nil{return err};[[end]]return caching.Check(ctx)}[[else if ne .Database "none"]]CheckDependency:db.Pool.PingContext[[end]]})

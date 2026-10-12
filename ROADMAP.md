@@ -10,7 +10,7 @@
 
 D6 进行中：`gen module` 通过一次性创建的模块工厂显式构造 Biz/Handler，SQL Store 接收应用数据库，dual 两侧共享同一 Biz；固定启动入口传递强类型共享依赖，新增模块保留已有手工组装代码。RPC 权限绑定实际模块名，重复 FullMethod 拒绝启动。生成前校验启动入口、完整登记投影和既有工厂，计划过期或写入失败时拒绝/回滚。资源字段 YAML 的严格版本 1 解析器已实现。
 
-D6 剩余任务按 [详细施工清单](docs/implementation.md#d6-剩余施工清单) 执行。D6-R01 接入决策、R02 只读资源目标计划与 R03 模块权限目录已交付。`PrepareResource` 尚无 CRUD 渲染、Write 或公共 CLI；Casbin 已通过纯模块描述接受已声明资源，并供启动与离线导入共用。下一项为 D6-R04，扩展迁移版本、资源 schema 核验和方言草稿；R04 至 R10 尚未完成。
+D6 剩余任务按 [详细施工清单](docs/implementation.md#d6-剩余施工清单) 执行。D6-R01 接入决策、R02 只读资源目标计划、R03 模块权限目录与 R04 迁移/schema 基础已交付。R04 的内部草稿与 schema Store 不代表完整资源：`PrepareResource` 尚无 CRUD、完整资源工厂、Write 或公共 CLI；下一项为 R05 字段映射与主体隔离 CRUD，R05 至 R10 尚未完成。
 
 ## 待开始
 
@@ -25,10 +25,12 @@ D6 剩余任务按 [详细施工清单](docs/implementation.md#d6-剩余施工�
 - 跟踪：go-redis 的纯取消 issue 仍开放；当前明确短命令预算、关闭命令与拨号重试，受控连接及真实服务取消已通过，但不承诺瞬时中断或全部取消竞争已消除。官方证据见 [依赖核验](docs/dependencies.md) 。
 - 待核验：pgx 缓冲响应与取消竞争的人工延迟 Write 场景；基础运行中 deadline 与随后池复用已通过，未声明解决上游报告。官方证据与版本边界见 [依赖核验](docs/dependencies.md) 。
 - 待确认：goseed 自身许可证；仅在公开发布前必须确定。主模块已确定为 `github.com/setcreed/goseed`，Go 工具链固定为 1.26.4。
-- 待实现：在已交付的内部只读资源计划上补齐迁移/schema、字段映射、主体隔离 CRUD、四协议适配、完整渲染/写入及公共 `gen resource` CLI。当前 `gen module` 生成的是无业务操作的结构骨架；Gateway HTTP 映射及 query/body 输入规则继续由模块登记描述驱动。
-- 资源接入边界：Casbin 模块目录已实现；迁移期望版本仍由模板固定，协议脚本仅处理内置模块，Gateway 复现会用单模块输出覆盖汇总，继续在 D6-R04、R07/R08 解决。组装入口版本 2 要求纯权限声明，旧入口或缺声明的工厂在写入前拒绝，不自动改写手工 Bootstrap；规则见资源接入方案。
+- 待实现：在已交付的内部只读资源计划和迁移/schema 基础上补齐资源工厂、字段映射、主体隔离 CRUD、四协议适配、完整渲染/写入及公共 `gen resource` CLI。当前 `gen module` 生成的是无业务操作的结构骨架；Gateway HTTP 映射及 query/body 输入规则继续由模块登记描述驱动。
+- 资源接入边界：Casbin 模块目录、嵌入迁移版本推导与只读资源 schema 原型已实现；完整资源工厂与旧项目 Context/schema 兼容检查继续在 R05/R09 接入。协议脚本仍仅处理内置模块，Gateway 复现会用单模块输出覆盖汇总，继续在 R07/R08 解决。组装入口版本 2 要求纯权限声明，不自动改写旧入口或手工 Bootstrap；规则见资源接入方案。
 
 ## 最近完成
+
+- 2026-10-12 13:03 D6-R04 迁移/schema 基础：从嵌入 SQL 推导唯一排序版本，按每版最新记录核对完整集合，显式迁移拒绝非前缀历史；保留只读状态/启动检查和取消传播。新增三方言资源 SQL 草稿、只读 schema Store 与不可变查询接口，校验类型/非空/单列自增主键、命名长度 CHECK、owner 排序和 63 字符标识符，MySQL TEXT 支持宽字段集合；固定四协议启动组装传递限时 Context。生成器不执行 SQL、不写资源，不增加依赖；完整 CRUD/工厂/CLI 继续按 R05 至 R10 实施，下一项为 R05。
 
 - 2026-10-12 10:08 文档同步：按 AGENTS/README/ROADMAP 职责核对 R01 至 R03 与 R04 边界；补齐 Gateway 文档入口、架构纯权限文件和模块/计划/目录验证范围，修正 Casbin 仍绑定内置资源、业务命令均待实现、主模块仅 CLI 依赖等过时描述。明确元数据/模板/字段规范版本 1 与组装版本 2 分别含义，目标规划不代表完整 CRUD/迁移/协议能力；不改变代码或施工范围。
 
@@ -68,9 +70,9 @@ D6 剩余任务按 [详细施工清单](docs/implementation.md#d6-剩余施工�
 
 - 2026-10-11 22:55 验证收尾规范：更新 AGENTS，要求每次验证结束后立即清理本次新建的临时项目、日志和可重建产物/缓存，检查清理结果并尽量复用缓存；明确保留任务前已存在、来源不明及其他任务数据。
 
-- 2026-10-11 22:45 D5 项目生成器：根命令默认在当前目录生成 HTTP／SQLite／JWT 项目，支持项目名、模块路径、数据库、Redis、Casbin、四种协议和 dry-run；固定 JWT 为基础能力。生成前渲染全部文件并检查目录、路径与冲突，独占创建、不覆盖已有文件，写入失败仅回滚本次创建内容；允许保留 `.git` 与系统文件。生成 `goseed.yaml` 记录版本、模块、能力和初始 `example` 登记，dry-run 展示文件、依赖版本和冲突。README 与需求、架构、命令契约同步；下一检查点为 D6。
-
 ## 最近验证
+
+- 2026-10-12 13:03 D6-R04：SQLite 两种授权组合的生成项目 readonly race/vet/lint 通过；真实 MySQL/PostgreSQL 的 `make template-db` 六组共 14 个组合全部通过、无跳过，包括两资源顺序升级/重启、异常历史、不兼容 schema、owner 排序、Unicode/int64、32 字段与 63 字符边界、取消和失败迁移。随后用原隔离脚本定向重跑四个 SQL 资源组合，独立应用账号通过状态/schema 与业务写入，CREATE TABLE 被拒绝，不要求建库/建表权限。确认 SQLite/PostgreSQL DDL 回滚、MySQL 保留部分 DDL 且不记录成功版本。四协议 16 个模块组装与 8 个 Redis/Casbin 可选编译回归通过；核心包测试/vet、lint（0 issues）、契约/格式/diff 检查通过。修正草稿渲染校验方法、模板未用字段、MySQL 非布尔 CHECK 夹具及 tokenizer lint；复现并修复 SQLite BINARY 索引掩盖 NOCASE 列。任务临时项目和四轮专用数据库资源已清理，保留已有共享缓存与历史 render 目录；完整 64 组合和 Redis/容器交叉运行留待 R10。
 
 - 2026-10-12 10:08 文档：`make contract-check`、`git diff --check` 通过；对照当前 go.mod、ResourcePlan 方法、模块组装校验、权限目录模板与固定迁移版本，核对内部链接、命令可用状态、版本契约、64/48/16 组合边界和 R04 执行入口。仅修改七份 Markdown 文档，未重跑 Go 或外部服务测试，未创建临时文件、缓存或构建产物。
 
@@ -109,5 +111,3 @@ D6 剩余任务按 [详细施工清单](docs/implementation.md#d6-剩余施工�
 - 2026-10-11 23:02 D6 登记接口原型：`make compatibility` 首次受沙箱回环监听限制；获准本机重跑后全套兼容性测试通过，包括新增 `TestGeneratedModuleRegistryContract`、Proto 回环测试和 SQLite 行为测试；MySQL/PostgreSQL 兼容性子用例按该目标设计跳过，真实服务仍由 `make compatibility-db` 验证。清理本次隔离 Go 构建缓存。
 
 - 2026-10-11 22:58 D6 契约文档：`make contract-check` 通过（68 个本地链接、314 个交付文件），`git diff --check` 通过；复核命令示例、字段约束、登记文件所有权和 D6 未实现状态一致。
-
-- 2026-10-11 22:55 AGENTS／ROADMAP 文档：`make contract-check` 通过（66 个本地链接、314 个交付文件），`git diff --check` 通过；核对临时文件收尾约定与文档入口。

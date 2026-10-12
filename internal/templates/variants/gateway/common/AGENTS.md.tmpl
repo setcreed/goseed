@@ -11,4 +11,4 @@
 [[if ne .Database "none"]]- 数据库迁移显式执行；禁止生产启动时 AutoMigrate。[[end]]
 - 普通构建使用已生成 Proto、Gateway 与 Swagger 文件；更新生成物前执行 `make proto-tools`、`make proto-generate`。验证入口见 README 中的 `make check`、`make race` 与协议检查命令。
 
-模块扩展由固定启动入口调用 `newModuleServices(moduleDependencies)`，共享依赖只用于 Bootstrap 组装。`bootstrap/module_<name>.go` 为开发者维护的模块工厂，显式构造 Store、Biz 和 Handler，返回构造错误；双协议共用同一 Biz，模块不自行关闭应用共享池。`bootstrap/modules_gen.go` 是生成器维护的登记索引，不手工修改；自定义构造、HTTP 权限、RPC 权限与 Gateway 映射放在模块工厂中。
+模块扩展由固定启动入口调用 `newModuleServices(moduleDependencies)`，共享依赖只用于 Bootstrap 组装。启动 Context 仅用于组装与 schema 核验，不传给 Biz 或留作请求 Context。`bootstrap/module_<name>.go` 为开发者维护的模块工厂，显式构造 Store、Biz 和 Handler，返回构造错误；双协议共用同一 Biz，模块不自行关闭应用共享池。`bootstrap/modules_gen.go` 是生成器维护的登记索引，不手工修改；自定义构造、HTTP 权限、RPC 权限与 Gateway 映射放在模块工厂中。

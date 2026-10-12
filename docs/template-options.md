@@ -14,7 +14,7 @@ SQLite 保持文件、连接 PRAGMA 和单实例约定。MySQL、PostgreSQL 采�
 
 JWT 主体限制为 1 至 128 个 Unicode 字符，拒绝控制字符及首尾空白，三个数据库保持一致的资源归属与名称唯一语义。MySQL 使用 utf8mb4 二进制排序规则；PostgreSQL 文本使用 C 排序规则。所有读写时间使用 UTC。MySQL 更新使用匹配行数，重复写入相同值不能把已有资源误报为 404。
 
-显式 `migrate status/up` 共用命令；status 和启动检查不创建 Goose 表，服务启动只核对版本及实际列，就绪依赖 Ping。SQLite/PostgreSQL 迁移使用方言支持的事务；MySQL DDL 不具备事务回滚，迁移失败后必须核对实际 schema，不通过自动重试修补部分 schema。退出和启动失败均关闭连接池。
+显式 `migrate status/up` 共用命令；status 和启动检查不创建 Goose 表。期望版本从嵌入 SQL 推导；status 只显示已应用最大版本，启动核对完整已应用集合及实际列，up 只接受有序前缀，拒绝未知版本和中间断档，不自动修复历史。就绪依赖 Ping。资源 schema 原型与方言草稿的约束见 [资源接入方案](resource-generation.md#迁移版本与资源-schema) ，完整 CRUD/CLI 状态见 ROADMAP。SQLite/PostgreSQL 迁移使用方言支持的事务；MySQL DDL 不具备事务回滚，迁移失败后必须核对实际 schema，不通过自动重试修补部分 schema。退出和启动失败均关闭连接池。
 
 外部数据库的 `dev init` 只创建开发 JWT 密钥并设置开发明文连接；需要先由环境安全提供数据库密码，再执行保留已有配置、Token、迁移与服务命令。脚手架不部署数据库、不创建生产账号。
 

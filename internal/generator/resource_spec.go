@@ -79,8 +79,8 @@ func ParseResourceSpec(data []byte) (ResourceSpec, error) {
 	seen := make(map[string]bool, len(raw.Fields))
 	goNames := make(map[string]bool, len(raw.Fields))
 	for i, field := range raw.Fields {
-		if field.Name == nil || !resourceFieldName.MatchString(*field.Name) {
-			return ResourceSpec{}, fmt.Errorf("field %d name must be lower snake_case", i+1)
+		if field.Name == nil || !resourceFieldName.MatchString(*field.Name) || len(*field.Name) > 63 {
+			return ResourceSpec{}, fmt.Errorf("field %d name must be lower snake_case with at most 63 ASCII characters", i+1)
 		}
 		if isReservedResourceField(*field.Name) {
 			return ResourceSpec{}, fmt.Errorf("field %q is reserved", *field.Name)

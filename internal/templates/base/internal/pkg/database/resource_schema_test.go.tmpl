@@ -1,0 +1,13 @@
+package database
+
+[[if ne .Database "postgres"]]import "testing"
+
+func TestLengthExpressionNormalization(t *testing.T){
+ for _,value:=range []string{`length("title") <= 3`,` (( length("title") <= 3 )) `,`length(/* constraint */ "title")<=3`}{if stripOuterParentheses(normalizeDDL(value))!="length(title)<=3"{t.Fatal("syntax trivia differs",value)}}
+ for _,value:=range []string{`length("title" <= 3)`,`length("title") <= 3 OR 1=1`,`'length(title)<=3'`,`length("title") <= 30`}{if stripOuterParentheses(normalizeDDL(value))=="length(title)<=3"{t.Fatal("invalid length check accepted",value)}}
+ [[if eq .Database "sqlite"]]for _,value:=range []string{`CREATE TABLE x(id INTEGER, CONSTRAINT c CHECK(length("title") <= 3))`,`CREATE TABLE x(id INTEGER, CONSTRAINT "c" CHECK(((length("title") <= 3))))`}{if namedCheck(normalizeDDL(value),"c")!="length(title)<=3"{t.Fatal("named check differs",value)}}
+ for _,value:=range []string{`CREATE TABLE x(id TEXT DEFAULT ',CONSTRAINT c CHECK(length(title)<=3)')`,`CREATE TABLE x(id INTEGER /*,CONSTRAINT c CHECK(length(title)<=3)*/)`}{if namedCheck(normalizeDDL(value),"c")!=""{t.Fatal("comment or literal impersonated check",value)}}
+ for _,value:=range []string{`CREATE TABLE x(owner TEXT NOT NULL)`,`CREATE TABLE x("owner" TEXT COLLATE "BINARY" NOT NULL)`}{if !sqliteColumnContract(value,"owner text not null"){t.Fatal("owner contract rejected",value)}}
+ for _,value:=range []string{`CREATE TABLE x(owner TEXT COLLATE NOCASE NOT NULL, "ownertextnotnull")`,`CREATE TABLE x(id INTEGER NOT NULL PRIMARY KEY, "idintegernotnullprimarykeyautoincrement")`}{if sqliteColumnContract(value,"owner text not null")||sqliteColumnContract(value,"id integer not null primary key autoincrement"){t.Fatal("quoted identifier impersonated column contract",value)}}[[end]]
+}
+[[end]]

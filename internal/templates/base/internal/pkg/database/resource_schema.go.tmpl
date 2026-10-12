@@ -1,0 +1,113 @@
+package database
+
+import (
+ "context"
+ [[if ne .Database "postgres"]]"crypto/sha256"[[end]]
+ [[if ne .Database "sqlite"]]"database/sql"[[end]]
+ "errors"
+ "fmt"
+ "regexp"
+ "strings"
+ [[if ne .Database "postgres"]]"unicode"[[end]]
+
+ "gorm.io/gorm"
+)
+
+type SchemaField struct{Name string;Type string;MaxLength int}
+type schemaColumn struct{name,kind string;nullable,primary,identity bool;[[if ne .Database "sqlite"]]length sql.NullInt64;collation sql.NullString[[end]]}
+var schemaIdentifier=regexp.MustCompile(`^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$`)
+
+// CheckResourceSchema only reads metadata; it never migrates or probes writes.
+func CheckResourceSchema(ctx context.Context,db *gorm.DB,table string,fields []SchemaField)error{
+ if err:=ctx.Err();err!=nil{return err}
+ if db==nil||!schemaIdentifier.MatchString(table)||len(table)>63||len(fields)<1||len(fields)>32{return errors.New("invalid resource schema contract")}
+ expected:=[]SchemaField{{Name:"id",Type:"id"},{Name:"owner",Type:"string",MaxLength:128},{Name:"created_at",Type:"time"},{Name:"updated_at",Type:"time"}}
+ seen:=map[string]bool{"id":true,"owner":true,"created_at":true,"updated_at":true}
+ for _,field:=range fields{
+  if !schemaIdentifier.MatchString(field.Name)||len(field.Name)>63||seen[field.Name]{return errors.New("invalid resource schema field")};seen[field.Name]=true
+  if field.Type=="string"{if field.MaxLength<1||field.MaxLength>4096{return errors.New("invalid resource string length")}}else if (field.Type!="bool"&&field.Type!="int64")||field.MaxLength!=0{return errors.New("invalid resource field type")}
+  expected=append(expected,field)
+ }
+ columns,err:=resourceColumns(ctx,db,table);if err!=nil{if ctx.Err()!=nil{return ctx.Err()};return fmt.Errorf("resource %s schema cannot be read",table)}
+ [[if eq .Database "sqlite"]]var ddl string;if err:=db.WithContext(ctx).Raw("SELECT sql FROM sqlite_master WHERE type='table' AND name=?",table).Row().Scan(&ddl);err!=nil{if ctx.Err()!=nil{return ctx.Err()};return fmt.Errorf("resource %s table is missing",table)};normalized:=normalizeDDL(ddl)
+ digest:=sha256.Sum256([]byte(table));index:=fmt.Sprintf("gs_%x_owner",digest[:16]);var collation string
+ if err:=db.WithContext(ctx).Raw("SELECT x.coll FROM sqlite_master m JOIN pragma_index_xinfo(m.name) x WHERE m.type='index' AND m.name=? AND m.tbl_name=? AND x.name='owner' AND x.key=1 AND x.seqno=0",index,table).Row().Scan(&collation);err!=nil||collation!="BINARY"||!sqliteColumnContract(ddl,"owner text not null"){if ctx.Err()!=nil{return ctx.Err()};return fmt.Errorf("resource %s owner column or index has incompatible collation",table)}[[end]]
+ primaryCount:=0;for _,column:=range columns{if column.primary{primaryCount++}};if primaryCount!=1{return fmt.Errorf("resource %s requires a single-column primary key",table)}
+ for _,field:=range expected {
+  column,ok:=columns[field.Name];if !ok||column.nullable{return fmt.Errorf("resource %s column %s is missing or nullable",table,field.Name)}
+  valid:=false
+  switch field.Type{
+  case "id":valid=column.kind==[[if eq .Database "sqlite"]]"integer"[[else]]"bigint"[[end]]&&column.primary&&column.identity
+  case "int64":valid=column.kind=="bigint"
+  case "bool":valid=column.kind==[[if eq .Database "mysql"]]"tinyint"[[else if eq .Database "postgres"]]"boolean"[[else]]"boolean"[[end]]
+  case "time":valid=column.kind==[[if eq .Database "postgres"]]"timestamp with time zone"[[else]]"datetime"[[end]]
+  case "string":
+   [[if eq .Database "postgres"]]valid=column.kind=="character varying"&&column.length.Valid&&column.length.Int64==int64(field.MaxLength);if field.Name=="owner"{valid=valid&&column.collation.Valid&&column.collation.String=="C"}
+   [[else if eq .Database "mysql"]]if field.Name=="owner"{valid=column.kind=="varchar"&&column.length.Valid&&column.length.Int64==128&&column.collation.Valid&&column.collation.String=="utf8mb4_0900_bin"}else{valid=column.kind=="text";if valid{valid=resourceLengthCheck(ctx,db,table,field)==nil}}
+   [[else]]valid=column.kind=="text";if valid{digest:=sha256.Sum256([]byte(table+"."+field.Name));name:=fmt.Sprintf("gs_%x_len",digest[:16]);expression:=fmt.Sprintf("length(%s)<=%d",field.Name,field.MaxLength);valid=namedCheck(normalized,name)==expression}[[end]]
+  }
+  if !valid{if ctx.Err()!=nil{return ctx.Err()};return fmt.Errorf("resource %s column %s has incompatible type or constraints",table,field.Name)}
+ }
+ return ctx.Err()
+}
+
+func resourceColumns(ctx context.Context,db *gorm.DB,table string)(map[string]schemaColumn,error){
+ [[if eq .Database "sqlite"]]rows,err:=db.WithContext(ctx).Raw(`PRAGMA table_info("`+table+`")`).Rows()
+ [[else if eq .Database "mysql"]]rows,err:=db.WithContext(ctx).Raw("SELECT column_name,CASE WHEN column_type LIKE '%unsigned%' THEN CONCAT(data_type,' unsigned') ELSE data_type END,is_nullable,character_maximum_length,column_key,extra,collation_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=?",table).Rows()
+ [[else]]rows,err:=db.WithContext(ctx).Raw("SELECT c.column_name,c.data_type,c.is_nullable,c.character_maximum_length,c.is_identity,EXISTS(SELECT 1 FROM information_schema.table_constraints t JOIN information_schema.key_column_usage k ON k.constraint_catalog=t.constraint_catalog AND k.constraint_schema=t.constraint_schema AND k.constraint_name=t.constraint_name AND k.table_name=t.table_name WHERE t.table_schema=c.table_schema AND t.table_name=c.table_name AND t.constraint_type='PRIMARY KEY' AND k.column_name=c.column_name),c.collation_name FROM information_schema.columns c WHERE c.table_schema=current_schema() AND c.table_name=?",table).Rows()[[end]]
+ if err!=nil{return nil,err};defer func(){_ = rows.Close()}();columns:=make(map[string]schemaColumn)
+ for rows.Next(){var column schemaColumn
+  [[if eq .Database "sqlite"]]var position,notNull,primary int;var defaultValue any;if err:=rows.Scan(&position,&column.name,&column.kind,&notNull,&defaultValue,&primary);err!=nil{return nil,err};column.nullable=notNull==0;column.primary=primary>0
+  [[else if eq .Database "mysql"]]var nullable,key,extra string;if err:=rows.Scan(&column.name,&column.kind,&nullable,&column.length,&key,&extra,&column.collation);err!=nil{return nil,err};column.nullable=nullable!="NO";column.primary=key=="PRI";column.identity=strings.Contains(extra,"auto_increment")
+  [[else]]var nullable,identity string;if err:=rows.Scan(&column.name,&column.kind,&nullable,&column.length,&identity,&column.primary,&column.collation);err!=nil{return nil,err};column.nullable=nullable!="NO";column.identity=identity=="YES"[[end]]
+  column.kind=strings.ToLower(column.kind);columns[column.name]=column
+ }
+ if err:=rows.Err();err!=nil{return nil,err}
+ [[if eq .Database "sqlite"]]var ddl string;if err:=db.WithContext(ctx).Raw("SELECT sql FROM sqlite_master WHERE type='table' AND name=?",table).Row().Scan(&ddl);err!=nil{return nil,err};id:=columns["id"];id.identity=sqliteColumnContract(ddl,"id integer not null primary key autoincrement")||sqliteColumnContract(ddl,"id integer primary key autoincrement not null");columns["id"]=id[[end]]
+ return columns,nil
+}
+
+[[if eq .Database "mysql"]]func resourceLengthCheck(ctx context.Context,db *gorm.DB,table string,field SchemaField)error{
+ digest:=sha256.Sum256([]byte(table+"."+field.Name));name:=fmt.Sprintf("gs_%x_len",digest[:16]);var clause string;var enforced string
+ err:=db.WithContext(ctx).Raw("SELECT c.check_clause,t.enforced FROM information_schema.check_constraints c JOIN information_schema.table_constraints t ON t.constraint_schema=c.constraint_schema AND t.constraint_name=c.constraint_name WHERE t.table_schema=DATABASE() AND t.table_name=? AND t.constraint_name=? AND t.constraint_type='CHECK'",table,name).Row().Scan(&clause,&enforced)
+ if err!=nil{return err};if enforced!="YES"||stripOuterParentheses(normalizeDDL(clause))!=fmt.Sprintf("char_length(%s)<=%d",field.Name,field.MaxLength){return errors.New("resource length check differs")};return nil
+}[[end]]
+
+[[if ne .Database "postgres"]]// Normalize only syntax trivia. Literals and comments cannot impersonate
+// constraints; operators and operands remain, so tautologies do not match.
+func normalizeDDL(source string)string{
+ return strings.Join(ddlTokens(source),"")
+}
+func ddlTokens(source string)[]string{
+ var result []string
+ for i:=0;i<len(source);{
+  if strings.HasPrefix(source[i:],"--"){next:=strings.IndexByte(source[i:],'\n');if next<0{break};i+=next+1;continue}
+  if strings.HasPrefix(source[i:],"/*"){next:=strings.Index(source[i+2:],"*/");if next<0{return []string{"invalid"}};i+=next+4;continue}
+  character:=source[i]
+  if character=='\''{result=append(result,"#literal#");i++;for i<len(source){if source[i]=='\''{i++;if i<len(source)&&source[i]=='\''{i++;continue};break};i++};continue}
+  if character=='"'||character=='`'||character=='['{end:=character;if end=='['{end=']'};i++;var token strings.Builder;for i<len(source){if source[i]==end{if end!=']'&&i+1<len(source)&&source[i+1]==end{token.WriteByte(end);i+=2;continue};break};token.WriteByte(source[i]);i++};if i==len(source){return []string{"invalid"}};result=append(result,strings.ToLower(token.String()));i++;continue}
+  if unicode.IsSpace(rune(character)){i++;continue}
+  if ddlWord(character){start:=i;i++;for i<len(source){if !ddlWord(source[i]){break};i++};result=append(result,strings.ToLower(source[start:i]));continue}
+  result=append(result,string(character));i++
+ }
+ return result
+}
+func ddlWord(c byte)bool{return (c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||c=='_'}
+func stripOuterParentheses(expression string)string{
+ for len(expression)>1&&expression[0]=='('&&expression[len(expression)-1]==')'{
+  level:=0;outer:=true;for i,character:=range expression{if character=='('{level++};if character==')'{level--};if level==0&&i<len(expression)-1{outer=false;break};if level<0{return "invalid"}};if !outer||level!=0{break};expression=expression[1:len(expression)-1]
+ };return expression
+}
+[[if eq .Database "sqlite"]]func namedCheck(ddl,name string)string{
+ prefix:=",constraint"+name+"check(";position:=strings.Index(ddl,prefix);if position<0{return ""};start:=position+len(prefix);level:=1
+ for i:=start;i<len(ddl);i++{switch ddl[i]{case '(' :level++;case ')':level--};if level==0{return stripOuterParentheses(ddl[start:i])}}
+ return ""
+}
+func sqliteColumnContract(ddl,wanted string)bool{
+ tokens:=ddlTokens(ddl);start:=0;for start<len(tokens)&&tokens[start]!="("{start++};start++;level:=0
+ for i:=start;i<len(tokens);i++{
+  boundary:=false;switch tokens[i]{case "(":level++;case ")":if level==0{boundary=true}else{level--};case ",":boundary=level==0}
+  if boundary{clause:=tokens[start:i];var filtered []string;for j:=0;j<len(clause);j++{if clause[j]=="collate"&&j+1<len(clause)&&clause[j+1]=="binary"{j++;continue};filtered=append(filtered,clause[j])};if strings.Join(filtered," ")==wanted{return true};if tokens[i]==")"{return false};start=i+1}
+ };return false
+}[[end]]
+[[end]]

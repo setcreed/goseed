@@ -11,6 +11,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/setcreed/goseed/internal/templates"
 )
 
 // ResourceOptions selects the specification and an optional migration draft.
@@ -34,21 +36,23 @@ type resourceFingerprint struct {
 // ResourcePlan is a read-only target plan. Rendering and Write are deliberately
 // absent until every transport's CRUD and safe commit path have been verified.
 type ResourcePlan struct {
-	root       string
-	name       string
-	specPath   string
-	spec       ResourceSpec
-	targets    []ResourceTarget
-	tools      []ToolRequirement
-	inputs     map[string]resourceFingerprint
-	migrations []string
-	conflicts  []string
+	root           string
+	name           string
+	specPath       string
+	spec           ResourceSpec
+	targets        []ResourceTarget
+	tools          []ToolRequirement
+	inputs         map[string]resourceFingerprint
+	migrations     []string
+	conflicts      []string
+	schemaStore    templates.File
+	migrationDraft *templates.File
 }
 
 // PrepareResource validates resource inputs and plans output paths without
 // creating files, rendering placeholder CRUD, or connecting to services.
 func PrepareResource(root, name string, options ResourceOptions) (ResourcePlan, error) {
-	if !projectModuleName.MatchString(name) || name == "example" {
+	if !projectModuleName.MatchString(name) || len(name) > 63 || name == "example" {
 		return ResourcePlan{}, fmt.Errorf("invalid or reserved resource name %q", name)
 	}
 	if name == "examples" {
@@ -171,12 +175,22 @@ func PrepareResource(root, name string, options ResourceOptions) (ResourcePlan, 
 		}
 	}
 	plan.targets = resourceTargets(name, state.Metadata.Transport)
+	fields := make([]templates.SchemaField, 0, len(spec.Fields))
+	for _, field := range spec.Fields {
+		fields = append(fields, templates.SchemaField{Name: field.Name, Type: field.Type, MaxLength: field.MaxLength})
+	}
+	store, sql, err := templates.RenderResourceSchema(templates.Project{Name: state.Metadata.Name, Module: state.Metadata.Module}, state.Metadata.Database, name, fields)
+	if err != nil {
+		return ResourcePlan{}, err
+	}
+	plan.schemaStore = store
 	if options.Migration {
 		path, err := nextResourceMigration(name, plan.migrations)
 		if err != nil {
 			return ResourcePlan{}, err
 		}
 		plan.targets = append(plan.targets, ResourceTarget{Path: path, Action: "create"})
+		plan.migrationDraft = &templates.File{Path: path, Content: sql}
 	}
 	plan.tools = requiredResourceTools(state.Metadata.Transport)
 	if len(plan.tools) > 0 {
@@ -344,6 +358,18 @@ func (p ResourcePlan) Specification() ResourceSpec {
 	spec := p.spec
 	spec.Fields = append([]ResourceField(nil), spec.Fields...)
 	return spec
+}
+
+// SchemaStore and MigrationDraft return reviewable schema inputs, not CRUD or
+// permission to write/apply them. Revalidate still guards later execution.
+func (p ResourcePlan) SchemaStore() templates.File {
+	return templates.File{Path: p.schemaStore.Path, Content: bytes.Clone(p.schemaStore.Content)}
+}
+func (p ResourcePlan) MigrationDraft() (templates.File, bool) {
+	if p.migrationDraft == nil {
+		return templates.File{}, false
+	}
+	return templates.File{Path: p.migrationDraft.Path, Content: bytes.Clone(p.migrationDraft.Content)}, true
 }
 
 // Report labels this intermediate preview explicitly; it promises no CRUD code.
