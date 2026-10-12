@@ -10,6 +10,8 @@ Go 工具链固定为 **1.26.4**，主模块为 **`github.com/setcreed/goseed`**
 
 内部模板渲染入口为 `internal/templates.Default` 与 `Render(Project, Options)`，返回校验后的文件计划，展开项目名称及模块路径，并格式化 Go 源码。`Project.Name` 与 `Project.Module` 分别指定项目名和 Go 模块路径，二者独立校验，不要求名称与模块路径末段相同。渲染不联网、不直接写入文件。
 
+内部 `generator.PrepareResource` 已提供只读资源目标计划：校验 spec、当前组装入口、协议工具、迁移版本和文件冲突，预览输出目标，并在输入变化后拒绝旧计划。该入口尚不渲染 CRUD、不提供 Write，也未接入公共 CLI；接口与接入边界见 [资源接入方案](docs/resource-generation.md) 。
+
 | 模板能力 | 当前支持 | 默认值 |
 |---|---|---|
 | `Options.Database` | `sqlite`、`mysql`、`postgres`、`none` | `sqlite` |
