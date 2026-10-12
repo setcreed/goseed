@@ -13,7 +13,7 @@ goseed 是面向中小型 Go 后端业务的项目与业务代码生成器。生
 - `docs/requirements.md`：产品需求、范围和验收标准。
 - `docs/architecture.md`：目录、分层、技术方案和生产运行约定。
 - `docs/cli.md`：命令、参数、生成行为和组合约束。
-- `docs/implementation.md`：按依赖顺序执行的开发与验证计划。
+- `docs/implementation.md`：按依赖顺序执行的开发与验证计划；D6 剩余施工清单定义任务编号、前置条件、修改范围、失败路径和验收门槛，当前任务状态只维护在 ROADMAP。
 - `docs/dependencies.md`：维护与许可证证据、依赖决策、协议工具和验证边界；固定版本见 `dependencies.lock.json`。
 - `docs/template-http.md`：默认 HTTP 模板的配置、服务命令、认证、示例业务与验收契约。
 - `docs/template-options.md`：可选模板的配置、裁剪、数据库与失败路径验收契约。
