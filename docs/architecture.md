@@ -80,6 +80,7 @@ shop/
 │   │   ├── bootstrap/
 │   │   │   ├── providers.go
 │   │   │   ├── module_<name>.go
+│   │   │   ├── module_permissions.go
 │   │   │   └── modules_gen.go
 │   │   ├── router.go
 │   │   ├── handler/
@@ -133,7 +134,7 @@ shop/
 
 ## 技术方案
 
-资源生成的接入接口、纯权限描述、迁移版本/schema、Redis 边界及多模块协议复现以 [资源接入方案](resource-generation.md) 为准；该方案供后续实施，当前交付状态以 ROADMAP 为准。
+资源生成的接入接口、纯权限描述、迁移版本/schema、Redis 边界及多模块协议复现以 [资源接入方案](resource-generation.md) 为准；实施顺序由施工清单约束，当前交付状态以 ROADMAP 为准。
 
 RPC 登记将每个精确 FullMethod 绑定到所属模块名称与操作。生成索引把模块工厂的操作映射转换为带资源名称的权限描述，不把其他模块的请求当作内置示例授权；FullMethod 重复时返回组装错误并拒绝启动。
 
