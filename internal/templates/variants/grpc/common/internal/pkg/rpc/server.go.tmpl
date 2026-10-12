@@ -23,7 +23,7 @@ type Readiness struct{stopping atomic.Bool;CheckDependency func(context.Context)
 func(r *Readiness)Check(ctx context.Context)error{if r.stopping.Load(){return errors.New("service is stopping")};if r.CheckDependency!=nil{return r.CheckDependency(ctx)};return ctx.Err()}
 func(r *Readiness)Stop(){r.stopping.Store(true)}
 type Server struct{grpc *grpc.Server;settings config.GRPC;ready *Readiness;health *health.Server;logger *zap.Logger;running atomic.Bool;watchStop context.CancelFunc}
-func New(settings config.GRPC,ready *Readiness,logger *zap.Logger,jwt *auth.JWT,permissions map[string]string,register func(grpc.ServiceRegistrar)[[if eq .Authz "casbin"]],authorization Authorizer[[end]])(*Server,error){
+func New(settings config.GRPC,ready *Readiness,logger *zap.Logger,jwt *auth.JWT,permissions map[string]Permission,register func(grpc.ServiceRegistrar)[[if eq .Authz "casbin"]],authorization Authorizer[[end]])(*Server,error){
  [[if eq .Authz "casbin"]]if authorization==nil{return nil,errors.New("authorization is required")}[[end]]
  watchContext,watchStop:=context.WithCancel(context.Background())
  options:=[]grpc.ServerOption{grpc.MaxRecvMsgSize(settings.MaxRecvBytes),grpc.MaxSendMsgSize(settings.MaxSendBytes),grpc.MaxHeaderListSize(uint32(settings.MaxHeaderBytes)),grpc.MaxConcurrentStreams(uint32(settings.MaxConcurrentStreams)),grpc.ChainUnaryInterceptor(Unary(jwt,[[if eq .Authz "casbin"]]authorization[[else]]nil[[end]],permissions,settings.RequestTimeout,logger)),grpc.ChainStreamInterceptor(Streams(jwt,settings.Reflection,watchContext))}

@@ -78,6 +78,8 @@ make template-redis
 
 进入已生成项目目录后，可用 `goseed gen module orders --dry-run` 检查新模块计划，再执行 `goseed gen module orders` 写入。命令拒绝覆盖已有业务文件；登记文件更新失败时回滚本次新增文件和此前已更新的索引。模块 Handler 当前不注册虚构业务端点，Store 仅为持久化边界骨架，不代表可运行 CRUD。
 
+模块组装位于首次生成的 `internal/apiserver/bootstrap/module_orders.go`，由开发者维护构造逻辑、HTTP 操作权限、RPC 权限与 Gateway 映射。固定启动入口把共享数据库、日志及所选缓存交给模块工厂；每个模块只构造一次，dual 两种 Handler 共用同一 Biz。新增模块不改写 `providers.go` 或已有工厂；缺少组装入口的旧模板项目在生成前报不兼容，需显式更新入口。入口缺失、登记索引内容被改写或计划准备后组装文件发生变化时，命令拒绝写入。
+
 ## 技术兼容性验证
 
 固定版本的业务运行依赖在 `tests/compatibility/` 的独立模块中核验。主模块只依赖 CLI 库。

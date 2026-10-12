@@ -258,8 +258,8 @@ func TestBusinessModuleSkeletonUsesSafePackageIdentifiers(t *testing.T) {
 			t.Fatalf("Go keyword leaked into package declaration: %s", file.Path)
 		}
 	}
-	if len(files) != 4 {
-		t.Fatalf("dual SQL module expected Biz, Store and two Handler files, got %d", len(files))
+	if len(files) != 5 {
+		t.Fatalf("dual SQL module expected assembly, Biz, Store and two Handler files, got %d", len(files))
 	}
 }
 

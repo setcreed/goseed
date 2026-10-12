@@ -37,6 +37,10 @@ func PrepareModule(root, name string) (ModulePlan, error) {
 	if err != nil {
 		return ModulePlan{}, err
 	}
+	assemblyInputs, err := validateModuleAssembly(state)
+	if err != nil {
+		return ModulePlan{}, err
+	}
 	for _, module := range state.Metadata.Modules {
 		if module.Name == name {
 			return ModulePlan{}, fmt.Errorf("module %q is already registered", name)
@@ -60,7 +64,7 @@ func PrepareModule(root, name string) (ModulePlan, error) {
 	metadata = append(metadata, ModuleMetadata{Name: name, Type: "module"})
 	entries := make([]templates.ModuleEntry, 0, len(metadata))
 	for _, module := range metadata {
-		entries = append(entries, templates.ModuleEntry{Name: module.Name})
+		entries = append(entries, templates.ModuleEntry{Name: module.Name, Type: module.Type})
 	}
 	rendered, err := templates.RenderWithModules(project, options, entries)
 	if err != nil {
@@ -124,6 +128,9 @@ func PrepareModule(root, name string) (ModulePlan, error) {
 	sort.Slice(updates, func(i, j int) bool { return updates[i].Path < updates[j].Path })
 	sort.Slice(creates, func(i, j int) bool { return creates[i].Path < creates[j].Path })
 	inputs := map[string][]byte{metadataPath: nil}
+	for path, source := range assemblyInputs {
+		inputs[path] = bytes.Clone(source)
+	}
 	inputs[metadataPath], err = readProjectFile(state.Root, metadataPath)
 	if err != nil {
 		return ModulePlan{}, err

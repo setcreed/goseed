@@ -8,7 +8,7 @@
 
 ## 进行中
 
-D6 进行中：`gen module` 已生成无虚构业务行为的 Biz/Handler 骨架；按数据库生成仓储/Store 扩展点，并按项目协议动态登记模块。模块清单、协议索引、OpenAPI 源和汇总在同一 dry-run 计划内验证，写入失败回滚新增文件和已更新索引。资源字段 YAML 的严格版本 1 解析器已实现并覆盖结构与类型边界。下一步把解析器接入 `gen resource` 计划，再交付四协议主体隔离 CRUD 和显式迁移草稿。
+D6 进行中：`gen module` 通过一次性创建的模块工厂显式构造 Biz/Handler，SQL Store 接收应用数据库，dual 两侧共享同一 Biz；固定启动入口传递强类型共享依赖，新增模块保留已有手工组装代码。RPC 权限绑定实际模块名，重复 FullMethod 拒绝启动。生成前校验启动入口、完整登记投影和既有工厂，计划过期或写入失败时拒绝/回滚。资源字段 YAML 的严格版本 1 解析器已实现。下一步把解析器接入 `gen resource` 计划，再交付四协议主体隔离 CRUD 和显式迁移草稿。
 
 ## 待开始
 
@@ -25,22 +25,25 @@ D6 进行中：`gen module` 已生成无虚构业务行为的 Biz/Handler 骨架
 - 待核验：pgx 缓冲响应与取消竞争的人工延迟 Write 场景；基础运行中 deadline 与随后池复用已通过，未声明解决上游报告。官方证据与版本边界见 [依赖核验](docs/dependencies.md) 。
 - 待确认：goseed 自身许可证；仅在公开发布前必须确定。主模块已确定为 `github.com/setcreed/goseed`，Go 工具链固定为 1.26.4。
 - 待实现：将严格资源 spec 解析接入 `gen resource` dry-run 计划，生成四协议 CRUD、显式迁移草稿并完成主体隔离验证。当前 `gen module` 生成的是无业务操作的结构骨架；Gateway HTTP 映射及 query/body 输入规则继续由模块登记描述驱动。
+- 资源接入边界：现有 Casbin 策略校验只接受内置示例命名空间，迁移期望版本也由模板固定；`gen resource` 阶段需接入模块权限目录与迁移版本登记，不能仅新增 CRUD/SQL 文件。缺少模块组装入口的旧模板项目明确拒绝生成，不自动改写手工 Bootstrap。
 
 ## 最近完成
+
+- 2026-10-12 08:30 D6 模块依赖组装：静态 Bootstrap 通过强类型共享依赖调用模块工厂，工厂文件只生成一次并由开发者维护；SQL Store 复用应用数据库，dual 两侧共享 Biz，构造错误传播并回收共享资源。生成索引汇总手工 HTTP/RPC/Gateway 描述，RPC 授权绑定所属模块，重复 FullMethod 拒绝启动。生成前拒绝旧入口、改写登记索引和过期工厂输入，不增加依赖、不改写手工 Bootstrap。
 
 - 2026-10-12 07:37 D6 资源字段规范解析：新增严格版本 1 YAML 解析器，校验 UTF-8、单文档、重复/未知键、字段数量与命名、保留名、类型、required、max_length 和默认值；拒绝空值、别名、锚点、合并键及自定义标签。作为 `gen resource` 计划的输入基础，不单独写入业务项目。
 
 - 2026-10-12 07:27 D6 `gen module`：新增当前项目模块生成命令，按四种协议渲染登记索引并生成 Biz/Handler 骨架；SQL 选项生成仓储/Store 扩展点，无数据库不生成 Store。合并模块 OpenAPI 源，dry-run 显示新增、更新和冲突；多文件写入前重验输入与目标，更新失败回滚登记索引和本次新增文件。资源 CRUD 命令仍待实现。
 
-- 2026-10-12 07:01 D6 模块清单摘要校验：四种协议模板登记索引新增模块清单摘要；项目加载校验清单与登记摘要一致，手工改变摘要或清单时拒绝继续。动态登记内容重渲染和统一写回计划仍待实现。
+- 2026-10-12 07:01 D6 模块清单摘要校验：四种协议模板登记索引新增模块清单摘要；项目加载校验清单与登记摘要一致，手工改变摘要或清单时拒绝继续。
 
-- 2026-10-12 06:58 D6 结构化模块元数据：新项目 `goseed.yaml` 使用带 `name/type` 的登记项，资源项校验 `specs/` 相对路径及字段规范版本；读取旧版字符串条目时兼容解释为普通模块。业务生成命令及登记索引重渲染尚未实现。
-
-- 2026-10-12 00:02 D6 OpenAPI 合并器：新增生成器专用 YAML 依赖和多源 Swagger 2.0 合并器，按模块名稳定合并 paths、组件与 tags，拒绝重复键、别名、merge key、自定义标签、重复操作及 operationId，输出规范 JSON 与 SHA-256。初始模板渲染和 Gateway Proto 复现均规范化 Swagger，并把摘要写入登记索引；补齐 dual 专用 HTTP/RPC 合并登记模板。模块文件发现、摘要校验及后续索引安全写回仍待接入业务生成命令。
-
-- 2026-10-12 06:39 D6 项目状态校验：HTTP、dual 与 Gateway 新项目新增内置 `example.yaml` OpenAPI 源，Gateway 协议复现同步更新该源；新增 `generator.LoadProject`，严格校验 `goseed.yaml`、模块源登记和现有索引摘要，计算当前源的规范化索引并标出待更新状态，拒绝未登记 YAML 源及纯 gRPC 项目的 HTTP OpenAPI 文件。四种协议状态校验和关键篡改路径定向测试通过；增量登记与安全写回仍待实现。
+- 2026-10-12 06:58 D6 结构化模块元数据：新项目 `goseed.yaml` 使用带 `name/type` 的登记项，资源项校验 `specs/` 相对路径及字段规范版本；读取旧版字符串条目时兼容解释为普通模块。
 
 - 2026-10-12 06:49 D6 OpenAPI 安全刷新计划：新增 `PrepareOpenAPIRefresh`，准备阶段不落盘，执行前重新验证项目清单、源文件、登记摘要和目标原始字节；Swagger 与登记摘要采用同目录临时文件原子替换，多文件中后续写入失败时回滚先前替换。本能力当前是生成器内部 API，尚未接入业务生成 CLI。
+
+- 2026-10-12 06:39 D6 项目状态校验：HTTP、dual 与 Gateway 新项目新增内置 `example.yaml` OpenAPI 源，Gateway 协议复现同步更新该源；新增 `generator.LoadProject`，严格校验 `goseed.yaml`、模块源登记和现有索引摘要，计算当前源的规范化索引并标出待更新状态，拒绝未登记 YAML 源及纯 gRPC 项目的 HTTP OpenAPI 文件。四种协议状态校验和关键篡改路径定向测试通过；
+
+- 2026-10-12 00:02 D6 OpenAPI 合并器：新增生成器专用 YAML 依赖和多源 Swagger 2.0 合并器，按模块名稳定合并 paths、组件与 tags，拒绝重复键、别名、merge key、自定义标签、重复操作及 operationId，输出规范 JSON 与 SHA-256。初始模板渲染和 Gateway Proto 复现均规范化 Swagger，并把摘要写入登记索引；补齐 dual 专用 HTTP/RPC 合并登记模板。
 
 - 2026-10-11 23:24 D6 Gateway HTTP 登记接入：Gateway 启动组装从 `modules_gen.go` 读取模块名、路径、query 参数、JSON body 方法和 gRPC-Gateway 注册回调；请求日志路由与 query 校验使用同一登记描述，移除 Handler 对示例路径和字段的绑定。SQLite 与无数据库 Gateway 代表项目通过集成验证；OpenAPI 汇总及 D6 命令仍未实现。
 
@@ -66,26 +69,9 @@ D6 进行中：`gen module` 已生成无虚构业务行为的 Biz/Handler 骨架
 
 - 2026-10-11 12:12 D3 Casbin：Render 支持 `Options.Authz`，交付固定 RBAC、默认拒绝、用户／角色命名空间及 JWT 后的业务授权，资源归属仍由 Biz 校验。三种 SQL 复用现有连接，显式迁移策略表、Context 存储与事务全量导入；无数据库提供只读 CSV。策略严格校验，完整快照成功后发布，失败保留旧策略；离线更新需重启实例，不提供公开策略管理 API。八种新增组合与 Redis／数据库／容器验收通过，D3 完成，下一检查点为 D4。入口见 [可选模板](docs/template-options.md#casbin-可选能力) 。
 
-- 2026-10-11 11:40 项目命名文档：补充 `--name`、`--module`、默认值、名称校验及目录行为，明确目录名/项目名/模块路径末段可不同，`--name` 不创建或重命名目录。README 说明内部模板当前支持名称与路径替换，创建命令示例明确属于 D5 契约；AGENTS 已有命令文档入口，无需重复规则。CLI 实现未变化，下一功能仍为 Casbin。入口见 [命令契约](docs/cli.md#项目名模块路径与目录) 。
-
-- 2026-10-11 07:35 D3 Redis：Render 支持 `Options.Redis` 与四种存储选择组合，生成时裁剪客户端、配置、依赖、文档与测试；Biz 使用缓存接口，交付主体/资源摘要 Key、成功读取缓存、坏值回源、TTL 和写后失效。提供可选故障回源、必需启动/就绪/业务阻断、验证 TLS、脱敏日志与 App 统一关闭；固定 go-redis v9.23.0 和 Redis 8.10.2 镜像摘要，交付 `make template-redis`。同步项目与生成产物文档，root CLI 写入仍属 D5；下一功能为 Casbin。契约见 [可选模板](docs/template-options.md) 。
-
-- 2026-10-11 07:05 D3 无数据库：Render 支持 `Database: "none"`，保留 HTTP/JWT 与公共配置、日志、生命周期；裁剪 ORM、SQL 驱动、数据库配置、模型、Store 和迁移。交付 Handler → Biz 认证问候示例、严格 query/文本校验、固定清单、Swagger 2.0 和独立项目文档；Make 开发入口不迁移，Docker 不创建数据目录。root CLI 写入保持 D5 范围，下一功能为 Redis。契约见 [可选模板](docs/template-options.md) 。
-
-- 2026-10-11 06:49 D3 SQL 数据库：内部 Render/Options 支持 SQLite、MySQL、PostgreSQL，生成时裁剪驱动、配置、SQL 方言与固定清单；外部数据库提供独立 Connector、默认验证 TLS、连接池、UTC 与脱敏协议日志。交付真实数据库夹具与 `make template-db`，同步变体文档；统一 JWT 主体上限、控制字符及业务文本 NUL 边界，MySQL 相同值更新按匹配行数处理。D3 的其他能力保持待开始。
-
-- 2026-10-11 01:21 D2 完成：交付完整独立 HTTP/SQLite/JWT 项目模板、固定 go.mod/go.sum、项目文档与规范、配置/迁移/Makefile、Swagger 2.0、固定摘要非 root Dockerfile；普通检查不 tidy。HTTP 标准库协议错误接入统一脱敏日志，补齐进程级启动失败、可信 TLS 与 CORS 验收；交付入口为 README。
-- 2026-10-11 01:10 D2 错误与请求边界：Store 错误保留内部 cause 并按稳定业务码判定，错误文本不披露原因；数据库日志关联请求 ID，补齐请求预算及开发配置拒绝覆盖/符号链接回归，证书和私钥默认忽略。
-- 2026-10-11 01:00 D2 配置类型修复：在环境变量绑定前校验 YAML 原始类型，拒绝数字 issuer、小数连接数和数字布尔值，避免弱类型解码静默改变配置。
-- 2026-10-11 00:58 D2 示例 CRUD：Handler → Biz → Store、Biz 仓储接口、资源主体隔离、唯一冲突、UTC 时间、分页和零值 PATCH；写入拒绝未知/重复/null/额外 JSON/无效 UTF-8/超限正文，所有示例业务路由绑定 JWT。
-- 2026-10-11 00:52 D2 JWT：固定 HS256 和原始 Token 语法，强制签名、主体、issuer/audience、exp/iat/nbf 和最大生命周期；中间件传递请求主体，开发 CLI 签发，生产禁用，无公开签发接口。
-- 2026-10-11 00:49 D2 SQLite：嵌入 SQL 显式迁移、只读版本与 schema 校验、真实文件安全初始化、连接池和每连接 PRAGMA、无 SQL 参数的查询日志；服务就绪绑定数据库，退出及启动失败关闭连接池。
-- 2026-10-11 00:46 D2 HTTP 服务基础：标准库命令入口、开发密钥初始化、Bootstrap DI 组装、健康检查、请求 ID、脱敏错误与访问日志、CORS/预算/TLS/pprof、优雅退出及项目内 Make 检查模板。
-- 2026-10-11 00:36 D2 配置与日志：模板提供强类型配置、显式环境绑定、覆盖顺序、未知键及带单位时长校验、生产秘密和 JSON 日志要求；日志带服务、版本和 UTC 时间，渲染项目通过自身测试及 vet。
-- 2026-10-11 00:36 模板系统元数据修复：复现 Finder 创建 `.DS_Store` 后渲染失败；改用默认嵌入过滤并支持 `dot.<name>.tmpl` 输出隐藏文件，渲染忽略已知系统元数据。
-- 2026-10-11 00:30 D2 模板渲染：嵌入模板返回确定顺序的完整文件计划，校验名称/模块路径，使用独立分隔符、缺失变量检查和 Go 格式化；准备阶段失败返回空计划，CLI 生成写入仍在 D5 接入。
-
 ## 最近验证
+
+- 2026-10-12 08:30 D6 模块组装：16 种协议/存储组合通过生成项目验收，SQLite 与无数据库 8 种组合执行完整 readonly race 测试、vet、lint；MySQL/PostgreSQL 8 种组合执行 readonly 编译、指针组装测试、vet、lint，本轮未重跑真实外部数据库。Redis + Casbin 的四协议/两存储共 8 种代表组合通过 readonly 编译、vet、lint，未新增真实 Redis 验收。覆盖共享 Biz、真实 SQLite 指针与池生命周期、工厂构造失败、手工组装保留、RPC 模块授权、重复 FullMethod 拒绝；RPC 权限修正后重跑受影响 12 种协议/存储组合通过，重复 RPC 登记启动失败后池回收也通过三协议 SQLite race 回归。定向包测试、全仓 vet、修改包 lint（0 issues）、契约检查（65 个本地链接、331 个交付文件）、格式及 diff 检查通过。首次夹具生产 TLS 配置和注入变量 lint 失败已修正并重跑；本次隔离项目已清理，保留原有共享缓存；完整旧模板运行矩阵未重跑。
 
 - 2026-10-12 07:37 D6 资源规范解析：`go test ./internal/generator ./internal/cli ./internal/templates` 与对应 `go vet` 通过；覆盖默认值/字段顺序、无效 UTF-8、多文档、重复及未知键、字段名/类型/保留名、空值、别名/锚点/合并键/自定义标签、max_length 范围和字段数上限。复用项目已有 `.tmp` Go 缓存。
 
@@ -95,20 +81,21 @@ D6 进行中：`gen module` 已生成无虚构业务行为的 Biz/Handler 骨架
 
 - 2026-10-12 06:58 结构化模块元数据：`go test ./internal/generator ./internal/cli ./internal/templates`、`make contract-check`（68 个本地链接、324 个交付文件）、`make fmt-check` 与 `git diff --check` 通过；覆盖结构化模块/资源项、旧版字符串兼容、未知字段和 spec 路径/版本拒绝。使用项目已有 `.tmp` Go 构建与模块缓存。
 
-- 2026-10-12 00:02 D6 OpenAPI/登记回归：核心包测试、`make vet`、`make lint`（0 issues）、`make contract-check`（68 个本地链接、321 个交付文件）、`make fmt-check` 与 `git diff --check` 通过。分别运行默认项目、`TestDualProjects/(sqlite-none|none-none)`、`TestGatewayProjects/(sqlite-none|none-none)`；生成项目 readonly 编译、race/vet/lint、本机服务调用通过，Gateway Proto／Swagger 逐字节复现通过。Gateway 首次复现发现模板规范化与 protoc 原始输出格式不一致，已规范化复现脚本并重跑通过。完整 `make test` 矩阵未完成；首次模板测试断言的编译问题已修正，后续全量矩阵被主动停止，不能视为全矩阵通过。验证后清理本次生成的项目和 Go/lint 构建缓存，保留历史 `.tmp/d2/render-3653844838` 与可复用模块缓存。
+- 2026-10-12 06:49 OpenAPI 安全刷新：生成器、OpenAPI、模板和 CLI 包测试通过，覆盖 dry-run 无写入、过期计划拒绝及第二个文件替换失败后回滚；`make vet`、核心包 lint（0 issues）、`make contract-check`（68 个链接、324 个交付文件）、`make fmt-check` 和 `git diff --check` 通过。
 
 - 2026-10-12 06:47 D6 项目状态校验：定向测试、`go vet ./...`、契约检查、格式检查和核心修改包 lint（0 issues）通过；集成包编译通过。Gateway SQLite 与无数据库代表项目均完成 Proto／Swagger／`example.yaml` 复现，SQLite 代表用例通过；默认 HTTP 与 Gateway 无数据库用例在服务 SIGTERM 排空处超时（重跑仍复现），不能算集成通过。全仓及 `tests/integration` lint 因 Go 1.26 linter 遇到 Go 1.27 源码而 panic。清理本轮 171 MiB 任务缓存；完整生成项目矩阵尚未通过。
 
-- 2026-10-12 06:49 OpenAPI 安全刷新：生成器、OpenAPI、模板和 CLI 包测试通过，覆盖 dry-run 无写入、过期计划拒绝及第二个文件替换失败后回滚；`make vet`、核心包 lint（0 issues）、`make contract-check`（68 个链接、324 个交付文件）、`make fmt-check` 和 `git diff --check` 通过。
-
-- 2026-10-11 23:17 D6 RPC 登记：`go test ./internal/templates` 通过；在获准的本机回环环境运行 `go test ./tests/integration -run '^Test(GRPCProjects|GatewayProjects)/(sqlite-none|none-none)$'`，SQLite 与无数据库的 gRPC-only、Gateway 代表项目全部通过 readonly 编译、race/vet/lint、Proto 复现和服务回环调用；清理本次测试写入的 28,811 个 Go 构建缓存文件及 132 MiB 隔离缓存，保留历史共享缓存。
+- 2026-10-12 00:02 D6 OpenAPI/登记回归：核心包测试、`make vet`、`make lint`（0 issues）、`make contract-check`（68 个本地链接、321 个交付文件）、`make fmt-check` 与 `git diff --check` 通过。分别运行默认项目、`TestDualProjects/(sqlite-none|none-none)`、`TestGatewayProjects/(sqlite-none|none-none)`；生成项目 readonly 编译、race/vet/lint、本机服务调用通过，Gateway Proto／Swagger 逐字节复现通过。Gateway 首次复现发现模板规范化与 protoc 原始输出格式不一致，已规范化复现脚本并重跑通过。完整 `make test` 矩阵未完成；首次模板测试断言的编译问题已修正，后续全量矩阵被主动停止，不能视为全矩阵通过。验证后清理本次生成的项目和 Go/lint 构建缓存，保留历史 `.tmp/d2/render-3653844838` 与可复用模块缓存。
 
 - 2026-10-11 23:18 D6 文档/格式收尾：`make contract-check`（68 个本地链接、317 个交付文件）、`make fmt-check`、`git diff --check` 通过；本轮专用缓存与集成测试生成目录已清理。
 
+- 2026-10-11 23:17 D6 RPC 登记：`go test ./internal/templates` 通过；在获准的本机回环环境运行 `go test ./tests/integration -run '^Test(GRPCProjects|GatewayProjects)/(sqlite-none|none-none)$'`，SQLite 与无数据库的 gRPC-only、Gateway 代表项目全部通过 readonly 编译、race/vet/lint、Proto 复现和服务回环调用；清理本次测试写入的 28,811 个 Go 构建缓存文件及 132 MiB 隔离缓存，保留历史共享缓存。
+
 - 2026-10-11 23:12 D6 HTTP/dual：`go test ./internal/templates` 与新增 transport-scope 测试通过；在获准的本机回环环境执行 `go test ./tests/integration -run '^Test(DefaultProject|NoDatabaseProject|DualProjects)$'`，三个生成项目集成套件无跳过通过，覆盖 readonly 编译、race/vet/lint、HTTP/JWT CRUD、无数据库入口及 dual HTTP+gRPC 行为。清理本次 132 MiB 隔离 Go 构建缓存；`.tmp/d2` 仅保留任务前已有目录。23:13 `make contract-check`（68 个本地链接、316 个交付文件）、`make fmt-check` 与 `git diff --check` 通过，隔离缓存目录已确认不存在。
 
-- 2026-10-11 23:02 D6 登记接口原型：`make compatibility` 首次受沙箱回环监听限制；获准本机重跑后全套兼容性测试通过，包括新增 `TestGeneratedModuleRegistryContract`、Proto 回环测试和 SQLite 行为测试；MySQL/PostgreSQL 兼容性子用例按该目标设计跳过，真实服务仍由 `make compatibility-db` 验证。清理本次隔离 Go 构建缓存。
 - 2026-10-11 23:03 D6 文档与格式回归：`make contract-check`（68 个链接、315 个交付文件）、`make fmt-check`、`git diff --check` 全部通过；确认本次隔离缓存目录已清除。
+
+- 2026-10-11 23:02 D6 登记接口原型：`make compatibility` 首次受沙箱回环监听限制；获准本机重跑后全套兼容性测试通过，包括新增 `TestGeneratedModuleRegistryContract`、Proto 回环测试和 SQLite 行为测试；MySQL/PostgreSQL 兼容性子用例按该目标设计跳过，真实服务仍由 `make compatibility-db` 验证。清理本次隔离 Go 构建缓存。
 
 - 2026-10-11 22:58 D6 契约文档：`make contract-check` 通过（68 个本地链接、314 个交付文件），`git diff --check` 通过；复核命令示例、字段约束、登记文件所有权和 D6 未实现状态一致。
 
@@ -123,24 +110,3 @@ D6 进行中：`gen module` 已生成无虚构业务行为的 Biz/Handler 骨架
 - 2026-10-11 17:51 D4 dual：`make check`、`make race build`、`make template-db`、`make template-redis`、`make template-container` 全部通过，lint 零问题；48 种组合契约与原有协议回归通过。新增 16 种 dual 项目 readonly 编译测试包及 Linux amd64 服务／客户端，代表项目完成 race／vet／lint、跨协议 CRUD／问候、主体／角色隔离、TLS、Proto 逐字节复现与独立客户端导入，清单未变化。真实 MySQL／PostgreSQL 与 TLS Redis 无跳过验证持久化、授权先于缓存、故障回源、必需阻断与重连后两侧恢复；就绪使用独立契约，恢复限 5 秒。双端口占用、证书失败、共享池清理、任一 Serve 异常、并发强制退出及两侧在途请求成功排空通过，补强后两个代表项目回归通过。生产容器验证双端口 TLS、非 root、只读根文件系统、只读证书／策略挂载与重启；相关 Docker 测试标签的容器、镜像、卷和网络核对为空，仅清理本次中断生成项目与临时目录，保留共享缓存。CLI 二进制确认 Go 1.26.4、模块路径及帮助／版本行为。
 
 - 2026-10-11 12:55 D4 纯 gRPC：最终 `make check`、`make race build`、`make template-db`、`make template-redis`、`make template-container` 通过，lint 零问题；原有 HTTP 回归通过。新增 16 种 gRPC 组合 readonly 编译测试包及 Linux amd64 纯 Go 服务／客户端；四个代表组合完成 test/vet/race/lint、实际 RPC／TLS、交付 Proto 脚本逐字节复现及独立 Go 模块导入，清单未变化。真实 MySQL／PostgreSQL 与 TLS Redis 无跳过验证 CRUD、主体／角色隔离、权限撤销先于缓存、持久化、必需 Unavailable／健康 NOT_SERVING、可选回源和恢复；内部缓存预算与调用方 deadline 分开映射，原始 Handler 错误／panic 脱敏，Reflection 提前拒绝的 EOF 竞态回归通过。生产 TLS 容器验证非 root、只读根文件系统、证书／策略只读挂载和重启；本次测试标签下容器、镜像、卷和网络只读核对均为零。仅清理本次临时目录及已记录的中断旧验证目录，保留共享缓存。
-
-- 2026-10-11 12:12 D3 Casbin：最终 `make check`、`make race build`、`make template-db`、`make template-redis`、`make template-container` 通过；16 种组合契约及八种新增模板 readonly 测试/vet/race/lint、Linux amd64 纯 Go 构建通过，清单未变化。真实 SQLite/MySQL/PostgreSQL 验证显式迁移、持久化、撤销、唯一约束、保存失败回滚、连接池 deadline 与随后复用；外部数据库无跳过，并先验证 SQL v1 再升级 Casbin v2。真实 TLS Redis 与只读文件容器验证默认拒绝、主体／角色隔离、授权先于缓存、错误导入保留旧策略、重启撤销及日志脱敏；原有数据库、缓存和容器回归通过。仅清理本次临时目录与专用 Docker 资源，相关容器、测试镜像、卷和网络只读核对为空。
-
-- 2026-10-11 11:40 项目命名文档：`make contract-check` 与 `git diff --check` 通过；人工对照 CLI 当前仅支持帮助/版本、模板 Name/Module 独立校验及名称正则，核对示例参数、默认值、当前目录写入和文档锚点一致。仅修改 README、ROADMAP 与命令契约，不涉及代码或运行配置。
-
-- 2026-10-11 07:35 D3 Redis：`make check`、`make race build`、`make template-redis`、模板契约与 diff 检查通过。八种产物文件/依赖裁剪与清单不变，四种 Redis 组合完成 readonly 测试/vet/race/lint 和 Linux amd64 纯 Go 构建。固定摘要真实 TLS Redis 对 SQLite、无数据库完成无跳过验收：缓存命中、TTL、隔离、坏值、失效、取消/deadline、后续池复用、未知 CA/主机名/错误密码拒绝、可选停机回源、必需启动/就绪/读写 503 阻断、恢复及日志脱敏通过。受控 RESP2 连接覆盖运行中取消；修正 socket deadline 与 Context 定时器竞争、内部缓存预算误映射 504。复现 Docker 随机端口重启会改变，隔离夹具改用随机选择的固定映射并检查一致性。专用 Redis 标签下容器为零，仅清理本次临时凭据与依赖准备产物，保留共享镜像缓存。
-
-- 2026-10-11 07:05 D3 无数据库：最终 `make check`、`make race build`、`make template-container` 与模板契约检查通过；四种产物均通过 readonly 测试/vet/race/lint，清单不变。无数据库依赖树与文件裁剪、本机及 Linux amd64 纯 Go 构建、JWT 两主体、UTF-8/控制字符/长度/未知与重复参数、Context、非法配置、迁移命令无写入、TLS/CORS、JSON 日志脱敏与重启/退出通过。实际无数据库容器验证非 root、只读根文件系统、无卷与 JWT；默认容器迁移/CRUD/持久化回归通过。定位新二进制首次执行约 4.99s、再次非法命令约 9ms，测试先检查无写入帮助，再按原 3s 门槛验证失败退出。专用测试标签下容器、镜像与卷只读检查全部为零。
-
-- 2026-10-11 06:49 D3 SQL 数据库：`make check`、`make race build`、相关集成测试/vet/lint 通过；三个变体的 readonly 清单、直接依赖裁剪、文档与 Swagger 通过，MySQL/PostgreSQL 最新模板完成 Linux amd64 纯 Go 构建。最终 `make template-db` 使用固定摘要 MySQL 8.4.11、PostgreSQL 18.6，所有外部用例无跳过；迁移重放、空库只读检查、实际 schema 不匹配、唯一/大小写/Unicode、零值与相同值更新、跨仓储回滚、运行中 deadline 与随后池复用、启动失败关闭、HTTP 主体隔离、重启持久化及日志脱敏通过。真实 TLS 验证受信 CA 成功、未知 CA/主机名不符/错误密码/生产明文拒绝；定位并修正 MySQL Charset 接入及握手排序规则问题。最终专用容器、卷与网络只读检查均为零。
-
-- 2026-10-11 01:21 D2 最终验收：`make check`、`make race build`、`make template-container` 通过；独立项目全部使用 readonly 且清单未变化，文档链接、Swagger 2.0 本地引用、直接依赖与镜像摘要核对通过。真实进程验证未知配置/秘密缺失/未迁移/TLS 无效/端口占用/生产开发命令拒绝，可信证书链与精确 CORS 通过；复现 TLS 失败绕过 JSON 日志后修复，所有 TLS 日志可解析为 JSON。最终实际容器验证非 root、显式迁移重放、JWT/CRUD 和重启持久化；专用标签只读检查容器、卷及测试镜像均为零。
-- 2026-10-11 01:10 D2 错误与请求边界：`make check` 通过；独立项目测试、vet、race、lint 与实际 HTTP 全链路通过。cause 可追溯且 Error 文本脱敏，请求预算返回 504，已有无效配置及符号链接均拒绝覆盖。
-- 2026-10-11 01:00 D2 配置类型修复：先复现数字 issuer 被接受，再修正并通过 `make check`；生成项目测试、vet、race、lint 和真实 HTTP 回归通过，文件/环境/显式覆盖行为保持一致。
-- 2026-10-11 00:58 D2 示例 CRUD：`make check` 通过，独立项目测试、vet、race、lint 全通过；两个实际服务进程验证认证、CRUD、跨主体读/改/删 404、同主体唯一冲突 409、分页/参数边界、零值更新、非法 JSON 与重启持久化；日志未包含测试 Token、密钥、正文或 SQL 数据。同事务两个仓储回滚、取消与 deadline 传播通过。
-- 2026-10-11 00:52 D2 JWT：`make check` 通过，独立渲染项目测试、vet、race、lint 通过；算法/签名/issuer/audience、缺失声明、到期与未来时间、换行和超长输入全部拒绝；重复认证头、主体传播、签发参数和生产禁用回归通过。
-- 2026-10-11 00:49 D2 SQLite：`make check` 通过，渲染项目测试、vet、race、lint 全通过；真实文件覆盖特殊字符路径、0600 权限、三连接 PRAGMA、空库检查不建表、迁移重放、取消请求、关闭后持久化及日志脱敏。独立二进制初始化与迁移命令通过；缺 schema、非法 TLS、端口占用及失败后池关闭回归通过。
-- 2026-10-11 00:46 D2 HTTP 服务基础：`make check` 通过；渲染独立项目测试、vet、race、lint 全部通过，真实回环测试验证关闭请求排空与预算到期强制取消；开发配置权限及密钥保留、panic/Token/查询日志脱敏通过。
-- 2026-10-11 00:36 D2 配置与日志：`make check` 通过；集成测试实际渲染独立模块、补齐固定依赖后执行 readonly 测试与 vet。配置回归覆盖覆盖优先级、环境独立启动、显式文件缺失、未知键、无单位时长、pprof 限制及密钥错误脱敏。
-- 2026-10-11 00:36 模板元数据：`make test vet GO_PACKAGES=./internal/templates` 通过；回归覆盖 `.DS_Store`、`Thumbs.db` 不进入文件计划及 `.gitignore` 输出保留。
-- 2026-10-11 00:30 D2 模板渲染：`make check` 通过；单元测试覆盖确定性、变量展开、非法名称与模块注入、缺失变量、语法和格式错误，失败不返回部分计划。

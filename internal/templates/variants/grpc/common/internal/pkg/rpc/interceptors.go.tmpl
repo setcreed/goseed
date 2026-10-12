@@ -19,6 +19,8 @@ import (
 )
 
 type Authorizer interface {Authorize(context.Context,string,string,string)error}
+// Permission binds a registered method to its module and business operation.
+type Permission struct {Resource string;Operation string}
 var requestPattern=regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 func Status(ctx context.Context,err error)error{
  if err==nil{return nil}
@@ -40,16 +42,16 @@ func requestContext(ctx context.Context)(context.Context,error){
  id:="";if len(values)==1{if !requestPattern.MatchString(values[0]){return ctx,status.Error(codes.InvalidArgument,"invalid request ID")};id=values[0]}else{var random [16]byte;if _,err:=rand.Read(random[:]);err!=nil{return ctx,status.Error(codes.Internal,"cannot create request ID")};id=hex.EncodeToString(random[:])}
  return contextx.WithRequestID(ctx,id),nil
 }
-func Unary(jwt *auth.JWT,authorizer Authorizer,permissions map[string]string,budget time.Duration,logging *zap.Logger)grpc.UnaryServerInterceptor{
+func Unary(jwt *auth.JWT,authorizer Authorizer,permissions map[string]Permission,budget time.Duration,logging *zap.Logger)grpc.UnaryServerInterceptor{
  return func(ctx context.Context,request any,info *grpc.UnaryServerInfo,next grpc.UnaryHandler)(response any,err error){
   started:=time.Now();method:="unknown";if _,known:=permissions[info.FullMethod];known{method=info.FullMethod};if info.FullMethod=="/grpc.health.v1.Health/Check"{method=info.FullMethod}
   defer func(){if recover()!=nil{response=nil;err=status.Error(codes.Internal,"internal server error")};logging.Info("RPC completed",zap.String("method",method),zap.String("request_id",contextx.RequestID(ctx)),zap.String("code",status.Code(err).String()),zap.Duration("duration",time.Since(started)))}()
   ctx,err=requestContext(ctx);if err!=nil{return nil,err};_ = grpc.SetHeader(ctx,metadata.Pairs("x-request-id",contextx.RequestID(ctx)))
   ctx,cancel:=context.WithTimeout(ctx,budget);defer cancel()
   if info.FullMethod!="/grpc.health.v1.Health/Check" {
-   operation,known:=permissions[info.FullMethod];if !known{return nil,status.Error(codes.PermissionDenied,"unregistered operation")}
+   permission,known:=permissions[info.FullMethod];if !known||permission.Resource==""||permission.Operation==""{return nil,status.Error(codes.PermissionDenied,"unregistered operation")}
    ctx,err=identity(ctx,jwt);if err!=nil{return nil,err}
-   if authorizer!=nil{if err:=authorizer.Authorize(ctx,contextx.Subject(ctx),"example",operation);err!=nil{return nil,Status(ctx,err)}}
+   if authorizer!=nil{if err:=authorizer.Authorize(ctx,contextx.Subject(ctx),permission.Resource,permission.Operation);err!=nil{return nil,Status(ctx,err)}}
   }
   response,err=next(ctx,request);if err==nil&&ctx.Err()!=nil{return nil,Status(ctx,ctx.Err())};if err!=nil{if _,known:=status.FromError(err);!known{err=Status(ctx,err)}};return response,err
  }

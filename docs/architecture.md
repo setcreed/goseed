@@ -79,6 +79,7 @@ shop/
 │   ├── apiserver/
 │   │   ├── bootstrap/
 │   │   │   ├── providers.go
+│   │   │   ├── module_<name>.go
 │   │   │   └── modules_gen.go
 │   │   ├── router.go
 │   │   ├── handler/
@@ -126,7 +127,13 @@ shop/
 
 新增模块源码、Proto 源、spec、迁移、文档和测试都是创建后由开发者维护的文件。生成器只创建，不覆盖这些文件；不重新生成旧业务代码。这样登记索引可以增量重建，而业务实现仍保持普通 Go 源码和项目所有权。
 
+模块依赖组装使用固定启动入口：`providers.go` 初始化共享资源后，调用 `newModuleServices(moduleDependencies)` 一次，将同一份组装结果传给 HTTP、RPC 与 Gateway 登记函数。`moduleDependencies` 是启动层的强类型结构，只包含当前配置的共享数据库、日志和可选缓存；开发者可在启动层扩展它，不能把它或 DI 容器传入 Biz。`modules_gen.go` 按清单调用每个模块的 `new<Name>Module`，并汇总协议登记，不直接重写模块的构造逻辑。
+
+`bootstrap/module_<name>.go` 是首次生成后由开发者维护的组装文件。它通过显式构造函数创建 Store、Biz 和协议 Handler；SQL Store 接收应用已有的数据库对象，不创建额外连接池。dual 的两种 Handler 接收同一 Biz 实例。HTTP 操作权限、RPC 权限与 Gateway 映射由模块组装文件提供，登记索引只汇总并绑定模块名称及路径；增加其他模块时不覆盖既有组装文件。缺少固定组装入口的旧项目在生成前报不兼容错误，需要开发者显式更新入口，不自动改写 Bootstrap。
+
 ## 技术方案
+
+RPC 登记将每个精确 FullMethod 绑定到所属模块名称与操作。生成索引把模块工厂的操作映射转换为带资源名称的权限描述，不把其他模块的请求当作内置示例授权；FullMethod 重复时返回组装错误并拒绝启动。
 
 | 能力 | 拟采用方案 | 引入目的与边界 |
 |---|---|---|

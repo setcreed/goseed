@@ -37,3 +37,5 @@
 [[if .Redis]]
 Redis 配置、缓存边界与验证入口见 [Redis](docs/redis.md) ；Biz 只依赖缓存接口，客户端由 App 统一关闭，不将缓存当作唯一权威状态。
 [[end]]
+
+模块扩展由固定启动入口调用 `newModuleServices(moduleDependencies)`，共享依赖只用于 Bootstrap 组装。`bootstrap/module_<name>.go` 为开发者维护的模块工厂，显式构造 Store、Biz 和 Handler，返回构造错误；双协议共用同一 Biz，模块不自行关闭应用共享池。`bootstrap/modules_gen.go` 是生成器维护的登记索引，不手工修改；自定义构造、HTTP 权限、RPC 权限与 Gateway 映射放在模块工厂中。

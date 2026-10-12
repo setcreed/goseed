@@ -14,9 +14,17 @@ import (
 	[[if ne .Database "none"]]"[[.Module]]/internal/pkg/database"[[end]]
 	logx "[[.Module]]/internal/pkg/log"
 	"[[.Module]]/internal/pkg/rpc"
+	[[if ne .Database "none"]]"gorm.io/gorm"[[end]]
 	"github.com/samber/do/v2"
 	"go.uber.org/zap"
 )
+
+// moduleDependencies contains application-owned resources used only during assembly.
+type moduleDependencies struct {
+    Logger *zap.Logger
+    [[if ne .Database "none"]]Database *gorm.DB[[end]]
+    [[if .Redis]]Cache *cache.Client[[end]]
+}
 
 type App struct { Server *rpc.Server; Logger *zap.Logger[[if ne .Database "none"]];Database *database.Database[[end]][[if .Redis]];Cache *cache.Client[[end]][[if eq .Authz "casbin"]];Authorization *authz.Manager[[end]] }
 
@@ -37,6 +45,8 @@ func New(settings config.Config, version string) (*App,error) {
 	[[if .Redis]]caching,err:=cache.Open(startup,settings.Redis,logger);if err!=nil{[[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}
 	do.ProvideValue(injector,caching)[[end]]
 	do.ProvideValue(injector,authentication)
+	modules,err:=newModuleServices(moduleDependencies{Logger:logger,[[if ne .Database "none"]]Database:db.DB,[[end]][[if .Redis]]Cache:caching,[[end]]})
+	if err!=nil{[[if .Redis]]_ = caching.Close();[[end]][[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}
 	do.ProvideValue(injector,examplehandler.New(examplebiz.[[if .Redis]]NewCached([[if ne .Database "none"]]examplestore.New(db.DB),[[end]]caching)[[else]]New([[if ne .Database "none"]]examplestore.New(db.DB)[[end]])[[end]]))
 	do.ProvideValue(injector,&rpc.Readiness{[[if .Redis]]CheckDependency:func(ctx context.Context)error{[[if ne .Database "none"]]if err:=db.Pool.PingContext(ctx);err!=nil{return err};[[end]]return caching.Check(ctx)}[[else if ne .Database "none"]]CheckDependency:db.Pool.PingContext[[end]]})
 	do.Provide(injector,func(i do.Injector)(*rpc.Server,error){
@@ -46,7 +56,8 @@ func New(settings config.Config, version string) (*App,error) {
 		authentication,err:=do.Invoke[*auth.JWT](i);if err!=nil{return nil,err}
 		examples,err:=do.Invoke[*examplehandler.Handler](i);if err!=nil{return nil,err}
 		[[if eq .Authz "casbin"]]authorization,err:=do.Invoke[*authz.Manager](i);if err!=nil{return nil,err}[[end]]
-		permissions,register:=rpcModules(examples)
+		permissions,register,err:=rpcModules(examples,modules)
+		if err!=nil{return nil,err}
 		return rpc.New(configuration.GRPC,ready,logging,authentication,permissions,register[[if eq .Authz "casbin"]],authorization[[end]])
 	})
 	rpcServer,err := do.Invoke[*rpc.Server](injector)

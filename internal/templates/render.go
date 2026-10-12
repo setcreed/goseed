@@ -40,12 +40,10 @@ type Options struct {
 // ModuleEntry is the manifest projection used to render protocol registries.
 type ModuleEntry struct {
 	Name       string
+	Type       string
+	GoName     string
+	ServiceVar string
 	Path       string
-	HTTPAlias  string
-	RPCAlias   string
-	StoreAlias string
-	HTTPVar    string
-	RPCVar     string
 }
 
 type templateData struct {
@@ -64,7 +62,7 @@ func Default(project Project) ([]File, error) {
 
 // Render prepares a standalone project with the selected transport and storage.
 func Render(project Project, options Options) ([]File, error) {
-	return RenderWithModules(project, options, []ModuleEntry{{Name: "example", Path: "/v1/examples", HTTPAlias: "examplehttp", RPCAlias: "examplegrpc", HTTPVar: "exampleHTTP", RPCVar: "exampleRPC"}})
+	return RenderWithModules(project, options, []ModuleEntry{{Name: "example", Path: "/v1/examples"}})
 }
 
 // RenderWithModules renders a project using the supplied manifest modules.
@@ -109,6 +107,14 @@ func RenderWithModules(project Project, options Options, modules []ModuleEntry) 
 			return nil, fmt.Errorf("invalid or duplicate module name %q", module.Name)
 		}
 		seenModules[module.Name] = true
+		module.GoName = strings.ToUpper(module.Name[:1]) + module.Name[1:]
+		module.ServiceVar = module.Name + "Service"
+		if module.Type == "" {
+			module.Type = "module"
+		}
+		if module.Type != "module" && module.Type != "resource" {
+			return nil, fmt.Errorf("unsupported module type %q", module.Type)
+		}
 		if module.Name == "example" {
 			hasExample = true
 			if module.Path == "" {
@@ -116,21 +122,6 @@ func RenderWithModules(project Project, options Options, modules []ModuleEntry) 
 			}
 		} else if module.Path == "" {
 			module.Path = "/v1/" + module.Name
-		}
-		if module.HTTPAlias == "" {
-			module.HTTPAlias = module.Name + "http"
-		}
-		if module.RPCAlias == "" {
-			module.RPCAlias = module.Name + "grpc"
-		}
-		if module.StoreAlias == "" {
-			module.StoreAlias = module.Name + "store"
-		}
-		if module.HTTPVar == "" {
-			module.HTTPVar = module.Name + "HTTP"
-		}
-		if module.RPCVar == "" {
-			module.RPCVar = module.Name + "RPC"
 		}
 	}
 	if !hasExample {
@@ -238,7 +229,7 @@ func RenderBusinessModule(project Project, options Options, name string) ([]File
 		bizSource += "type Biz struct{}\n\nfunc New() *Biz { return &Biz{} }\n"
 	} else {
 		bizSource += "// Repository is the persistence boundary for operations added to this module.\ntype Repository interface{}\n\ntype Biz struct { repository Repository }\n\nfunc New(repository Repository) *Biz { return &Biz{repository: repository} }\n"
-		storeSource := "package store\n\nimport " + name + "biz \"" + project.Module + "/internal/apiserver/biz/" + name + "\"\n\ntype Store struct{}\n\nfunc New() *Store { return &Store{} }\n\nvar _ " + name + "biz.Repository = (*Store)(nil)\n"
+		storeSource := "package store\n\nimport (\n" + name + "biz \"" + project.Module + "/internal/apiserver/biz/" + name + "\"\n\"gorm.io/gorm\"\n)\n\ntype Store struct{ db *gorm.DB }\n\nfunc New(db *gorm.DB) *Store { return &Store{db:db} }\n\nvar _ " + name + "biz.Repository = (*Store)(nil)\n"
 		formatted, err := formatGo(storeSource)
 		if err != nil {
 			return nil, err
@@ -266,6 +257,11 @@ func RenderBusinessModule(project Project, options Options, name string) ([]File
 		}
 		files = append(files, File{Path: "internal/apiserver/handler/grpc/" + name + "/handler.go", Content: formatted})
 	}
+	factory, err := renderModuleFactory(project, options, name)
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, factory)
 	return files, nil
 }
 

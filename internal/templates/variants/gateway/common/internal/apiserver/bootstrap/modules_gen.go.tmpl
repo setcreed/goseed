@@ -2,45 +2,67 @@
 package bootstrap
 
 import (
-	[[if gt (len .Modules) 1]]"context"
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"[[end]]
-	examplegrpc "[[.Module]]/internal/apiserver/handler/grpc/example"
-	"[[.Module]]/internal/pkg/gateway"
-	api "[[.Module]]/pkg/api/example/v1"
-[[range .Modules]][[if ne .Name "example"]]
-	[[.Name]]biz "[[ $.Module ]]/internal/apiserver/biz/[[.Name]]"
-	[[if ne $.Database "none"]][[.StoreAlias]] "[[ $.Module ]]/internal/apiserver/store/[[.Name]]"[[end]]
-	[[.RPCAlias]] "[[ $.Module ]]/internal/apiserver/handler/grpc/[[.Name]]"[[end]][[end]]
-	"google.golang.org/grpc"
+examplegrpc "[[.Module]]/internal/apiserver/handler/grpc/example"
+"[[.Module]]/internal/pkg/rpc"
+[[if gt (len .Modules) 1]]"fmt"[[end]]
+"google.golang.org/grpc"
+"[[.Module]]/internal/pkg/gateway"
+api "[[.Module]]/pkg/api/example/v1"
 )
 
 const openAPISHA256 = ""
 const modulesSHA256 = ""
 
-func rpcModules(examples *examplegrpc.Handler) (map[string]string, func(grpc.ServiceRegistrar)) {
-	permissions := make(map[string]string, len(examplegrpc.Permissions))
-	for method, operation := range examplegrpc.Permissions {
-		permissions[method] = operation
-	}
-	[[range .Modules]][[if ne .Name "example"]][[.RPCVar]] := [[.RPCAlias]].New([[.Name]]biz.New([[if ne $.Database "none"]][[.StoreAlias]].New()[[end]]))
-	[[end]][[end]]
-	register := func(registrar grpc.ServiceRegistrar) {
-		examples.Register(registrar)
-		[[range .Modules]][[if ne .Name "example"]][[.RPCVar]].Register(registrar)
-		[[end]][[end]]
-	}
-	return permissions, register
+const moduleAssemblyVersion = 1
+
+type moduleServices struct {
+[[range .Modules]][[if ne .Name "example"]]
+    [[.ServiceVar]] [[.Name]]Module
+[[end]][[end]]
 }
 
-func gatewayModules() []gateway.Registration {
-	modules := []gateway.Registration{{
-		Name: "example",
-		Path: "/v1/examples",
-		Queries: map[string][]string{"GET": {[[if eq .Database "none"]]"name"[[else]]"page", "page_size"[[end]]}},
-		BodyMethods: map[string]bool{[[if ne .Database "none"]]"POST": true, "PATCH": true[[end]]},
-		Register: api.RegisterExampleServiceHandler,
-	}}
+func newModuleServices(dependencies moduleDependencies) (moduleServices, error) {
+    var services moduleServices
 [[range .Modules]][[if ne .Name "example"]]
-	modules = append(modules, gateway.Registration{Name: "[[.Name]]", Path: "[[.Path]]", Queries: map[string][]string{}, BodyMethods: map[string]bool{}, Register: func(context.Context, *runtime.ServeMux, *grpc.ClientConn) error { return nil }})[[end]][[end]]
-	return modules
+    [[.ServiceVar]], err := new[[.GoName]]Module(dependencies)
+    if err != nil { return moduleServices{}, err }
+    services.[[.ServiceVar]] = [[.ServiceVar]]
+[[end]][[end]]
+    return services, nil
+}
+
+func rpcModules(examples *examplegrpc.Handler, services moduleServices) (map[string]rpc.Permission, func(grpc.ServiceRegistrar), error) {
+    permissions := make(map[string]rpc.Permission, len(examplegrpc.Permissions))
+    for method, operation := range examplegrpc.Permissions {
+        permissions[method] = rpc.Permission{Resource:"example", Operation:operation}
+    }
+[[range .Modules]][[if ne .Name "example"]]
+    for method, operation := range services.[[.ServiceVar]].Permissions {
+        if _,exists:=permissions[method];exists{return nil,nil,fmt.Errorf("duplicate RPC method registration %s",method)}
+        permissions[method] = rpc.Permission{Resource:"[[.Name]]",Operation:operation}
+    }
+[[end]][[end]]
+    register := func(registrar grpc.ServiceRegistrar) {
+        examples.Register(registrar)
+[[range .Modules]][[if ne .Name "example"]]
+        services.[[.ServiceVar]].RPC.Register(registrar)
+[[end]][[end]]
+    }
+    return permissions, register, nil
+}
+
+func gatewayModules(services moduleServices) []gateway.Registration {
+    modules := []gateway.Registration{{
+        Name: "example", Path: "/v1/examples",
+        Queries: map[string][]string{"GET": {[[if eq .Database "none"]]"name"[[else]]"page", "page_size"[[end]]}},
+        BodyMethods: map[string]bool{[[if ne .Database "none"]]"POST": true, "PATCH": true[[end]]},
+        Register: api.RegisterExampleServiceHandler,
+    }}
+[[range .Modules]][[if ne .Name "example"]]
+    [[.ServiceVar]] := services.[[.ServiceVar]].Gateway
+    [[.ServiceVar]].Name = "[[.Name]]"
+    [[.ServiceVar]].Path = "[[.Path]]"
+    modules = append(modules, [[.ServiceVar]])
+[[end]][[end]]
+    return modules
 }

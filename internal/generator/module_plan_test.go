@@ -142,3 +142,146 @@ func TestModulePlanRollsBackNewFilesAndUpdatedIndexesOnFailure(t *testing.T) {
 		}
 	}
 }
+
+func TestModuleAssemblyPreservesDeveloperOwnedFiles(t *testing.T) {
+	for _, transport := range []string{"http", "grpc", "dual", "gateway"} {
+		t.Run(transport, func(t *testing.T) {
+			root := generatedProject(t, templates.Options{Transport: transport})
+			plan, err := PrepareModule(root, "orders")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := plan.Write(); err != nil {
+				t.Fatal(err)
+			}
+			paths := []string{"internal/apiserver/bootstrap/providers.go", "internal/apiserver/bootstrap/module_orders.go"}
+			originals := make(map[string][]byte)
+			for _, path := range paths {
+				filename := filepath.Join(root, filepath.FromSlash(path))
+				data, err := os.ReadFile(filename)
+				if err != nil {
+					t.Fatal(err)
+				}
+				data = append(data, []byte("\n// Developer-owned customization must survive module generation.\n")...)
+				if err := os.WriteFile(filename, data, 0644); err != nil {
+					t.Fatal(err)
+				}
+				originals[path] = data
+			}
+			second, err := PrepareModule(root, "type")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := second.Write(); err != nil {
+				t.Fatal(err)
+			}
+			for path, expected := range originals {
+				actual, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+				if err != nil || !bytes.Equal(actual, expected) {
+					t.Fatalf("developer-owned %s was changed: %v", path, err)
+				}
+			}
+		})
+	}
+}
+
+func TestModuleAssemblyRejectsIncompatibleAndChangedInputs(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		path string
+		old  string
+		new  string
+	}{
+		{"old registry", "modules_gen.go", "const moduleAssemblyVersion = 1", "const legacyAssemblyVersion = 1"},
+		{"modified registry", "modules_gen.go", "Name: \"example\"", "Name: \"modified\""},
+		{"missing factory entry", "providers.go", "newModuleServices(", "legacyModuleServices("},
+		{"old registration call", "providers.go", "httpModules(examples, modules)", "httpModules(examples)"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := generatedProject(t, templates.Options{})
+			path := filepath.Join(root, "internal/apiserver/bootstrap", test.path)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Contains(data, []byte(test.old)) {
+				t.Fatalf("test mutation %q missing", test.old)
+			}
+			if err := os.WriteFile(path, bytes.Replace(data, []byte(test.old), []byte(test.new), 1), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := PrepareModule(root, "orders"); err == nil {
+				t.Fatal("incompatible or modified assembly was accepted")
+			}
+			if _, err := os.Stat(filepath.Join(root, "internal/apiserver/biz/orders/biz.go")); !os.IsNotExist(err) {
+				t.Fatal("failed preflight wrote module files")
+			}
+		})
+	}
+	for _, target := range []string{"providers.go", "module_orders.go"} {
+		t.Run("stale "+target, func(t *testing.T) {
+			root := generatedProject(t, templates.Options{})
+			first, err := PrepareModule(root, "orders")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := first.Write(); err != nil {
+				t.Fatal(err)
+			}
+			plan, err := PrepareModule(root, "products")
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(root, "internal/apiserver/bootstrap", target)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, append(data, []byte("\n// changed after plan\n")...), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if err := plan.Write(); err == nil || !strings.Contains(err.Error(), "changed after") {
+				t.Fatalf("stale assembly input accepted: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(root, "internal/apiserver/biz/products/biz.go")); !os.IsNotExist(err) {
+				t.Fatal("stale plan wrote module files")
+			}
+		})
+	}
+}
+
+func TestModuleAssemblyRefusesFactoryConflictsAndRepeatedConstruction(t *testing.T) {
+	t.Run("factory conflict", func(t *testing.T) {
+		root := generatedProject(t, templates.Options{})
+		path := filepath.Join(root, "internal/apiserver/bootstrap/module_orders.go")
+		original := []byte("// developer-owned factory\n")
+		if err := os.WriteFile(path, original, 0644); err != nil {
+			t.Fatal(err)
+		}
+		plan, err := PrepareModule(root, "orders")
+		if err != nil || len(plan.Conflicts) != 1 {
+			t.Fatalf("factory conflict not reported: %v %v", plan.Conflicts, err)
+		}
+		if err := plan.Write(); err == nil {
+			t.Fatal("conflicted factory was overwritten")
+		}
+		actual, err := os.ReadFile(path)
+		if err != nil || !bytes.Equal(actual, original) {
+			t.Fatal("factory was modified")
+		}
+	})
+	t.Run("repeated construction", func(t *testing.T) {
+		root := generatedProject(t, templates.Options{})
+		path := filepath.Join(root, "internal/apiserver/bootstrap/providers.go")
+		original, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, append(original, []byte("\nfunc repeated(){_,_ = newModuleServices(moduleDependencies{})}\n")...), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := PrepareModule(root, "orders"); err == nil || !strings.Contains(err.Error(), "repeated") {
+			t.Fatalf("repeated module construction accepted: %v", err)
+		}
+	})
+}

@@ -50,7 +50,7 @@ func dualFixture(t *testing.T,release <-chan struct{})(*Server,*blockingHandler,
    }}},
   },handler)
  }
- grpcServer,err:=rpc.New(settings.GRPC,grpcReady,zap.NewNop(),jwt,map[string]string{"/test.Blocking/Call":"read"},register[[if eq .Authz "casbin"]],allowDual{}[[end]]);if err!=nil{t.Fatal(err)}
+ grpcServer,err:=rpc.New(settings.GRPC,grpcReady,zap.NewNop(),jwt,map[string]rpc.Permission{"/test.Blocking/Call":{Resource:"example",Operation:"read"}},register[[if eq .Authz "casbin"]],allowDual{}[[end]]);if err!=nil{t.Fatal(err)}
  t.Cleanup(grpcServer.Stop)
  return New(settings,httpServer,grpcServer,httpReady,grpcReady),handler,httpEntered,httpAborted,token
 }
