@@ -10,7 +10,7 @@
 
 D6 进行中：`gen module` 通过一次性创建的模块工厂显式构造 Biz/Handler，SQL Store 接收应用数据库，dual 两侧共享同一 Biz；固定启动入口传递强类型共享依赖，新增模块保留已有手工组装代码。RPC 权限绑定实际模块名，重复 FullMethod 拒绝启动。生成前校验启动入口、完整登记投影和既有工厂，计划过期或写入失败时拒绝/回滚。资源字段 YAML 的严格版本 1 解析器已实现。
 
-D6 剩余任务已拆成 D6-R01 至 D6-R10，目标、前置依赖、修改边界、关键失败路径、验收与提交范围见 [详细施工清单](docs/implementation.md#d6-剩余施工清单) 。本次只完成清单整理，R01 至 R10 尚未开始实施；下一项为 D6-R01，先定稿权限目录、迁移版本/schema、资源计划接口、多模块协议复现和 Redis 行为，再依次开发资源计划、CRUD、四协议适配与完整 CLI。
+D6 剩余任务按 [详细施工清单](docs/implementation.md#d6-剩余施工清单) 执行。D6-R01 已定稿 [资源接入方案](docs/resource-generation.md) ，明确 ResourcePlan、纯权限描述、嵌入 SQL 版本推导、资源 schema 核验、Redis 最小依赖检查和多模块协议/文档复现。下一项为 D6-R02，只交付内部只读目标规划、输入快照与预览，不提前开放公共资源命令；R02 至 R10 尚未完成。
 
 ## 待开始
 
@@ -29,6 +29,8 @@ D6 剩余任务已拆成 D6-R01 至 D6-R10，目标、前置依赖、修改边�
 - 资源接入边界：现有 Casbin 策略校验只接受内置示例命名空间，迁移期望版本由模板固定，协议脚本仅处理内置模块，Gateway 复现会用单模块输出覆盖汇总；分别在 D6-R03、R04、R07/R08 解决，不能仅新增 CRUD/SQL 文件。缺少兼容入口的旧模板项目明确拒绝生成，不自动改写手工 Bootstrap；具体接口与兼容规则在 R01 定稿。
 
 ## 最近完成
+
+- 2026-10-12 08:53 D6-R01 接入决策：定稿资源计划 API、各协议输出路径和文件归属、CRUD 输入/响应、纯模块权限描述与启动/离线共用目录、迁移期望版本及只读 schema、无自动缓存的 Redis 检查、多模块协议和 Gateway 聚合复现；保留 Go 1.26.4 与现有依赖。同步架构、命令、施工清单和 AGENTS 入口，当前方案未实现为运行能力，下一项为 R02。
 
 - 2026-10-12 08:43 D6 详细施工清单：在实施方案中拆分 D6-R01 至 R10，记录目标、前置依赖、修改范围、文件归属、失败路径、验收与独立提交边界；明确权限目录、迁移版本/schema 和多模块协议复现的前置问题，以及 48 种资源合法组合、16 种无数据库拒绝组合和 64 种原项目组合回归。同步 AGENTS 入口与需求中的 Swagger 更新权限，清理 D6 同时列为进行中/待开始的重复状态。资源开发未启动，下一项为 R01。
 
@@ -68,9 +70,9 @@ D6 剩余任务已拆成 D6-R01 至 D6-R10，目标、前置依赖、修改边�
 
 - 2026-10-11 17:51 D4 dual：Render 支持 `Options.Transport: "dual"`，HTTP／gRPC Handler 共用同一 Biz、数据库池、JWT、可选 Redis 与 Casbin；交付独立监听覆盖、双端口预绑定、失败清理与并发排空，保留 Swagger、Proto 和示例客户端。新增 16 种组合及真实 SQL／TLS Redis／双端口生产容器验收通过，HTTP／纯 gRPC 回归通过；同步架构、配置、依赖与生成文档。Gateway 为下一功能，CLI 写入仍属 D5。入口见 [双协议模板](docs/template-dual.md) 。
 
-- 2026-10-11 12:55 D4 纯 gRPC：Render 支持协议选择，交付 SQL CRUD／无数据库问候的 Proto、公开 `pkg/api`、Handler、服务与示例客户端；复用 Biz／Store、JWT、Redis 和 Casbin，裁剪 Gin／业务 HTTP／Swagger。提供强类型配置、请求 ID、标准错误与日志脱敏、optional 零值、预算／取消、健康 Check／Watch、生产 TLS、开发认证 Reflection 和有限期退出；固定版本显式 Proto 生成无需普通构建重新生成。32 种 HTTP／gRPC 组合与真实数据库／Redis／生产容器验收完成，同步目录和使用文档。CLI 写入仍属 D5。入口见 [纯 gRPC 模板](docs/template-grpc.md) 。
-
 ## 最近验证
+
+- 2026-10-12 08:53 D6-R01 文档：`make contract-check`、`git diff --check` 通过；对照现有模块计划/组装、SQL/Redis/Casbin 模板和协议脚本，核对接口、分页/ID、迁移命名、固定工具版本与 YAML 依赖已有声明。仅形成技术决策，未运行 Go/真实服务测试，未创建临时产物。
 
 - 2026-10-12 08:43 D6 施工清单文档：`make contract-check` 通过（69 个本地链接、331 个交付文件），`git diff --check` 通过；人工对照现有源码、命令/架构契约和 Makefile，核对任务依赖、索引归属、组合数及真实服务验收入口。仅修改四份文档，未开发资源命令、未重跑 Go 或真实服务测试；本次未创建任务临时目录、缓存或编译产物。
 
@@ -109,5 +111,3 @@ D6 剩余任务已拆成 D6-R01 至 D6-R10，目标、前置依赖、修改边�
 - 2026-10-11 22:07 D4 Gateway：`make check` 的根模块集成测试、`make fmt-check`、`make vet`、`make lint`、协议复现与 `make contract-check`／`git diff --check` 通过；新增的 Gateway 包 race 与 IPv4／IPv6 通配监听目标回归通过。`make template-db` 的 MySQL／PostgreSQL Gateway 项目、`make template-redis` 的 SQLite／无数据库及 Casbin 组合均实际运行通过且无跳过；启用 Docker 的 Gateway TLS 容器实际测试通过。Redis 重启后的旧 gRPC 健康恢复用例曾暴露瞬时观察竞态，改为有界 5 秒轮询后完整 Redis 套件通过；没有改变生产服务重试行为。
 
 - 2026-10-11 19:43 文档同步：`make contract-check` 通过版本契约、55 个本地链接、Python 语法与 260 个交付文件检查，`git diff --check` 通过；`make test GO_PACKAGES=./internal/templates` 通过，验证文档模板可渲染及交付链接一致。对照 CLI 源码、Render 选项、模板路径和 Makefile，核对当前默认值、监听参数与 48 种组合；仅改文档及一份生成文档模板，没有重跑数据库或容器，沿用 17:51 的运行验收证据。
-
-- 2026-10-11 17:51 D4 dual：`make check`、`make race build`、`make template-db`、`make template-redis`、`make template-container` 全部通过，lint 零问题；48 种组合契约与原有协议回归通过。新增 16 种 dual 项目 readonly 编译测试包及 Linux amd64 服务／客户端，代表项目完成 race／vet／lint、跨协议 CRUD／问候、主体／角色隔离、TLS、Proto 逐字节复现与独立客户端导入，清单未变化。真实 MySQL／PostgreSQL 与 TLS Redis 无跳过验证持久化、授权先于缓存、故障回源、必需阻断与重连后两侧恢复；就绪使用独立契约，恢复限 5 秒。双端口占用、证书失败、共享池清理、任一 Serve 异常、并发强制退出及两侧在途请求成功排空通过，补强后两个代表项目回归通过。生产容器验证双端口 TLS、非 root、只读根文件系统、只读证书／策略挂载与重启；相关 Docker 测试标签的容器、镜像、卷和网络核对为空，仅清理本次中断生成项目与临时目录，保留共享缓存。CLI 二进制确认 Go 1.26.4、模块路径及帮助／版本行为。
