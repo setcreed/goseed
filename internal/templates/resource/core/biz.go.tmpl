@@ -1,0 +1,63 @@
+package [[.Name]]
+
+import (
+ "context"
+ "math"
+ "time"
+ [[if .HasString]]"strings";"unicode/utf8"[[end]]
+ "[[.Module]]/internal/apiserver/model"
+ "[[.Module]]/internal/pkg/contextx"
+ "[[.Module]]/internal/pkg/errno"
+)
+
+type Repository interface{
+ Create(context.Context,*model.[[.GoName]])error
+ Get(context.Context,string,uint64)(*model.[[.GoName]],error)
+ List(context.Context,string,int,int)([]model.[[.GoName]],int64,error)
+ Update(context.Context,string,uint64,model.[[.GoName]]Changes)(*model.[[.GoName]],error)
+ Delete(context.Context,string,uint64)error
+}
+[[if .Redis]]type Dependency interface{Check(context.Context)error}[[end]]
+type Biz struct{repository Repository;[[if .Redis]]dependency Dependency[[end]]}
+func New(repository Repository[[if .Redis]],dependency Dependency[[end]])*Biz{return &Biz{repository:repository,[[if .Redis]]dependency:dependency,[[end]]}}
+[[if .Redis]]func(b *Biz)checkDependency(ctx context.Context)error{if b.dependency==nil{return errno.Unavailable};return b.dependency.Check(ctx)}[[end]]
+type CreateInput struct{
+ [[range .Fields]][[.GoName]] *[[.Type]] `json:"[[.Name]],omitempty"`
+ [[end]]
+}
+type UpdateInput struct{
+ [[range .Fields]][[.GoName]] *[[.Type]] `json:"[[.Name]],omitempty"`
+ [[end]]
+}
+type Item struct{
+ ID uint64 `json:"id"`
+ [[range .Fields]][[.GoName]] [[.Type]] `json:"[[.Name]]"`
+ [[end]]CreatedAt time.Time `json:"created_at"`
+ UpdatedAt time.Time `json:"updated_at"`
+}
+type Page struct{Items []Item `json:"items"`;Total int64 `json:"total"`;Page int `json:"page"`;PageSize int `json:"page_size"`}
+func subject(ctx context.Context)(string,error){if err:=ctx.Err();err!=nil{return "",err};owner:=contextx.Subject(ctx);if owner==""{return "",errno.Unauthorized};return owner,nil}
+func validID(id uint64)error{if id<1||id>math.MaxInt64{return errno.Invalid("id must be between 1 and 9223372036854775807")};return nil}
+[[if .HasString]]func validateString(value string,limit int,field string)error{if !utf8.ValidString(value)||strings.ContainsRune(value,'\x00')||utf8.RuneCountInString(value)>limit{return errno.Invalid(field+" has invalid text or exceeds its character limit")};return nil}[[end]]
+func item(value *model.[[.GoName]])*Item{return &Item{ID:value.ID,[[range .Fields]][[.GoName]]:value.[[.GoName]],[[end]]CreatedAt:value.CreatedAt.UTC(),UpdatedAt:value.UpdatedAt.UTC()}}
+func(b *Biz)Create(ctx context.Context,input CreateInput)(*Item,error){
+ owner,err:=subject(ctx);if err!=nil{return nil,err}
+ [[range .Fields]][[if .Required]]if input.[[.GoName]]==nil{return nil,errno.Invalid("[[.Name]] is required")};[[end]][[if eq .Type "string"]]if input.[[.GoName]]!=nil{if err:=validateString(*input.[[.GoName]],[[.MaxLength]],"[[.Name]]");err!=nil{return nil,err}};[[end]][[end]]
+ value:=&model.[[.GoName]]{Owner:owner}
+ [[range .Fields]]if input.[[.GoName]]!=nil{value.[[.GoName]]=*input.[[.GoName]]};[[end]]
+ [[if .Redis]]if err:=b.checkDependency(ctx);err!=nil{return nil,err};[[end]]if err:=b.repository.Create(ctx,value);err!=nil{return nil,err};return item(value),nil
+}
+func(b *Biz)Get(ctx context.Context,id uint64)(*Item,error){owner,err:=subject(ctx);if err!=nil{return nil,err};if err:=validID(id);err!=nil{return nil,err};[[if .Redis]]if err:=b.checkDependency(ctx);err!=nil{return nil,err};[[end]]value,err:=b.repository.Get(ctx,owner,id);if err!=nil{return nil,err};return item(value),nil}
+func(b *Biz)List(ctx context.Context,page,size int)(*Page,error){
+ owner,err:=subject(ctx);if err!=nil{return nil,err};if page<1||page>100000||size<1||size>100{return nil,errno.Invalid("invalid pagination")}
+ [[if .Redis]]if err:=b.checkDependency(ctx);err!=nil{return nil,err};[[end]]values,total,err:=b.repository.List(ctx,owner,page,size);if err!=nil{return nil,err}
+ items:=make([]Item,0,len(values));for i:=range values{items=append(items,*item(&values[i]))};return &Page{Items:items,Total:total,Page:page,PageSize:size},nil
+}
+func(b *Biz)Update(ctx context.Context,id uint64,input UpdateInput)(*Item,error){
+ owner,err:=subject(ctx);if err!=nil{return nil,err};if err:=validID(id);err!=nil{return nil,err}
+ if [[range $i,$field:=.Fields]][[if $i]]&&[[end]]input.[[.GoName]]==nil[[end]]{return nil,errno.Invalid("update requires at least one field")}
+ [[range .Fields]][[if eq .Type "string"]]if input.[[.GoName]]!=nil{if err:=validateString(*input.[[.GoName]],[[.MaxLength]],"[[.Name]]");err!=nil{return nil,err}};[[end]][[end]]
+ changes:=model.[[.GoName]]Changes(input)
+ [[if .Redis]]if err:=b.checkDependency(ctx);err!=nil{return nil,err};[[end]]value,err:=b.repository.Update(ctx,owner,id,changes);if err!=nil{return nil,err};return item(value),nil
+}
+func(b *Biz)Delete(ctx context.Context,id uint64)error{owner,err:=subject(ctx);if err!=nil{return err};if err:=validID(id);err!=nil{return err};[[if .Redis]]if err:=b.checkDependency(ctx);err!=nil{return err};[[end]]return b.repository.Delete(ctx,owner,id)}

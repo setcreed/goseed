@@ -77,7 +77,7 @@ func ParseResourceSpec(data []byte) (ResourceSpec, error) {
 	}
 	result := ResourceSpec{Version: 1, Fields: make([]ResourceField, 0, len(raw.Fields))}
 	seen := make(map[string]bool, len(raw.Fields))
-	goNames := make(map[string]bool, len(raw.Fields))
+	goNames := map[string]bool{"ID": true, "Owner": true, "CreatedAt": true, "UpdatedAt": true, "TableName": true}
 	for i, field := range raw.Fields {
 		if field.Name == nil || !resourceFieldName.MatchString(*field.Name) || len(*field.Name) > 63 {
 			return ResourceSpec{}, fmt.Errorf("field %d name must be lower snake_case with at most 63 ASCII characters", i+1)
@@ -107,7 +107,7 @@ func ParseResourceSpec(data []byte) (ResourceSpec, error) {
 		}
 		goName := resourceGoName(*field.Name)
 		if goNames[goName] {
-			return ResourceSpec{}, fmt.Errorf("resource fields produce duplicate Go name %q", goName)
+			return ResourceSpec{}, fmt.Errorf("resource field Go name %q is reserved or duplicated", goName)
 		}
 		goNames[goName] = true
 		required := field.Required != nil && *field.Required

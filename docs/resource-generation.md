@@ -47,6 +47,12 @@ spec 是用户提供的输入，不复制或改写。业务名称使用现有小
 
 API DTO 在 Biz 包定义，不依赖 Gin、gRPC 或 GORM；Handler 只做协议解析/转换和错误映射。Repository 使用模型与字段修改集合；Store 复用传入数据库，所有 SQL 使用 Context 和 owner 条件，PATCH 用明确字段 map 保留零值。保持简单 CRUD，不抽象通用框架、不推断字段间业务约束。
 
+R05 的内部 `CoreFiles()` 提供 Model、Biz、完整 SQL Store 与对应测试的内容副本，不写文件或更新登记。创建与更新 DTO 的字段均使用指针；nil 只表示未提供，协议入口负责在构造 DTO 前拒绝 JSON null、未知/重复键。Biz 返回独立 Item/Page DTO，owner 不进入响应；Repository 的修改集合为模型中的强类型 Changes，不接受外部任意字段 map。Store 显式 TableName 和 column 标签，避免 ORM 命名策略改变资源表/列。
+
+更新先在事务中按 owner/id 写入明确字段，再读取同一主体的结果；失败回滚。列表固定 id 升序，计数和记录分别按 owner 查询，不承诺并发写入下两次读取的快照一致性。Biz 校验主体存在、ID 上界、分页、字符串与字段出现性；Store 复核 ID/owner/空修改边界并传递 Context，SQL 错误使用现有 errno 脱敏。新资源不生成缓存；选择 Redis 时 Biz 仅接收 Check 接口并在输入校验后调用，不复制示例缓存逻辑。
+
+R05 不生成完整协议工厂；R06/R07 在构造 Biz 前调用完整 Store 的 CheckSchema，并复用同一个 Store/Biz。纯 schema 预览 `SchemaStore()` 保持 R04 原型，不应与 CoreFiles 的完整 Store 混合写入同一路径。Go 字段名还须避开 ID、Owner、CreatedAt、UpdatedAt、TableName，不能只按 YAML 原名检查保留字段。
+
 ## 纯模块描述与权限目录
 
 模块工厂文件增加不访问外部服务的 `<name>Permissions() modulePermissions`，描述所选协议的 HTTP method → operation 与 RPC FullMethod → operation。模块工厂与生成登记从同一函数取值，避免另写一份权限字符串；内置模块由固定启动层提供相同纯描述。描述只能声明权限，不构造 Store/Biz/Handler，不访问配置、数据库或 Redis。
@@ -79,7 +85,7 @@ API DTO 在 Biz 包定义，不依赖 Gin、gRPC 或 GORM；Handler 只做协议
 | bool／int64 字段 | BOOLEAN／BIGINT | BOOLEAN（元数据为 TINYINT）／有符号 BIGINT | BOOLEAN／BIGINT |
 | created_at／updated_at | DATETIME | DATETIME(6) | TIMESTAMPTZ |
 
-所有声明列均非空。schema 检查不证明任意手工 DDL 等价；人工迁移应遵循上述草稿结构，额外兼容语法需显式扩展并验证。固定启动层把限时 `moduleDependencies.Context` 交给模块工厂，后续资源工厂用它调用 Store.CheckSchema；Context 不进入 Biz，不留作请求 Context。完整资源工厂随 R05/R09 接入。
+所有声明列均非空。schema 检查不证明任意手工 DDL 等价；人工迁移应遵循上述草稿结构，额外兼容语法需显式扩展并验证。固定启动层把限时 `moduleDependencies.Context` 交给模块工厂，后续资源工厂用它调用 Store.CheckSchema；Context 不进入 Biz，不留作请求 Context。完整协议资源工厂随 R06/R07 接入，兼容校验与写入由 R09 完成。
 
 不带 `--migration` 时可以生成源码；模块文档说明表结构和人工显式迁移入口。用户可自行编写迁移或管理外部 schema，服务仍必须通过同样的只读核验；没有资源表的项目拒绝启动，不能宣称生成即可运行。不提供已有 schema 差异推断或覆盖历史 SQL。
 

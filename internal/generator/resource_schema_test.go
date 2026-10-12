@@ -29,6 +29,15 @@ func TestResourceSchemaDraft(t *testing.T) {
 				t.Fatal("caller changed SQL draft")
 			}
 			store := plan.SchemaStore()
+			core := plan.CoreFiles()
+			if len(core) != 6 {
+				t.Fatal("business core missing")
+			}
+			first := bytes.Clone(core[0].Content)
+			core[0].Content[0] = 'X'
+			if !bytes.Equal(plan.CoreFiles()[0].Content, first) {
+				t.Fatal("caller changed business sources")
+			}
 			if !bytes.Contains(store.Content, []byte("CheckResourceSchema(ctx, s.db")) {
 				t.Fatal("read-only schema store missing")
 			}

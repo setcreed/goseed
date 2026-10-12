@@ -33,8 +33,8 @@ type resourceFingerprint struct {
 	Mode   os.FileMode
 }
 
-// ResourcePlan is a read-only target plan. Rendering and Write are deliberately
-// absent until every transport's CRUD and safe commit path have been verified.
+// ResourcePlan is a read-only target and business-core plan. Protocol rendering
+// and Write remain absent until the complete safe generation path is verified.
 type ResourcePlan struct {
 	root           string
 	name           string
@@ -47,10 +47,11 @@ type ResourcePlan struct {
 	conflicts      []string
 	schemaStore    templates.File
 	migrationDraft *templates.File
+	coreFiles      []templates.File
 }
 
 // PrepareResource validates resource inputs and plans output paths without
-// creating files, rendering placeholder CRUD, or connecting to services.
+// creating files, rendering protocol placeholders, or connecting to services.
 func PrepareResource(root, name string, options ResourceOptions) (ResourcePlan, error) {
 	if !projectModuleName.MatchString(name) || len(name) > 63 || name == "example" {
 		return ResourcePlan{}, fmt.Errorf("invalid or reserved resource name %q", name)
@@ -116,11 +117,6 @@ func PrepareResource(root, name string, options ResourceOptions) (ResourcePlan, 
 	if err != nil {
 		return ResourcePlan{}, fmt.Errorf("resource spec %s: %w", options.Spec, err)
 	}
-	for _, field := range spec.Fields {
-		if field.GoName == "TableName" {
-			return ResourcePlan{}, fmt.Errorf("field %q collides with the generated model TableName method", field.Name)
-		}
-	}
 	plan := ResourcePlan{root: state.Root, name: name, specPath: options.Spec, spec: spec, inputs: make(map[string]resourceFingerprint)}
 	inputs := []string{"goseed.yaml", "internal/apiserver/bootstrap/modules_gen.go", options.Spec}
 	for path := range assembly {
@@ -184,6 +180,14 @@ func PrepareResource(root, name string, options ResourceOptions) (ResourcePlan, 
 		return ResourcePlan{}, err
 	}
 	plan.schemaStore = store
+	coreFields := make([]templates.ResourceField, len(spec.Fields))
+	for i, field := range spec.Fields {
+		coreFields[i] = templates.ResourceField{SchemaField: fields[i], Required: field.Required}
+	}
+	plan.coreFiles, err = templates.RenderResourceCore(templates.Project{Name: state.Metadata.Name, Module: state.Metadata.Module}, templates.Options{Database: state.Metadata.Database, Transport: state.Metadata.Transport, Authz: state.Metadata.Authorization, Redis: state.Metadata.Redis}, name, coreFields)
+	if err != nil {
+		return ResourcePlan{}, err
+	}
 	if options.Migration {
 		path, err := nextResourceMigration(name, plan.migrations)
 		if err != nil {
@@ -365,6 +369,16 @@ func (p ResourcePlan) Specification() ResourceSpec {
 func (p ResourcePlan) SchemaStore() templates.File {
 	return templates.File{Path: p.schemaStore.Path, Content: bytes.Clone(p.schemaStore.Content)}
 }
+
+// CoreFiles returns independently reviewable business sources and tests. It
+// does not include protocol handlers, factories, registry updates, or Write.
+func (p ResourcePlan) CoreFiles() []templates.File {
+	files := make([]templates.File, len(p.coreFiles))
+	for i, file := range p.coreFiles {
+		files[i] = templates.File{Path: file.Path, Content: bytes.Clone(file.Content)}
+	}
+	return files
+}
 func (p ResourcePlan) MigrationDraft() (templates.File, bool) {
 	if p.migrationDraft == nil {
 		return templates.File{}, false
@@ -390,7 +404,7 @@ func (p ResourcePlan) Report(w io.Writer) error {
 	for _, conflict := range p.conflicts {
 		fmt.Fprintf(&output, "  ! %s\n", conflict)
 	}
-	output.WriteString("Target preview only: CRUD rendering and writing are not available yet.\nNo files written.\n")
+	output.WriteString("Target preview only: protocol rendering and writing are not available yet.\nBusiness core is available through CoreFiles.\nNo files written.\n")
 	_, err := output.WriteTo(w)
 	return err
 }

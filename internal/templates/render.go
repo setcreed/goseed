@@ -16,7 +16,7 @@ import (
 	"github.com/setcreed/goseed/internal/openapi"
 )
 
-//go:embed base variants
+//go:embed base variants resource
 var sources embed.FS
 
 type File struct {

@@ -1,0 +1,18 @@
+package model
+
+import "time"
+
+type [[.GoName]] struct {
+ ID uint64 `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+ Owner string `gorm:"column:owner" json:"-"`
+ [[range .Fields]][[.GoName]] [[.Type]] `gorm:"column:[[.Name]]" json:"[[.Name]]"`
+ [[end]]CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+ UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+func ([[.GoName]])TableName()string{return "[[.Name]]"}
+
+// Changes permits only declared writable fields and preserves zero values.
+type [[.GoName]]Changes struct{
+ [[range .Fields]][[.GoName]] *[[.Type]]
+ [[end]]
+}

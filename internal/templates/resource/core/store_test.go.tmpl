@@ -1,0 +1,74 @@
+package [[.Name]]_test
+
+import (
+ "context"
+ "errors"
+ "math"
+ [[if eq .Database "sqlite"]]"path/filepath"[[end]]
+ "strings"
+ "sync"
+ "testing"
+ "time"
+ [[if eq .Database "sqlite"]]"[[.Module]]/internal/pkg/config"[[else]]"[[.Module]]/internal/testutil"[[end]]
+ "[[.Module]]/internal/pkg/database"
+ "[[.Module]]/internal/pkg/contextx"
+ "[[.Module]]/internal/pkg/errno"
+ "[[.Module]]/internal/apiserver/model"
+ business "[[.Module]]/internal/apiserver/biz/[[.Name]]"
+ store "[[.Module]]/internal/apiserver/store/[[.Name]]"
+ "go.uber.org/zap"
+ "gorm.io/gorm"
+)
+
+func pointer[T any](value T)*T{return &value}
+[[if .Redis]]type dependency struct{}
+func(dependency)Check(ctx context.Context)error{return ctx.Err()}[[end]]
+func input()business.CreateInput{return business.CreateInput{[[range .Fields]][[.GoName]]:pointer([[if eq .Type "string"]]""[[else if eq .Type "bool"]]false[[else]]int64(0)[[end]]),[[end]]}}
+
+func TestResourceCRUD(t *testing.T){
+ ctx:=context.Background()
+ [[if eq .Database "sqlite"]]settings:=config.Database{Path:filepath.Join(t.TempDir(),"resource.db"),MaxOpen:4,MaxIdle:2,BusyTimeout:time.Second}[[else]]settings:=testutil.Configuration(t).Database[[end]]
+ db,err:=database.Open(ctx,settings,zap.NewNop());if err!=nil{t.Fatal(err)};defer func(){_ = db.Close()}()
+ repository:=store.New(db.DB);if err:=repository.CheckSchema(ctx);err==nil{t.Fatal("unmigrated resource accepted")}
+ if err:=db.Migrate(ctx);err!=nil{t.Fatal(err)};if err:=repository.CheckSchema(ctx);err!=nil{t.Fatal(err)}
+ biz:=business.New(repository[[if .Redis]],dependency{}[[end]])
+ alice:=contextx.WithSubject(ctx,"Alice");bob:=contextx.WithSubject(ctx,"alice")
+ first,err:=biz.Create(alice,input());if err!=nil||first.ID==0||first.CreatedAt.Location()!=time.UTC||first.UpdatedAt.Location()!=time.UTC{t.Fatal("create",err)}
+ second,err:=biz.Create(alice,input());if err!=nil{t.Fatal(err)}
+ other,err:=biz.Create(bob,input());if err!=nil{t.Fatal(err)}
+ if _,err:=biz.Get(bob,first.ID);!errors.Is(err,errno.NotFound){t.Fatal("cross-owner read",err)}
+ changes:=business.UpdateInput(input())
+ if _,err:=biz.Update(bob,first.ID,changes);!errors.Is(err,errno.NotFound){t.Fatal("cross-owner update",err)}
+ if err:=biz.Delete(bob,first.ID);!errors.Is(err,errno.NotFound){t.Fatal("cross-owner delete",err)}
+ page,err:=biz.List(alice,1,1);if err!=nil||page.Total!=2||len(page.Items)!=1||page.Items[0].ID!=first.ID{t.Fatal("pagination/order",err)}
+ page,err=biz.List(alice,2,1);if err!=nil||len(page.Items)!=1||page.Items[0].ID!=second.ID{t.Fatal("next page",err)}
+ page,err=biz.List(bob,1,20);if err!=nil||page.Total!=1||len(page.Items)!=1||page.Items[0].ID!=other.ID{t.Fatal("owner count",err)}
+ empty,err:=biz.List(contextx.WithSubject(ctx,"empty"),100000,100);if err!=nil||empty.Items==nil||len(empty.Items)!=0||empty.Total!=0{t.Fatal("empty page",err)}
+ [[range .Fields]]nonzero[[.GoName]]:=[[if eq .Type "string"]]"x"[[else if eq .Type "bool"]]true[[else]]int64(math.MaxInt64)[[end]]
+ changed[[.GoName]],err:=biz.Update(alice,first.ID,business.UpdateInput{[[.GoName]]:&nonzero[[.GoName]]});if err!=nil||changed[[.GoName]].[[.GoName]]!=nonzero[[.GoName]]{t.Fatal("partial update [[.Name]]",err)}
+ zero[[.GoName]]:=[[if eq .Type "string"]]""[[else if eq .Type "bool"]]false[[else]]int64(0)[[end]]
+ for range 2{zeroed,err:=biz.Update(alice,first.ID,business.UpdateInput{[[.GoName]]:&zero[[.GoName]]});if err!=nil||zeroed.[[.GoName]]!=zero[[.GoName]]{t.Fatal("zero/idempotent update [[.Name]]",err)}}
+ [[if eq .Type "int64"]]minimum[[.GoName]]:=int64(math.MinInt64);value[[.GoName]],err:=biz.Update(alice,first.ID,business.UpdateInput{[[.GoName]]:&minimum[[.GoName]]});if err!=nil||value[[.GoName]].[[.GoName]]!=math.MinInt64{t.Fatal("int64 precision",err)}[[end]]
+ [[end]]
+ // A read failure after UPDATE must roll back the field and timestamp writes.
+ before,err:=biz.Get(alice,second.ID);if err!=nil{t.Fatal(err)}
+ callback:="resource-[[.Name]]-read-failure"
+ if err:=db.DB.Callback().Query().Before("gorm:query").Register(callback,func(tx *gorm.DB){if tx.Statement.Table=="[[.Name]]"{_ = tx.AddError(errors.New("private-read-failure"))}});err!=nil{t.Fatal(err)}
+ firstChange:=[[with index .Fields 0]][[if eq .Type "string"]]"x"[[else if eq .Type "bool"]]true[[else]]int64(123)[[end]][[end]]
+ _,failed:=biz.Update(alice,second.ID,business.UpdateInput{[[with index .Fields 0]][[.GoName]][[end]]:&firstChange})
+ if err:=db.DB.Callback().Query().Remove(callback);err!=nil{t.Fatal(err)}
+ if !errors.Is(failed,errno.Internal)||strings.Contains(failed.Error(),"private"){t.Fatal("failed update mapping",failed)}
+ after,err:=biz.Get(alice,second.ID);if err!=nil||after.[[with index .Fields 0]][[.GoName]][[end]]!=before.[[with index .Fields 0]][[.GoName]][[end]]||!after.UpdatedAt.Equal(before.UpdatedAt){t.Fatal("update was not rolled back",err)}
+ var workers sync.WaitGroup;ids:=make(chan uint64,4);failures:=make(chan error,4)
+ for range 4{workers.Go(func(){value,err:=biz.Create(alice,input());if err!=nil{failures<-err;return};ids<-value.ID})};workers.Wait();close(ids);close(failures)
+ for err:=range failures{t.Fatal("concurrent creation",err)};unique:=make(map[uint64]bool);for id:=range ids{if id==0||unique[id]{t.Fatal("concurrent IDs collide")};unique[id]=true};if len(unique)!=4{t.Fatal("concurrent rows missing")}
+ if err:=db.Close();err!=nil{t.Fatal(err)};reopened,err:=database.Open(ctx,settings,zap.NewNop());if err!=nil{t.Fatal(err)};defer func(){_ = reopened.Close()}();repository=store.New(reopened.DB);if err:=repository.CheckSchema(ctx);err!=nil{t.Fatal(err)};biz=business.New(repository[[if .Redis]],dependency{}[[end]])
+ preserved,err:=biz.Get(alice,first.ID);if err!=nil||preserved.ID!=first.ID{t.Fatal("restart",err)}
+ [[range .Fields]][[if eq .Type "int64"]]if preserved.[[.GoName]]!=math.MinInt64{t.Fatal("restart int64 precision")};[[end]][[end]]
+ canceled,cancel:=context.WithCancel(alice);cancel();if _,err:=biz.Get(canceled,first.ID);!errors.Is(err,context.Canceled){t.Fatal("canceled read",err)};if err:=biz.Delete(canceled,first.ID);!errors.Is(err,context.Canceled){t.Fatal("canceled delete",err)}
+ if _,err:=biz.Create(canceled,input());!errors.Is(err,context.Canceled){t.Fatal("canceled creation",err)};if _,err:=biz.List(canceled,1,20);!errors.Is(err,context.Canceled){t.Fatal("canceled list",err)};if _,err:=biz.Update(canceled,first.ID,business.UpdateInput(input()));!errors.Is(err,context.Canceled){t.Fatal("canceled update",err)}
+ expired,stop:=context.WithDeadline(alice,time.Now().Add(-time.Second));defer stop();if _,err:=biz.Get(expired,first.ID);!errors.Is(err,context.DeadlineExceeded){t.Fatal("deadline lost",err)}
+ if _,err:=repository.Get(alice,"Alice",uint64(math.MaxInt64)+1);err==nil{t.Fatal("store id boundary")};if _,err:=repository.Update(alice,"Alice",first.ID,model.[[.GoName]]Changes{});err==nil{t.Fatal("store empty patch")}
+ if err:=biz.Delete(alice,first.ID);err!=nil{t.Fatal(err)};if _,err:=biz.Get(alice,first.ID);!errors.Is(err,errno.NotFound){t.Fatal("deleted read",err)};if err:=biz.Delete(alice,first.ID);!errors.Is(err,errno.NotFound){t.Fatal("repeated delete",err)}
+ if err:=reopened.Close();err!=nil{t.Fatal(err)};if _,err:=biz.Get(alice,second.ID);!errors.Is(err,errno.Internal)||strings.Contains(err.Error(),"sql:"){t.Fatal("SQL error mapping",err)}
+}

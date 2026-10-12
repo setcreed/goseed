@@ -10,7 +10,7 @@
 
 D6 进行中：`gen module` 通过一次性创建的模块工厂显式构造 Biz/Handler，SQL Store 接收应用数据库，dual 两侧共享同一 Biz；固定启动入口传递强类型共享依赖，新增模块保留已有手工组装代码。RPC 权限绑定实际模块名，重复 FullMethod 拒绝启动。生成前校验启动入口、完整登记投影和既有工厂，计划过期或写入失败时拒绝/回滚。资源字段 YAML 的严格版本 1 解析器已实现。
 
-D6 剩余任务按 [详细施工清单](docs/implementation.md#d6-剩余施工清单) 执行。D6-R01 接入决策、R02 只读资源目标计划、R03 模块权限目录与 R04 迁移/schema 基础已交付。R04 的内部草稿与 schema Store 不代表完整资源：`PrepareResource` 尚无 CRUD、完整资源工厂、Write 或公共 CLI；下一项为 R05 字段映射与主体隔离 CRUD，R05 至 R10 尚未完成。
+D6 剩余任务按 [详细施工清单](docs/implementation.md#d6-剩余施工清单) 执行。D6-R01 至 R05 已交付，内部 CoreFiles 已返回协议无关的 CRUD 核心与测试；`PrepareResource` 尚无资源 Handler、完整协议工厂、Write 或公共 CLI。下一项为 R06 HTTP 入口、OpenAPI 与模块文档，R06 至 R10 尚未完成。
 
 ## 待开始
 
@@ -25,10 +25,12 @@ D6 剩余任务按 [详细施工清单](docs/implementation.md#d6-剩余施工�
 - 跟踪：go-redis 的纯取消 issue 仍开放；当前明确短命令预算、关闭命令与拨号重试，受控连接及真实服务取消已通过，但不承诺瞬时中断或全部取消竞争已消除。官方证据见 [依赖核验](docs/dependencies.md) 。
 - 待核验：pgx 缓冲响应与取消竞争的人工延迟 Write 场景；基础运行中 deadline 与随后池复用已通过，未声明解决上游报告。官方证据与版本边界见 [依赖核验](docs/dependencies.md) 。
 - 待确认：goseed 自身许可证；仅在公开发布前必须确定。主模块已确定为 `github.com/setcreed/goseed`，Go 工具链固定为 1.26.4。
-- 待实现：在已交付的内部只读资源计划和迁移/schema 基础上补齐资源工厂、字段映射、主体隔离 CRUD、四协议适配、完整渲染/写入及公共 `gen resource` CLI。当前 `gen module` 生成的是无业务操作的结构骨架；Gateway HTTP 映射及 query/body 输入规则继续由模块登记描述驱动。
-- 资源接入边界：Casbin 模块目录、嵌入迁移版本推导与只读资源 schema 原型已实现；完整资源工厂与旧项目 Context/schema 兼容检查继续在 R05/R09 接入。协议脚本仍仅处理内置模块，Gateway 复现会用单模块输出覆盖汇总，继续在 R07/R08 解决。组装入口版本 2 要求纯权限声明，不自动改写旧入口或手工 Bootstrap；规则见资源接入方案。
+- 待实现：在已交付的内部资源计划、迁移/schema 和 CRUD 核心上补齐 Handler、资源工厂、四协议适配、完整渲染/写入及公共 `gen resource` CLI。当前 `gen module` 生成的是无业务操作的结构骨架；Gateway HTTP 映射及 query/body 输入规则继续由模块登记描述驱动。
+- 资源接入边界：Casbin 模块目录、迁移/schema 与 CRUD 核心已实现；协议资源工厂与旧项目 Context/schema 兼容检查继续在 R06/R07/R09 接入。协议脚本仍仅处理内置模块，Gateway 复现会用单模块输出覆盖汇总，继续在 R07/R08 解决。组装入口版本 2 要求纯权限声明，不自动改写旧入口或手工 Bootstrap；规则见资源接入方案。
 
 ## 最近完成
+
+- 2026-10-12 15:23 D6-R05 CRUD 核心：增加协议无关的资源 Model、Biz、完整 Store 和对应测试，CoreFiles 返回独立内容副本，无写入/登记修改。输入指针保留出现性，required 仅用于创建；空字符串/false/0、Unicode/int64、ID/分页、UTC DTO、owner 隔离及事务更新已实现。Store 显式表/列映射，Biz 不依赖 ORM 或协议，Redis 仅经 Check 接口检查，不复制缓存、不新增依赖。字段 Go 名避开保留成员，去掉重复的 TableName 准备检查；JSON 严格解析和协议工厂继续由 R06/R07 实施，下一项为 R06。
 
 - 2026-10-12 13:03 D6-R04 迁移/schema 基础：从嵌入 SQL 推导唯一排序版本，按每版最新记录核对完整集合，显式迁移拒绝非前缀历史；保留只读状态/启动检查和取消传播。新增三方言资源 SQL 草稿、只读 schema Store 与不可变查询接口，校验类型/非空/单列自增主键、命名长度 CHECK、owner 排序和 63 字符标识符，MySQL TEXT 支持宽字段集合；固定四协议启动组装传递限时 Context。生成器不执行 SQL、不写资源，不增加依赖；完整 CRUD/工厂/CLI 继续按 R05 至 R10 实施，下一项为 R05。
 
@@ -68,9 +70,9 @@ D6 剩余任务按 [详细施工清单](docs/implementation.md#d6-剩余施工�
 
 - 2026-10-11 22:58 D6 契约定义：确定 `gen module`／`gen resource` 命令、版本 1 YAML 字段规则、类型与校验语义、保留字段、主体隔离、目标文件范围及 no-overwrite 边界；以 `goseed.yaml` 为模块清单权威源、`modules_gen.go` 为带摘要的确定性注册索引。更新 CLI、需求、架构和实施文档；D6 代码尚未开始。
 
-- 2026-10-11 22:55 验证收尾规范：更新 AGENTS，要求每次验证结束后立即清理本次新建的临时项目、日志和可重建产物/缓存，检查清理结果并尽量复用缓存；明确保留任务前已存在、来源不明及其他任务数据。
-
 ## 最近验证
+
+- 2026-10-12 15:23 D6-R05：五个 SQLite 生成项目（两资源，基础/Redis+Casbin、纯 bool、纯 int64、单字符串）readonly race/vet/lint/build 通过；真实 MySQL/PostgreSQL 四个资源组合通过两主体 CRUD、零值/部分更新、int64 两端、重启、取消/deadline、并发 ID、读取失败回滚与脱敏。独立应用账号具备业务 CRUD/状态/schema 权限，CREATE TABLE 被拒绝；测试账号单独负责建库/迁移。完整 template-db 七组共 18 个组合无跳过通过，最终 owner 校验整理后定向重跑四个资源组合通过。核心包测试、vet、lint（0 issues）、契约/格式/diff 检查通过。首次自动权限审核超时，改用普通沙箱；宿主 GOROOT 指向 Go 1.27，验证命令显式使用已有 Go 1.26.4 工具链与 GOROOT，不修改系统配置。修正元数据字段名与生成测试的结构体转换 lint。临时项目及两轮专用容器/卷/网络已清理，保留共享缓存和历史 render；未新增真实 Redis 或完整 64 组合验收。
 
 - 2026-10-12 13:03 D6-R04：SQLite 两种授权组合的生成项目 readonly race/vet/lint 通过；真实 MySQL/PostgreSQL 的 `make template-db` 六组共 14 个组合全部通过、无跳过，包括两资源顺序升级/重启、异常历史、不兼容 schema、owner 排序、Unicode/int64、32 字段与 63 字符边界、取消和失败迁移。随后用原隔离脚本定向重跑四个 SQL 资源组合，独立应用账号通过状态/schema 与业务写入，CREATE TABLE 被拒绝，不要求建库/建表权限。确认 SQLite/PostgreSQL DDL 回滚、MySQL 保留部分 DDL 且不记录成功版本。四协议 16 个模块组装与 8 个 Redis/Casbin 可选编译回归通过；核心包测试/vet、lint（0 issues）、契约/格式/diff 检查通过。修正草稿渲染校验方法、模板未用字段、MySQL 非布尔 CHECK 夹具及 tokenizer lint；复现并修复 SQLite BINARY 索引掩盖 NOCASE 列。任务临时项目和四轮专用数据库资源已清理，保留已有共享缓存与历史 render 目录；完整 64 组合和 Redis/容器交叉运行留待 R10。
 
@@ -109,5 +111,3 @@ D6 剩余任务按 [详细施工清单](docs/implementation.md#d6-剩余施工�
 - 2026-10-11 23:03 D6 文档与格式回归：`make contract-check`（68 个链接、315 个交付文件）、`make fmt-check`、`git diff --check` 全部通过；确认本次隔离缓存目录已清除。
 
 - 2026-10-11 23:02 D6 登记接口原型：`make compatibility` 首次受沙箱回环监听限制；获准本机重跑后全套兼容性测试通过，包括新增 `TestGeneratedModuleRegistryContract`、Proto 回环测试和 SQLite 行为测试；MySQL/PostgreSQL 兼容性子用例按该目标设计跳过，真实服务仍由 `make compatibility-db` 验证。清理本次隔离 Go 构建缓存。
-
-- 2026-10-11 22:58 D6 契约文档：`make contract-check` 通过（68 个本地链接、314 个交付文件），`git diff --check` 通过；复核命令示例、字段约束、登记文件所有权和 D6 未实现状态一致。

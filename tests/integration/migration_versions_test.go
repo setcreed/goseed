@@ -259,6 +259,26 @@ func applicationAccountCall(backend string) string {
 }
 
 func resourceApplicationAccountTest(backend, authz string) string {
+	setup, cleanup := resourceAccountStatements(backend, authz)
+	return fmt.Sprintf(`
+func verifyApplicationAccount(t *testing.T,ctx context.Context,admin *database.Database,settings config.Database){
+ t.Helper();user:="goseed_app_"+strings.TrimPrefix(settings.Name,"goseed_test_")[:16];password:=rand.Text()
+ exec:=func(statement string){t.Helper();if err:=admin.DB.WithContext(ctx).Exec(statement).Error;err!=nil{t.Fatal("isolated application account setup or cleanup failed")}}
+ %s
+ defer func(){%s}()
+ settings.User=user;settings.Password=password
+ application,err:=database.Open(ctx,settings,zap.NewNop());if err!=nil{t.Fatal(err)};defer func(){_ = application.Close()}()
+ if err:=application.CheckSchema(ctx);err!=nil{t.Fatal("application account requires extra migration privileges",err)}
+ if err:=orders.New(application.DB).CheckSchema(ctx);err!=nil{t.Fatal("application account cannot inspect resource",err)}
+ if err:=notes.New(application.DB).CheckSchema(ctx);err!=nil{t.Fatal(err)}
+ if err:=application.DB.WithContext(ctx).Exec("CREATE TABLE forbidden_app_ddl(id BIGINT)").Error;err==nil{t.Fatal("application account unexpectedly has DDL privileges")}
+ if err:=application.DB.WithContext(ctx).Exec("INSERT INTO orders(owner,title,enabled,count,created_at,updated_at) VALUES(?,?,?,?,?,?)","application","ok",false,int64(0),time.Now().UTC(),time.Now().UTC()).Error;err==nil{t.Fatal("schema allows omitted non-null field")}
+ if err:=application.DB.WithContext(ctx).Exec(%q,"application","ok",false,int64(0),"",time.Now().UTC(),time.Now().UTC()).Error;err!=nil{t.Fatal("application account cannot write business rows",err)}
+}
+`, setup, cleanup, resourceInsertStatement(backend))
+}
+
+func resourceAccountStatements(backend, authz string) (string, string) {
 	setup := ""
 	cleanup := ""
 	tables := []string{"examples", "orders", "notes"}
@@ -283,20 +303,5 @@ func resourceApplicationAccountTest(backend, authz string) string {
 		setup += "\n" + `exec("GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO "+user)`
 		cleanup = `exec("DROP OWNED BY "+user);exec("DROP ROLE "+user)`
 	}
-	return fmt.Sprintf(`
-func verifyApplicationAccount(t *testing.T,ctx context.Context,admin *database.Database,settings config.Database){
- t.Helper();user:="goseed_app_"+strings.TrimPrefix(settings.Name,"goseed_test_")[:16];password:=rand.Text()
- exec:=func(statement string){t.Helper();if err:=admin.DB.WithContext(ctx).Exec(statement).Error;err!=nil{t.Fatal("isolated application account setup or cleanup failed")}}
- %s
- defer func(){%s}()
- settings.User=user;settings.Password=password
- application,err:=database.Open(ctx,settings,zap.NewNop());if err!=nil{t.Fatal(err)};defer func(){_ = application.Close()}()
- if err:=application.CheckSchema(ctx);err!=nil{t.Fatal("application account requires extra migration privileges",err)}
- if err:=orders.New(application.DB).CheckSchema(ctx);err!=nil{t.Fatal("application account cannot inspect resource",err)}
- if err:=notes.New(application.DB).CheckSchema(ctx);err!=nil{t.Fatal(err)}
- if err:=application.DB.WithContext(ctx).Exec("CREATE TABLE forbidden_app_ddl(id BIGINT)").Error;err==nil{t.Fatal("application account unexpectedly has DDL privileges")}
- if err:=application.DB.WithContext(ctx).Exec("INSERT INTO orders(owner,title,enabled,count,created_at,updated_at) VALUES(?,?,?,?,?,?)","application","ok",false,int64(0),time.Now().UTC(),time.Now().UTC()).Error;err==nil{t.Fatal("schema allows omitted non-null field")}
- if err:=application.DB.WithContext(ctx).Exec(%q,"application","ok",false,int64(0),"",time.Now().UTC(),time.Now().UTC()).Error;err!=nil{t.Fatal("application account cannot write business rows",err)}
-}
-`, setup, cleanup, resourceInsertStatement(backend))
+	return setup, cleanup
 }

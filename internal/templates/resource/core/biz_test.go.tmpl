@@ -1,0 +1,44 @@
+package [[.Name]]
+
+import(
+ "context"
+ "encoding/json"
+ "errors"
+ "math"
+ "strings"
+ "testing"
+ [[if .HasString]]"unicode/utf8"[[end]]
+ "[[.Module]]/internal/apiserver/model"
+ "[[.Module]]/internal/pkg/contextx"
+ "[[.Module]]/internal/pkg/errno"
+)
+
+type recordingRepository struct{Repository;value *model.[[.GoName]];ctx context.Context}
+func(r *recordingRepository)Create(ctx context.Context,value *model.[[.GoName]])error{r.value=value;r.ctx=ctx;return nil}
+func pointer[T any](value T)*T{return &value}
+[[if .Redis]]type recordingDependency struct{calls int;err error}
+func(d *recordingDependency)Check(context.Context)error{d.calls++;return d.err}[[end]]
+func validInput()CreateInput{return CreateInput{[[range .Fields]][[.GoName]]:pointer([[if eq .Type "string"]]""[[else if eq .Type "bool"]]false[[else]]int64(0)[[end]]),[[end]]}}
+
+func TestBusinessBoundaries(t *testing.T){
+ repository:=&recordingRepository{}
+ [[if .Redis]]dependency:=&recordingDependency{};[[end]]business:=New(repository[[if .Redis]],dependency[[end]])
+ ctx:=contextx.WithSubject(context.Background(),"alice")
+ if _,err:=business.Create(context.Background(),validInput());!errors.Is(err,errno.Unauthorized){t.Fatal("authentication missing",err)}
+ [[range .Fields]][[if .Required]]input[[.GoName]]:=validInput();input[[.GoName]].[[.GoName]]=nil;if _,err:=business.Create(ctx,input[[.GoName]]);err==nil{t.Fatal("missing required [[.Name]] accepted")}
+ [[end]][[end]]
+ [[range .Fields]][[if eq .Type "string"]]for _,text:=range []string{strings.Repeat("中",[[.MaxLength]]+1),"value\x00",string([]byte{0xff})}{input:=validInput();input.[[.GoName]]=pointer(text);if _,err:=business.Create(ctx,input);err==nil{t.Fatal("invalid [[.Name]] accepted")};if _,err:=business.Update(ctx,1,UpdateInput{[[.GoName]]:pointer(text)});err==nil{t.Fatal("invalid patch [[.Name]] accepted")}}
+ [[end]][[end]]
+ if _,err:=business.Update(ctx,1,UpdateInput{});err==nil{t.Fatal("empty patch accepted")}
+ for _,id:=range []uint64{0,uint64(math.MaxInt64)+1}{if _,err:=business.Get(ctx,id);err==nil{t.Fatal("invalid id accepted")};if _,err:=business.Update(ctx,id,UpdateInput{});err==nil{t.Fatal("invalid update id accepted")};if err:=business.Delete(ctx,id);err==nil{t.Fatal("invalid delete id accepted")}}
+ for _,pair:=range [][2]int{{0,20},{100001,20},{1,0},{1,101}}{if _,err:=business.List(ctx,pair[0],pair[1]);err==nil{t.Fatal("invalid pagination accepted")}}
+ canceled,cancel:=context.WithCancel(ctx);cancel();if _,err:=business.Create(canceled,validInput());!errors.Is(err,context.Canceled){t.Fatal("cancellation lost")}
+ if repository.value!=nil{t.Fatal("invalid input reached persistence")}
+ [[if .Redis]]if dependency.calls!=0{t.Fatal("dependency checked before validation")};dependency.err=errno.Unavailable;if _,err:=business.Create(ctx,validInput());!errors.Is(err,errno.Unavailable)||repository.value!=nil{t.Fatal("required dependency failure bypassed")};dependency.err=nil[[end]]
+ result,err:=business.Create(ctx,validInput());if err!=nil||repository.ctx!=ctx||repository.value.Owner!="alice"{t.Fatal("subject/context not preserved",err)}
+ encoded,err:=json.Marshal(result);if err!=nil||strings.Contains(string(encoded),`"owner":`){t.Fatal("response leaked owner",err)}
+ optional:=validInput();[[range .Fields]][[if not .Required]]optional.[[.GoName]]=nil;[[end]][[end]]if _,err:=business.Create(ctx,optional);err!=nil{t.Fatal("optional omission rejected",err)}
+ [[range .Fields]][[if eq .Type "string"]]text[[.GoName]]:=strings.Repeat("中",[[.MaxLength]]);boundaryInput[[.GoName]]:=validInput();boundaryInput[[.GoName]].[[.GoName]]=pointer(text[[.GoName]]);value[[.GoName]],err:=business.Create(ctx,boundaryInput[[.GoName]]);if err!=nil||utf8.RuneCountInString(value[[.GoName]].[[.GoName]])!=[[.MaxLength]]{t.Fatal("Unicode boundary differs",err)}
+ whitespace[[.GoName]]:=validInput();whitespace[[.GoName]].[[.GoName]]=pointer(" ");valueWhitespace[[.GoName]],err:=business.Create(ctx,whitespace[[.GoName]]);if err!=nil||valueWhitespace[[.GoName]].[[.GoName]]!=" "{t.Fatal("string was trimmed",err)}
+ [[end]][[end]]
+}

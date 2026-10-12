@@ -1,0 +1,59 @@
+package [[.Name]]
+
+import (
+ "context"
+ "errors"
+ "math"
+ "time"
+ "[[.Module]]/internal/apiserver/model"
+ "[[.Module]]/internal/pkg/database"
+ "[[.Module]]/internal/pkg/errno"
+ "gorm.io/gorm"
+)
+
+type Store struct{db *gorm.DB}
+func New(db *gorm.DB)*Store{return &Store{db:db}}
+func(s *Store)CheckSchema(ctx context.Context)error{return database.CheckResourceSchema(ctx,s.db,"[[.Name]]",[]database.SchemaField{
+ [[range .Fields]]{Name:"[[.Name]]",Type:"[[.Type]]",MaxLength:[[.MaxLength]]},[[end]]
+})}
+func translate(ctx context.Context,err error)error{
+ if err==nil{return nil};if ctx.Err()!=nil{return ctx.Err()}
+ switch{case errors.Is(err,context.Canceled)||errors.Is(err,context.DeadlineExceeded):return err
+ case errors.Is(err,errno.NotFound)||errors.Is(err,errno.Conflict)||errors.Is(err,errno.Internal):return err
+ case errors.Is(err,gorm.ErrRecordNotFound):return errno.WithCause(errno.NotFound,err)
+ case errors.Is(err,gorm.ErrDuplicatedKey):return errno.WithCause(errno.Conflict,err)
+ default:return errno.WithCause(errno.Internal,err)}
+}
+func ownerBoundary(ctx context.Context,owner string)error{if err:=ctx.Err();err!=nil{return err};if owner==""{return errno.Unauthorized};return nil}
+func boundary(ctx context.Context,owner string,id uint64)error{if err:=ownerBoundary(ctx,owner);err!=nil{return err};if id<1||id>math.MaxInt64{return errno.Invalid("id must be between 1 and 9223372036854775807")};return nil}
+func(s *Store)Create(ctx context.Context,value *model.[[.GoName]])error{
+ if err:=ctx.Err();err!=nil{return err};if value==nil||value.Owner==""||value.ID!=0{return errno.Invalid("creation requires an owner and an unassigned id")}
+ now:=time.Now().UTC();value.CreatedAt=now;value.UpdatedAt=now
+ return translate(ctx,s.db.WithContext(ctx).Create(value).Error)
+}
+func(s *Store)Get(ctx context.Context,owner string,id uint64)(*model.[[.GoName]],error){
+ if err:=boundary(ctx,owner,id);err!=nil{return nil,err};var value model.[[.GoName]]
+ if err:=s.db.WithContext(ctx).Where("owner = ? AND id = ?",owner,id).First(&value).Error;err!=nil{return nil,translate(ctx,err)};return &value,nil
+}
+func(s *Store)List(ctx context.Context,owner string,page,size int)([]model.[[.GoName]],int64,error){
+ if err:=ownerBoundary(ctx,owner);err!=nil{return nil,0,err};if page<1||page>100000||size<1||size>100{return nil,0,errno.Invalid("invalid pagination")}
+ values:=make([]model.[[.GoName]],0);var total int64;query:=s.db.WithContext(ctx).Model(&model.[[.GoName]]{}).Where("owner = ?",owner)
+ if err:=query.Count(&total).Error;err!=nil{return nil,0,translate(ctx,err)}
+ if err:=query.Order("id ASC").Offset((page-1)*size).Limit(size).Find(&values).Error;err!=nil{return nil,0,translate(ctx,err)};return values,total,nil
+}
+func(s *Store)Update(ctx context.Context,owner string,id uint64,changes model.[[.GoName]]Changes)(*model.[[.GoName]],error){
+ if err:=boundary(ctx,owner,id);err!=nil{return nil,err}
+ if [[range $i,$field:=.Fields]][[if $i]]&&[[end]]changes.[[.GoName]]==nil[[end]]{return nil,errno.Invalid("update requires at least one field")}
+ columns:=map[string]any{"updated_at":time.Now().UTC()}
+ [[range .Fields]]if changes.[[.GoName]]!=nil{columns["[[.Name]]"]=*changes.[[.GoName]]};[[end]]
+ var value *model.[[.GoName]]
+ err:=s.db.WithContext(ctx).Transaction(func(tx *gorm.DB)error{
+  result:=tx.Model(&model.[[.GoName]]{}).Where("owner = ? AND id = ?",owner,id).Updates(columns)
+  if result.Error!=nil{return result.Error};if result.RowsAffected==0{return gorm.ErrRecordNotFound}
+  var err error;value,err=New(tx).Get(ctx,owner,id);return err
+ });if err!=nil{return nil,translate(ctx,err)};return value,nil
+}
+func(s *Store)Delete(ctx context.Context,owner string,id uint64)error{
+ if err:=boundary(ctx,owner,id);err!=nil{return err};result:=s.db.WithContext(ctx).Where("owner = ? AND id = ?",owner,id).Delete(&model.[[.GoName]]{})
+ if result.Error!=nil{return translate(ctx,result.Error)};if result.RowsAffected==0{return errno.NotFound};return nil
+}
