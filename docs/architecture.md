@@ -1,6 +1,6 @@
 # 技术架构
 
-本文件描述待实现的目标架构；具体完成状态以 ROADMAP 为准。
+本文件定义项目的目标架构、长期分层与技术约定；具体实现和验收状态以 ROADMAP 为准。源码入口与新环境恢复见 [开发指南](development.md)。
 
 ## 整体结构
 
@@ -150,7 +150,7 @@ RPC 登记将每个精确 FullMethod 绑定到所属模块名称与操作。生�
 | SQLite | `github.com/libtnb/sqlite` | 底层 modernc，纯 Go 构建 |
 | MySQL | `gorm.io/driver/mysql` | 官方数据库接入 |
 | PostgreSQL | `gorm.io/driver/postgres` | 官方数据库接入，底层 pgx |
-| 依赖注入 | `samber/do/v2` | 只用于应用组装，替代代码生成式 DI |
+| 依赖注入 | `samber/do/v2` | 只用于应用启动组装，业务通过构造函数接收依赖 |
 | 配置 | Viper | 合并文件、环境变量与显式参数，输出强类型配置 |
 | 日志 | Zap | 统一结构化日志与数据库日志接入 |
 | 迁移 | Goose | 显式、版本化 SQL 迁移 |
@@ -169,7 +169,7 @@ RPC 登记将每个精确 FullMethod 绑定到所属模块名称与操作。生�
 
 Handler 解析请求，进行协议基础校验并映射响应；Biz 处理规则、资源归属、流程和事务需求；Store 负责 SQL 与持久化错误转换。
 
-Biz 使用独立输入输出，不直接使用 Gin Context 或 Proto 消息。HTTP DTO 位于 HTTP Handler 附近，Proto 消息仅在 gRPC/Gateway 边界转换。简单 CRUD 可使用数据库模型，业务复杂后按实际需求增加独立业务实体。
+Biz 使用独立输入输出，不直接使用 Gin Context 或 Proto 消息。资源的强类型输入/输出 DTO 定义在 Biz 包，HTTP Handler 解析后传入 DTO；Proto 消息仅在 gRPC/Gateway 边界转换。简单 CRUD 可使用数据库模型，业务复杂后按实际需求增加独立业务实体。
 
 小型仓储接口定义在使用它的 Biz 模块附近，Store 实现该接口。避免庞大的全项目 Store 接口、无用途的扩展接口，以及将通用查询构造器暴露到 Biz。
 

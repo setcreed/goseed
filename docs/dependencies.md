@@ -93,7 +93,7 @@ pgx 存在未解决的 [缓冲响应与取消竞争报告](https://github.com/ja
 
 ## 许可证范围
 
-直接业务运行依赖采用 MIT、Apache-2.0 或 BSD 系列许可，正式生成模板需要携带适用的版权与许可说明。Goose/protoc 的 GitHub 自动许可证识别不明确，已检查固定标签 LICENSE。golangci-lint 的 GPL-3.0 仅限开发工具，不进入业务运行链或生成器二进制；对外分发工具时另行处理义务。goseed 自身许可证仍待用户决定，D1 不包含公开发布。
+直接业务运行依赖采用 MIT、Apache-2.0 或 BSD 系列许可，正式生成模板需要携带适用的版权与许可说明。Goose/protoc 的 GitHub 自动许可证识别不明确，已检查固定标签 LICENSE。golangci-lint 的 GPL-3.0 仅限开发工具，不进入业务运行链或生成器二进制；对外分发工具时另行处理义务。goseed 自身采用 [MIT](../LICENSE)，许可文本按 [Open Source Initiative 标准文本](https://opensource.org/license/mit) 保存。本项目许可证不替换第三方依赖许可，公开源码与分发包含的第三方代码仍须保留适用说明。
 
 ## 可复现验证入口
 

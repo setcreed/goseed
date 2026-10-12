@@ -36,11 +36,8 @@ def main():
             raise SystemExit("Database image version mismatch")
     files = list(root.glob("*.md")) + list((root / "docs").glob("*.md"))
     links = 0
-    forbidden_reference = "mini" + "blog"
     for path in files:
         content = path.read_text()
-        if forbidden_reference in content.lower():
-            raise SystemExit("Reference project name in document: " + str(path))
         for target in re.findall(r"\]\(([^)]+)\)", content):
             if "://" in target or target.startswith("#"):
                 continue

@@ -50,7 +50,7 @@ goseed --name shop --module github.com/setcreed/shop
 | `--dry-run` | 布尔值 | `false` | 校验并展示文件、依赖版本及冲突，不写入文件 |
 
 ```bash
-goseed --module github.com/chengwz/shop
+goseed --module github.com/acme/shop
 goseed --db=postgres --redis --authz=casbin --transport=dual
 goseed --db=mysql --transport=gateway
 goseed --db=none --redis --transport=grpc
