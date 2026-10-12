@@ -19,8 +19,7 @@
 首次恢复需要访问 Go 模块代理和固定工具下载源。使用本机正常的 Go 环境，不复制原电脑的 GOROOT 或 Go 安装目录。若有全局 GOROOT 覆盖，先核对它与实际执行的 Go 二进制一致。
 
 ```sh
-# 在仓库上传后，使用实际 GitHub 仓库地址克隆
-git clone <repository-url> goseed
+git clone https://github.com/setcreed/goseed.git
 cd goseed
 git status --short --branch
 git log -1 --oneline
@@ -133,6 +132,6 @@ make test GO_PACKAGES='./tests/integration -run TestResourceCoreProjects -count=
 - 第三方生成文件的版权头保留；需要核验来源的内容不能靠删去名字解决许可问题。
 - Git 作者身份属于公开历史，检查是否符合个人公开偏好；不自动改写作者或历史。
 - 远端地址、可见性和首次推送分支确定；本地检查不代表已经发布。
-- 确認 GitHub 上的 main 包含最新文档提交，再在新电脑克隆；未推送的本地提交不会随克隆恢复。
+- 确认 GitHub 上的 main 包含最新文档提交，再在新电脑克隆；未推送的本地提交不会随克隆恢复。
 
-如尚未创建远端，先创建空仓库，避免远端生成 README/许可证与现有历史产生不必要冲突。仓库上传后再核对实际远端状态；不以未来地址或本地 module path 证明仓库已经存在。
+公开仓库为 https://github.com/setcreed/goseed ，默认分支 main，本地 origin 使用 HTTPS。推送后核对 GitHub 提交与本地 HEAD 一致；不以本地提交成功代替远端验证。

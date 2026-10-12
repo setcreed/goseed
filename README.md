@@ -26,6 +26,8 @@
 Go 固定为 **1.26.4**；主模块为 `github.com/setcreed/goseed`。需要 Git、Make 和 Python 3.9+；首次构建需要下载固定 Go 工具链及依赖。
 
 ```sh
+git clone https://github.com/setcreed/goseed.git
+cd goseed
 make contract-check
 make build
 ./bin/goseed --help
