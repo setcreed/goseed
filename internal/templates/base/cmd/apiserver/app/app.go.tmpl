@@ -56,7 +56,7 @@ func Run(ctx context.Context, args []string, output io.Writer, version string) e
 		logging,err:=logx.New(settings.Log,version);if err!=nil{return err};defer func(){_ = logging.Sync()}()
 		migrationContext,cancel:=context.WithTimeout(ctx,time.Minute);defer cancel()
 		db,err:=database.Open(migrationContext,settings.Database,logging);if err!=nil{return err};defer func(){_ = db.Close()}()
-  [[if eq .Authz "casbin"]]if command=="policy"{if err:=db.CheckSchema(migrationContext);err!=nil{return err};if err:=authz.Import(migrationContext,authz.NewDatabase(db.DB),policyFile);err!=nil{return err};_,err=fmt.Fprintln(output,"policy replaced; restart running instances to load the new policy");return err}[[end]]
+  [[if eq .Authz "casbin"]]if command=="policy"{catalog,err:=bootstrap.PermissionCatalog();if err!=nil{return err};if err:=db.CheckSchema(migrationContext);err!=nil{return err};if err:=authz.Import(migrationContext,authz.NewDatabase(db.DB,catalog),policyFile,catalog);err!=nil{return err};_,err=fmt.Fprintln(output,"policy replaced; restart running instances to load the new policy");return err}[[end]]
 		if action=="up" {if err:=db.Migrate(migrationContext);err!=nil{return err}}
 		version,err:=db.Version(migrationContext);if err!=nil{return err};_,err=fmt.Fprintf(output,"schema version: %d\n",version);return err
 	}[[end]]

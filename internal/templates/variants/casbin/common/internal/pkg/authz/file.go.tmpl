@@ -10,7 +10,10 @@ import (
  "unicode/utf8"
 )
 
-func ReadFile(ctx context.Context,filename string)([]Rule,error){
+func ReadFile(ctx context.Context,filename string,catalog Catalog)([]Rule,error){
+ if err:=ctx.Err();err!=nil{return nil,err};permissions,err:=newPermissionSet(catalog);if err!=nil{return nil,err};return readFile(ctx,filename,permissions)
+}
+func readFile(ctx context.Context,filename string,permissions permissionSet)([]Rule,error){
  if err:=ctx.Err();err!=nil{return nil,err}
  info,err:=os.Lstat(filename);if err!=nil||!info.Mode().IsRegular()||info.Size()>MaxFileBytes{return nil,errors.New("policy file must be a regular file within size limit")}
  file,err:=os.Open(filename);if err!=nil{return nil,errors.New("cannot open policy file")};defer func(){_ = file.Close()}()
@@ -26,10 +29,10 @@ func ReadFile(ctx context.Context,filename string)([]Rule,error){
   if len(record)==4&&record[0]=="p" {rule=Rule{Ptype:"p",V0:record[1],V1:record[2],V2:record[3]}} else if len(record)==3&&record[0]=="g" {rule=Rule{Ptype:"g",V0:record[1],V1:record[2]}} else {return nil,errors.New("invalid policy CSV fields")}
   rules=append(rules,rule)
  }
- if err:=ValidateRules(ctx,rules);err!=nil{return nil,err};return rules,nil
+ if err:=validateRules(ctx,rules,permissions);err!=nil{return nil,err};return rules,nil
 }
 
-type FileStore struct { filename string }
-func NewFile(filename string)*FileStore{return &FileStore{filename:filename}}
-func(s *FileStore)Load(ctx context.Context)([]Rule,error){return ReadFile(ctx,s.filename)}
+type FileStore struct { filename string;permissions permissionSet;catalogError error }
+func NewFile(filename string,catalog Catalog)*FileStore{permissions,err:=newPermissionSet(catalog);return &FileStore{filename:filename,permissions:permissions,catalogError:err}}
+func(s *FileStore)Load(ctx context.Context)([]Rule,error){if err:=ctx.Err();err!=nil{return nil,err};if s.catalogError!=nil{return nil,s.catalogError};return readFile(ctx,s.filename,s.permissions)}
 func(s *FileStore)Replace(ctx context.Context,_ []Rule)error{if err:=ctx.Err();err!=nil{return err};return ErrReadOnly}

@@ -9,19 +9,20 @@ import (
 
 type policyRow struct {ID uint64;Ptype string;V0,V1,V2 string}
 func(policyRow)TableName()string{return "casbin_rules"}
-type DatabaseStore struct { db *gorm.DB }
-func NewDatabase(db *gorm.DB)*DatabaseStore{return &DatabaseStore{db:db}}
+type DatabaseStore struct { db *gorm.DB;permissions permissionSet;catalogError error }
+func NewDatabase(db *gorm.DB,catalog Catalog)*DatabaseStore{permissions,err:=newPermissionSet(catalog);return &DatabaseStore{db:db,permissions:permissions,catalogError:err}}
 func storageError(ctx context.Context,cause error)error{if err:=ctx.Err();err!=nil{return err};return errno.WithCause(errno.Internal,cause)}
 func(s *DatabaseStore)Load(ctx context.Context)([]Rule,error){
  if err:=ctx.Err();err!=nil{return nil,err}
+ if s.catalogError!=nil{return nil,s.catalogError}
  var rows []policyRow
  if err:=s.db.WithContext(ctx).Order("id").Limit(MaxRules+1).Find(&rows).Error;err!=nil{return nil,storageError(ctx,err)}
  rules:=make([]Rule,len(rows));for i,row:=range rows{rules[i]=Rule{Ptype:row.Ptype,V0:row.V0,V1:row.V1,V2:row.V2}}
- if err:=ValidateRules(ctx,rules);err!=nil{return nil,err};return rules,nil
+ if err:=validateRules(ctx,rules,s.permissions);err!=nil{return nil,err};return rules,nil
 }
 func(s *DatabaseStore)Replace(ctx context.Context,rules []Rule)error{
  rules=append([]Rule(nil),rules...)
- if err:=ValidateRules(ctx,rules);err!=nil{return err}
+ if err:=ctx.Err();err!=nil{return err};if s.catalogError!=nil{return s.catalogError};if err:=validateRules(ctx,rules,s.permissions);err!=nil{return err}
  err:=s.db.WithContext(ctx).Transaction(func(tx *gorm.DB)error{
   if err:=tx.Where("1 = 1").Delete(&policyRow{}).Error;err!=nil{return err}
   for _,rule:=range rules {

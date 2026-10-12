@@ -109,6 +109,38 @@ func TestModulePlanRejectsConflictsAndStaleInputs(t *testing.T) {
 	})
 }
 
+func TestModuleAssemblyRequiresPurePermissions(t *testing.T) {
+	for _, declaration := range []string{
+		"func missingPermissions() modulePermissions",
+		"func ordersPermissions(value int) modulePermissions",
+		"func ordersPermissions[T any]() modulePermissions",
+		"func ordersPermissions() any",
+	} {
+		t.Run(declaration, func(t *testing.T) {
+			root := generatedProject(t, templates.Options{})
+			first, err := PrepareModule(root, "orders")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := first.Write(); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(root, "internal/apiserver/bootstrap/module_orders.go")
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data = bytes.Replace(data, []byte("func ordersPermissions() modulePermissions"), []byte(declaration), 1)
+			if err := os.WriteFile(path, data, 0644); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := PrepareModule(root, "other"); err == nil || !strings.Contains(err.Error(), "pure") {
+				t.Fatalf("incompatible permission declaration accepted: %v", err)
+			}
+		})
+	}
+}
+
 func TestModulePlanRollsBackNewFilesAndUpdatedIndexesOnFailure(t *testing.T) {
 	root := generatedProject(t, templates.Options{})
 	plan, err := PrepareModule(root, "orders")
@@ -192,7 +224,7 @@ func TestModuleAssemblyRejectsIncompatibleAndChangedInputs(t *testing.T) {
 		old  string
 		new  string
 	}{
-		{"old registry", "modules_gen.go", "const moduleAssemblyVersion = 1", "const legacyAssemblyVersion = 1"},
+		{"old registry", "modules_gen.go", "const moduleAssemblyVersion = 2", "const legacyAssemblyVersion = 1"},
 		{"modified registry", "modules_gen.go", "Name: \"example\"", "Name: \"modified\""},
 		{"missing factory entry", "providers.go", "newModuleServices(", "legacyModuleServices("},
 		{"old registration call", "providers.go", "httpModules(examples, modules)", "httpModules(examples)"},
@@ -218,7 +250,7 @@ func TestModuleAssemblyRejectsIncompatibleAndChangedInputs(t *testing.T) {
 			}
 		})
 	}
-	for _, target := range []string{"providers.go", "module_orders.go"} {
+	for _, target := range []string{"providers.go", "module_orders.go", "module_permissions.go"} {
 		t.Run("stale "+target, func(t *testing.T) {
 			root := generatedProject(t, templates.Options{})
 			first, err := PrepareModule(root, "orders")

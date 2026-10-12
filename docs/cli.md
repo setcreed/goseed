@@ -138,6 +138,8 @@ fields:
 
 ## 业务生成登记与文件归属
 
+模块工厂文件还提供不构造业务的 `<name>Permissions() modulePermissions`，声明当前协议的操作权限；工厂返回值必须与纯描述一致。选择 Casbin 时，生成索引的 `bootstrap.PermissionCatalog()` 汇总资源/操作并供启动与离线策略导入共用，声明本身不授予任何用户。组装入口版本 2 要求既有模块保留此函数；旧入口或缺声明时明确拒绝并提示人工升级，不自动重写手工文件。
+
 模块命令同时创建 `internal/apiserver/bootstrap/module_<name>.go`，作为由开发者维护的显式依赖组装函数。固定启动入口通过强类型 `moduleDependencies` 将应用数据库、日志和所选缓存交给组装函数，所有模块仅构造一次；dual 的 HTTP 与 RPC Handler 共用同一 Biz。工厂返回构造错误时终止启动，由应用回收共享资源。生成索引汇总组装结果及协议登记，不覆盖手工组装代码。生成前检查组装版本、启动调用入口和登记索引的完整确定性投影；旧项目若缺少入口，应显式更新后再生成，不自动改写 `providers.go`。准备计划时记录启动文件及既有模块工厂的字节，执行前发现变化则拒绝写入。
 
 `goseed.yaml` 是生成器维护的版本化元数据和模块清单，模块登记包含名称、类型（`module` 或 `resource`）；资源项另记录 `specs/` 下的 spec 相对路径与字段规范版本。新项目使用结构化登记项；已生成的版本 1 项目若使用旧字符串登记，读取时按 `type: module` 兼容解释。它不是服务运行配置。`internal/apiserver/bootstrap/modules_gen.go` 是由该清单确定性生成的启动登记索引，统一接入依赖组装并输出协议注册描述：HTTP 描述包含模块名、操作权限和 `func(*gin.RouterGroup)` 路由回调；gRPC 描述包含 FullMethod 权限和 `func(grpc.ServiceRegistrar)` 注册回调；Gateway 描述包含模块名、HTTP 路径、允许的 query 参数、JSON body 方法及 `func(context.Context, *runtime.ServeMux, *grpc.ClientConn) error` 映射回调。对应协议不存在时裁剪其描述类型与依赖。`example` 作为内置登记项参与同一索引。

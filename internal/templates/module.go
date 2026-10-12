@@ -21,6 +21,7 @@ func renderModuleFactory(project Project, options Options, name string) (File, e
 		fmt.Fprintf(&source, "httpHandler %q\n", project.Module+"/internal/apiserver/handler/http/"+name)
 	}
 	if rpc {
+		source.WriteString("\"maps\"\n")
 		fmt.Fprintf(&source, "rpcHandler %q\n", project.Module+"/internal/apiserver/handler/grpc/"+name)
 	}
 	if options.Transport == "gateway" {
@@ -38,6 +39,7 @@ func renderModuleFactory(project Project, options Options, name string) (File, e
 	}
 	goName := strings.ToUpper(name[:1]) + name[1:]
 	fmt.Fprintf(&source, "}\n\nfunc new%sModule(dependencies moduleDependencies) (%sModule, error) {\n", goName, name)
+	source.WriteString("permissions := " + name + "Permissions()\n")
 	if options.Database == "none" {
 		source.WriteString("biz := business.New()\n")
 	} else {
@@ -45,15 +47,23 @@ func renderModuleFactory(project Project, options Options, name string) (File, e
 	}
 	source.WriteString("return " + name + "Module{\n")
 	if http {
-		source.WriteString("HTTP: httpHandler.New(biz),\nOperations: map[string]string{},\n")
+		source.WriteString("HTTP: httpHandler.New(biz),\nOperations: permissions.HTTP,\n")
 	}
 	if rpc {
-		source.WriteString("RPC: rpcHandler.New(biz),\nPermissions: rpcHandler.Permissions,\n")
+		source.WriteString("RPC: rpcHandler.New(biz),\nPermissions: permissions.RPC,\n")
 	}
 	if options.Transport == "gateway" {
 		source.WriteString("Gateway: gateway.Registration{Queries:map[string][]string{},BodyMethods:map[string]bool{},Register:func(context.Context,*runtime.ServeMux,*grpc.ClientConn)error{return nil}},\n")
 	}
 	source.WriteString("}, nil\n}\n")
+	source.WriteString("\n// Permissions can be read by offline policy commands without constructing the module.\nfunc " + name + "Permissions() modulePermissions { return modulePermissions{\n")
+	if http {
+		source.WriteString("HTTP: map[string]string{},\n")
+	}
+	if rpc {
+		source.WriteString("RPC: maps.Clone(rpcHandler.Permissions),\n")
+	}
+	source.WriteString("} }\n")
 	formatted, err := formatGo(source.String())
 	if err != nil {
 		return File{}, err

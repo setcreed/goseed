@@ -4,7 +4,9 @@
 
 ## 权限与策略
 
-固定模型使用用户 → 角色 → 资源/操作，不使用 URL、任意表达式、通配符、角色继承或超级管理员绕过。资源为 `example`，[[if eq .Database "none"]]操作只有 `read`。[[else]]操作为 `read/create/update/delete`，[[if eq .Transport "grpc"]]分别对应 List/Get、Create、Update、Delete RPC。[[else]]分别对应 GET、POST、PATCH、DELETE；GET 列表和详情共用 read。[[if eq .Transport "dual"]]RPC 对应 List/Get、Create、Update、Delete。[[end]][[end]][[end]]业务协议入口登记同一资源与操作；增加业务时需同步登记权限及验证。
+固定模型使用用户 → 角色 → 资源/操作，不使用 URL、任意表达式、通配符、角色继承或超级管理员绕过。内置资源为 `example`，[[if eq .Database "none"]]操作只有 `read`。[[else]]操作为 `read/create/update/delete`，[[if eq .Transport "grpc"]]分别对应 List/Get、Create、Update、Delete RPC。[[else]]分别对应 GET、POST、PATCH、DELETE；GET 列表和详情共用 read。[[if eq .Transport "dual"]]RPC 对应 List/Get、Create、Update、Delete。[[end]][[end]][[end]]其他业务在模块工厂文件的 `<name>Permissions()` 中显式声明，工厂和协议登记使用同一映射；声明与实际工厂不一致时拒绝组装。
+
+`bootstrap.PermissionCatalog()` 汇总所有模块的纯描述，启动和离线导入共用，不构造业务、连接数据库/Redis 或读取 goseed.yaml。操作名称为小写字母开头的小写字母/数字/下划线，最多 32 个字符；RPC 必须登记精确 FullMethod，重复方法拒绝。authz 与策略存储复制目录，未知资源/操作始终拒绝；新增声明不会授予默认角色或用户权限。目录与策略变更后重启实例。
 
 策略采用严格 CSV，以下内容明确授予 alice 读取自己的示例：
 

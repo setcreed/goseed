@@ -1,0 +1,41 @@
+package bootstrap
+
+import (
+ [[if ne .Transport "http"]]"maps"
+ examplegrpc "[[.Module]]/internal/apiserver/handler/grpc/example"[[end]]
+ [[if eq .Authz "casbin"]]"fmt"
+ "regexp"
+ "sort"
+ "[[.Module]]/internal/pkg/authz"[[end]]
+)
+
+// modulePermissions is pure metadata, independent of business construction.
+type modulePermissions struct {HTTP map[string]string;RPC map[string]string}
+
+func examplePermissions()modulePermissions{return modulePermissions{
+ [[if or (eq .Transport "http") (eq .Transport "dual")]]HTTP:map[string]string{"GET":"read",[[if ne .Database "none"]]"POST":"create","PATCH":"update","DELETE":"delete",[[end]]},[[end]]
+ [[if ne .Transport "http"]]RPC:maps.Clone(examplegrpc.Permissions),[[end]]
+}}
+
+[[if eq .Authz "casbin"]]
+var fullMethodPattern=regexp.MustCompile(`^/[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*/[A-Za-z_][A-Za-z0-9_]*$`)
+
+func permissionCatalog(modules map[string]modulePermissions)(authz.Catalog,error){
+ catalog:=make(authz.Catalog,len(modules));methods:=make(map[string]string)
+ names:=make([]string,0,len(modules));for name:=range modules{names=append(names,name)};sort.Strings(names)
+ for _,name:=range names {
+  declaration:=modules[name];operations:=make(map[string]bool)
+  for method,operation:=range declaration.HTTP {
+   switch method {case "GET","POST","PUT","PATCH","DELETE","HEAD","OPTIONS":default:return nil,fmt.Errorf("module %s declares an invalid HTTP method",name)}
+   operations[operation]=true
+  }
+  for method,operation:=range declaration.RPC {
+   if !fullMethodPattern.MatchString(method){return nil,fmt.Errorf("module %s declares an invalid RPC FullMethod",name)}
+   if other,exists:=methods[method];exists{return nil,fmt.Errorf("RPC FullMethod is declared by both %s and %s",other,name)}
+   methods[method]=name;operations[operation]=true
+  }
+  entries:=make([]string,0,len(operations));for operation:=range operations{entries=append(entries,operation)};sort.Strings(entries);catalog[name]=entries
+ }
+ if err:=authz.ValidateCatalog(catalog);err!=nil{return nil,err};return catalog,nil
+}
+[[end]]

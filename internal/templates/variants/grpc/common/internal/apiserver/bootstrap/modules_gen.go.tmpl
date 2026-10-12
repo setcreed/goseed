@@ -2,6 +2,8 @@
 package bootstrap
 
 import (
+[[if gt (len .Modules) 1]]"maps"[[end]]
+[[if eq .Authz "casbin"]]"[[.Module]]/internal/pkg/authz"[[end]]
 examplegrpc "[[.Module]]/internal/apiserver/handler/grpc/example"
 "[[.Module]]/internal/pkg/rpc"
 [[if gt (len .Modules) 1]]"fmt"[[end]]
@@ -10,7 +12,7 @@ examplegrpc "[[.Module]]/internal/apiserver/handler/grpc/example"
 
 const modulesSHA256 = ""
 
-const moduleAssemblyVersion = 1
+const moduleAssemblyVersion = 2
 
 type moduleServices struct {
 [[range .Modules]][[if ne .Name "example"]]
@@ -23,14 +25,15 @@ func newModuleServices(dependencies moduleDependencies) (moduleServices, error) 
 [[range .Modules]][[if ne .Name "example"]]
     [[.ServiceVar]], err := new[[.GoName]]Module(dependencies)
     if err != nil { return moduleServices{}, err }
+    if err:=validateModulePermissions("[[.Name]]",[[.Name]]Permissions(),modulePermissions{RPC:[[.ServiceVar]].Permissions});err!=nil{return moduleServices{},err}
     services.[[.ServiceVar]] = [[.ServiceVar]]
 [[end]][[end]]
     return services, nil
 }
 
 func rpcModules(examples *examplegrpc.Handler, services moduleServices) (map[string]rpc.Permission, func(grpc.ServiceRegistrar), error) {
-    permissions := make(map[string]rpc.Permission, len(examplegrpc.Permissions))
-    for method, operation := range examplegrpc.Permissions {
+    permissions := make(map[string]rpc.Permission, len(examplePermissions().RPC))
+    for method, operation := range examplePermissions().RPC {
         permissions[method] = rpc.Permission{Resource:"example", Operation:operation}
     }
 [[range .Modules]][[if ne .Name "example"]]
@@ -47,3 +50,19 @@ func rpcModules(examples *examplegrpc.Handler, services moduleServices) (map[str
     }
     return permissions, register, nil
 }
+
+[[if eq .Authz "casbin"]]
+// PermissionCatalog is safe for startup and offline commands.
+func PermissionCatalog()(authz.Catalog,error){
+ return permissionCatalog(map[string]modulePermissions{
+ "example":examplePermissions(),
+ [[range .Modules]][[if ne .Name "example"]]"[[.Name]]":[[.Name]]Permissions(),[[end]][[end]]
+ })
+}
+[[end]]
+
+[[if gt (len .Modules) 1]]
+func validateModulePermissions(name string,expected,actual modulePermissions)error{
+ if !maps.Equal(expected.HTTP,actual.HTTP)||!maps.Equal(expected.RPC,actual.RPC){return fmt.Errorf("module %s factory permissions differ from its pure declaration",name)};return nil
+}
+[[end]]

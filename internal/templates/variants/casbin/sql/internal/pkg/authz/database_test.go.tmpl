@@ -18,26 +18,35 @@ import (
 func TestDatabasePolicyPersistenceAndRollback(t *testing.T){
  ctx:=context.Background()
  [[if eq .Database "sqlite"]]db,err:=database.Open(ctx,config.Database{Path:filepath.Join(t.TempDir(),"policy.db"),MaxOpen:2,MaxIdle:1,BusyTimeout:time.Second,SlowThreshold:time.Second},zap.NewNop());if err!=nil{t.Fatal(err)};defer func(){_ = db.Close()}()
- if _,err:=New(ctx,NewDatabase(db.DB));err==nil{t.Fatal("missing policy schema accepted")};if db.DB.Migrator().HasTable(&policyRow{}){t.Fatal("policy load created schema")}
+ if _,err:=New(ctx,NewDatabase(db.DB,testCatalog()),testCatalog());err==nil{t.Fatal("missing policy schema accepted")};if db.DB.Migrator().HasTable(&policyRow{}){t.Fatal("policy load created schema")}
  if err:=db.Migrate(ctx);err!=nil{t.Fatal(err)}[[else]]db:=testutil.Database(t)[[end]]
- source:=NewDatabase(db.DB);service,err:=New(ctx,source);if err!=nil{t.Fatal(err)}
+ source:=NewDatabase(db.DB,testCatalog());service,err:=New(ctx,source,testCatalog());if err!=nil{t.Fatal(err)}
  if !errors.Is(service.Authorize(ctx,"alice","example","read"),errno.Forbidden){t.Fatal("empty SQL policy allowed")}
  if err:=service.Replace(ctx,readRules());err!=nil{t.Fatal(err)}
  duplicate:=policyRow{Ptype:"p",V0:"role:reader",V1:"example",V2:"read"};if err:=db.DB.Create(&duplicate).Error;!errors.Is(err,gorm.ErrDuplicatedKey){t.Fatal("policy unique constraint absent")}
- loaded,err:=New(ctx,source);if err!=nil||loaded.Authorize(ctx,"alice","example","read")!=nil{t.Fatal("saved policy not reloaded")}
+ loaded,err:=New(ctx,source,testCatalog());if err!=nil||loaded.Authorize(ctx,"alice","example","read")!=nil{t.Fatal("saved policy not reloaded")}
  // Fail the first INSERT after DELETE; the original committed rules must survive.
  callback:="authz_test_reject";if err:=db.DB.Callback().Create().Before("gorm:create").Register(callback,func(tx *gorm.DB){if tx.Statement.Table=="casbin_rules"{_ = tx.AddError(errors.New("private-policy-write-failure"))}});err!=nil{t.Fatal(err)}
  if err:=service.Replace(ctx,[]Rule{{Ptype:"p",V0:"role:other",V1:"example",V2:"read"}});err==nil||strings.Contains(err.Error(),"private"){t.Fatal("policy write failure accepted or disclosed")}
  if err:=db.DB.Callback().Create().Remove(callback);err!=nil{t.Fatal(err)}
- loaded,err=New(ctx,source);if err!=nil||loaded.Authorize(ctx,"alice","example","read")!=nil{t.Fatal("failed save did not roll back deleted policies")}
- if err:=service.Replace(ctx,nil);err!=nil{t.Fatal(err)};loaded,err=New(ctx,source);if err!=nil||!errors.Is(loaded.Authorize(ctx,"alice","example","read"),errno.Forbidden){t.Fatal("revocation not persisted")}
+ loaded,err=New(ctx,source,testCatalog());if err!=nil||loaded.Authorize(ctx,"alice","example","read")!=nil{t.Fatal("failed save did not roll back deleted policies")}
+ if err:=service.Replace(ctx,nil);err!=nil{t.Fatal(err)};loaded,err=New(ctx,source,testCatalog());if err!=nil||!errors.Is(loaded.Authorize(ctx,"alice","example","read"),errno.Forbidden){t.Fatal("revocation not persisted")}
  if err:=service.Replace(ctx,readRules());err!=nil{t.Fatal(err)}
+ catalog:=testCatalog();catalog["orders"]=[]string{"read"}
+ scoped:=NewDatabase(db.DB,catalog);extended,err:=New(ctx,scoped,catalog);if err!=nil{t.Fatal(err)}
+ catalog["orders"][0]="delete"
+ orders:=[]Rule{{Ptype:"p",V0:"role:reader",V1:"orders",V2:"read"},{Ptype:"g",V0:"user:alice",V1:"role:reader"}}
+ if err:=extended.Replace(ctx,orders);err!=nil{t.Fatal("registered SQL resource rejected",err)}
+ if err:=extended.Authorize(ctx,"alice","orders","read");err!=nil{t.Fatal(err)}
+ if _,err:=New(ctx,source,testCatalog());err==nil{t.Fatal("SQL loader accepted resource outside its catalog")}
+ if err:=scoped.Replace(ctx,[]Rule{{Ptype:"p",V0:"role:reader",V1:"orders",V2:"delete"}});err==nil{t.Fatal("caller changed SQL store catalog")}
+ if err:=source.Replace(ctx,readRules());err!=nil{t.Fatal(err)}
  db.Pool.SetMaxOpenConns(1);connection,err:=db.Pool.Conn(ctx);if err!=nil{t.Fatal(err)}
  deadline,cancel:=context.WithTimeout(ctx,20*time.Millisecond);_,err=source.Load(deadline);cancel();_ = connection.Close();if !errors.Is(err,context.DeadlineExceeded){t.Fatal("running policy read did not propagate deadline")}
  if err:=service.Reload(ctx);err!=nil{t.Fatal("pool not reusable after deadline")}
  canceled,end:=context.WithCancel(ctx);end();if err:=source.Replace(canceled,nil);!errors.Is(err,context.Canceled){t.Fatal("canceled replacement accepted")}
  if err:=service.Reload(ctx);err!=nil{t.Fatal(err)};if err:=service.Authorize(ctx,"alice","example","read");err!=nil{t.Fatal("canceled save changed policy")}
- row:=policyRow{Ptype:"g",V0:"role:reader",V1:"role:other"};if err:=db.DB.Create(&row).Error;err!=nil{t.Fatal(err)};if _,err:=New(ctx,source);err==nil{t.Fatal("invalid stored policy accepted")};if err:=db.DB.Delete(&row).Error;err!=nil{t.Fatal(err)}
- if err:=db.DB.Exec("DROP TABLE casbin_rules").Error;err!=nil{t.Fatal(err)};if err:=db.CheckSchema(ctx);err==nil{t.Fatal("recorded migration version hid missing policy table")};if _,err:=New(ctx,source);err==nil{t.Fatal("missing policy table accepted")}
- if err:=db.Close();err!=nil{t.Fatal(err)};if _,err:=New(ctx,source);err==nil{t.Fatal("closed policy storage accepted")}
+ row:=policyRow{Ptype:"g",V0:"role:reader",V1:"role:other"};if err:=db.DB.Create(&row).Error;err!=nil{t.Fatal(err)};if _,err:=New(ctx,source,testCatalog());err==nil{t.Fatal("invalid stored policy accepted")};if err:=db.DB.Delete(&row).Error;err!=nil{t.Fatal(err)}
+ if err:=db.DB.Exec("DROP TABLE casbin_rules").Error;err!=nil{t.Fatal(err)};if err:=db.CheckSchema(ctx);err==nil{t.Fatal("recorded migration version hid missing policy table")};if _,err:=New(ctx,source,testCatalog());err==nil{t.Fatal("missing policy table accepted")}
+ if err:=db.Close();err!=nil{t.Fatal(err)};if _,err:=New(ctx,source,testCatalog());err==nil{t.Fatal("closed policy storage accepted")}
 }

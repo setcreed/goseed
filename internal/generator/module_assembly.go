@@ -18,9 +18,9 @@ func validateModuleAssembly(state ProjectState) (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	marker := []byte("const moduleAssemblyVersion = 1")
+	marker := []byte("const moduleAssemblyVersion = 2")
 	if bytes.Count(registry, marker) != 1 {
-		return nil, fmt.Errorf("project lacks module assembly version 1; explicitly upgrade the bootstrap entry and module factories before generating (no files written)")
+		return nil, fmt.Errorf("project lacks module assembly version 2; explicitly upgrade the bootstrap entry, pure permission declarations and module factories before generating (no files written)")
 	}
 	providerPath := "internal/apiserver/bootstrap/providers.go"
 	if err := validateModulePath(state.Root, providerPath); err != nil {
@@ -34,6 +34,18 @@ func validateModuleAssembly(state ProjectState) (map[string][]byte, error) {
 		return nil, err
 	}
 	inputs := map[string][]byte{providerPath: providers}
+	permissionPath := "internal/apiserver/bootstrap/module_permissions.go"
+	if err := validateModulePath(state.Root, permissionPath); err != nil {
+		return nil, err
+	}
+	permissionSource, err := readProjectFile(state.Root, permissionPath)
+	if err != nil {
+		return nil, err
+	}
+	inputs[permissionPath] = permissionSource
+	if err := validatePurePermissionEntry(permissionSource, "examplePermissions"); err != nil {
+		return nil, err
+	}
 	entries := make([]templates.ModuleEntry, 0, len(state.Metadata.Modules))
 	for _, module := range state.Metadata.Modules {
 		entries = append(entries, templates.ModuleEntry{Name: module.Name, Type: module.Type})
@@ -49,6 +61,9 @@ func validateModuleAssembly(state ProjectState) (map[string][]byte, error) {
 			return nil, fmt.Errorf("module %q assembly is missing or unsafe: %w", module.Name, err)
 		}
 		inputs[path] = factory
+		if err := validatePurePermissionEntry(factory, module.Name+"Permissions"); err != nil {
+			return nil, err
+		}
 	}
 	project := templates.Project{Name: state.Metadata.Name, Module: state.Metadata.Module}
 	options := templates.Options{Database: state.Metadata.Database, Redis: state.Metadata.Redis, Authz: state.Metadata.Authorization, Transport: state.Metadata.Transport}
@@ -77,6 +92,32 @@ func validateModuleAssembly(state ProjectState) (map[string][]byte, error) {
 		return nil, fmt.Errorf("generated module registration index differs from its manifest projection; preserve custom assembly in module_<name>.go, not modules_gen.go")
 	}
 	return inputs, nil
+}
+
+func validatePurePermissionEntry(source []byte, name string) error {
+	file, err := parser.ParseFile(token.NewFileSet(), "module factory", source, 0)
+	if err != nil {
+		return fmt.Errorf("parse module permissions: %w", err)
+	}
+	count := 0
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Name.Name != name {
+			continue
+		}
+		count++
+		if function.Recv != nil || function.Type.TypeParams.NumFields() != 0 || function.Type.Params.NumFields() != 0 || function.Type.Results.NumFields() != 1 {
+			return fmt.Errorf("module requires pure %s() modulePermissions declaration", name)
+		}
+		result, ok := function.Type.Results.List[0].Type.(*ast.Ident)
+		if !ok || result.Name != "modulePermissions" {
+			return fmt.Errorf("module requires pure %s() modulePermissions declaration", name)
+		}
+	}
+	if count != 1 {
+		return fmt.Errorf("module requires one pure %s() modulePermissions declaration", name)
+	}
+	return nil
 }
 
 func validateAssemblyCalls(source []byte, transport string) error {

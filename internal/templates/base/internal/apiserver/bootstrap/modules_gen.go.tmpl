@@ -2,6 +2,9 @@
 package bootstrap
 
 import (
+[[if gt (len .Modules) 1]]"maps"[[end]]
+[[if gt (len .Modules) 1]]"fmt"[[end]]
+[[if eq .Authz "casbin"]]"[[.Module]]/internal/pkg/authz"[[end]]
 "[[.Module]]/internal/apiserver"
 examplehttp "[[.Module]]/internal/apiserver/handler/http/example"
 )
@@ -9,7 +12,7 @@ examplehttp "[[.Module]]/internal/apiserver/handler/http/example"
 const openAPISHA256 = ""
 const modulesSHA256 = ""
 
-const moduleAssemblyVersion = 1
+const moduleAssemblyVersion = 2
 
 type moduleServices struct {
 [[range .Modules]][[if ne .Name "example"]]
@@ -22,6 +25,7 @@ func newModuleServices(dependencies moduleDependencies) (moduleServices, error) 
 [[range .Modules]][[if ne .Name "example"]]
     [[.ServiceVar]], err := new[[.GoName]]Module(dependencies)
     if err != nil { return moduleServices{}, err }
+    if err:=validateModulePermissions("[[.Name]]",[[.Name]]Permissions(),modulePermissions{HTTP:[[.ServiceVar]].Operations});err!=nil{return moduleServices{},err}
     services.[[.ServiceVar]] = [[.ServiceVar]]
 [[end]][[end]]
     return services, nil
@@ -30,10 +34,7 @@ func newModuleServices(dependencies moduleDependencies) (moduleServices, error) 
 func httpModules(examples *examplehttp.Handler, services moduleServices) []apiserver.HTTPModule {
     modules := []apiserver.HTTPModule{{
         Name: "example", Path: "/v1/examples",
-        Operations: map[string]string{
-            "GET": "read",
-            [[if ne .Database "none"]]"POST": "create", "PATCH": "update", "DELETE": "delete",[[end]]
-        },
+        Operations: examplePermissions().HTTP,
         Register: examples.Register,
     }}
 [[range .Modules]][[if ne .Name "example"]]
@@ -41,3 +42,19 @@ func httpModules(examples *examplehttp.Handler, services moduleServices) []apise
 [[end]][[end]]
     return modules
 }
+
+[[if eq .Authz "casbin"]]
+// PermissionCatalog is safe for startup and offline commands.
+func PermissionCatalog()(authz.Catalog,error){
+ return permissionCatalog(map[string]modulePermissions{
+ "example":examplePermissions(),
+ [[range .Modules]][[if ne .Name "example"]]"[[.Name]]":[[.Name]]Permissions(),[[end]][[end]]
+ })
+}
+[[end]]
+
+[[if gt (len .Modules) 1]]
+func validateModulePermissions(name string,expected,actual modulePermissions)error{
+ if !maps.Equal(expected.HTTP,actual.HTTP)||!maps.Equal(expected.RPC,actual.RPC){return fmt.Errorf("module %s factory permissions differ from its pure declaration",name)};return nil
+}
+[[end]]

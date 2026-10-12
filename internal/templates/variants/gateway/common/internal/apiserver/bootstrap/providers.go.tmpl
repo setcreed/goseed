@@ -32,6 +32,7 @@ type App struct { Server *gateway.Server;RPC *rpc.Server; Logger *zap.Logger[[if
 func New(settings config.Config, version string) (*App,error) {
 	logger,err := logx.New(settings.Log,version)
 	if err != nil { return nil,err }
+	[[if eq .Authz "casbin"]]catalog,err:=PermissionCatalog();if err!=nil{_ = logger.Sync();return nil,err}[[end]]
 	[[if or (ne .Database "none") .Redis (eq .Authz "casbin")]]startup,cancel:=context.WithTimeout(context.Background(),10*time.Second);defer cancel()[[end]]
 	[[if ne .Database "none"]]db,err:=database.Open(startup,settings.Database,logger)
 	if err!=nil { _ = logger.Sync(); return nil,err }
@@ -41,7 +42,7 @@ func New(settings config.Config, version string) (*App,error) {
 	do.ProvideValue(injector,logger)
 	[[if ne .Database "none"]]do.ProvideValue(injector,db)[[end]]
 	authentication,err:=auth.New(settings.JWT);if err!=nil{[[if ne .Database "none"]]_ = db.Close();[[end]] _ = logger.Sync();return nil,err}
-	[[if eq .Authz "casbin"]]authorization,err:=authz.New(startup,authz.[[if eq .Database "none"]]NewFile(settings.Authz.PolicyFile)[[else]]NewDatabase(db.DB)[[end]]);if err!=nil{[[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}
+	[[if eq .Authz "casbin"]]authorization,err:=authz.New(startup,authz.[[if eq .Database "none"]]NewFile(settings.Authz.PolicyFile,catalog)[[else]]NewDatabase(db.DB,catalog)[[end]],catalog);if err!=nil{[[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}
 	do.ProvideValue(injector,authorization)[[end]]
 	[[if .Redis]]caching,err:=cache.Open(startup,settings.Redis,logger);if err!=nil{[[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}
 	do.ProvideValue(injector,caching)[[end]]

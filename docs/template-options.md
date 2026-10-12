@@ -54,7 +54,9 @@ SQL 示例只缓存按主体与 ID 读取的成功结果，列表、404 与错�
 
 `Options.Authz` 支持 `none`（默认）与 `casbin`，其他值在渲染前拒绝；可与四种存储选择及 Redis 组合，当前生成项目均使用 JWT。开启时才生成授权组件、配置、策略文档、测试和 Casbin 依赖。所有业务入口在 JWT 之后、业务处理之前执行授权；存活/就绪检查保持公共入口，未登记入口不获得权限。后续 HTTP/RPC 统一使用资源与操作，而不是将 URL 当作策略。
 
-首版使用固定简单 RBAC 模型、精确匹配，不接受自定义模型、通配符、表达式、角色继承或超级管理员绕过。权限资源为 `example`，SQL 模式操作为 `read/create/update/delete`，无数据库模式仅 `read`。HTTP GET 列表和详情映射 read，POST 映射 create，PATCH 映射 update，DELETE 映射 delete。Biz 始终继续校验主体及资源归属，拥有操作权限不代表可以访问他人的资源；JWT 主体不能自行指定角色。
+首版使用固定简单 RBAC 模型、精确匹配，不接受自定义模型、通配符、表达式、角色继承或超级管理员绕过。内置权限资源为 `example`，SQL 模式操作为 `read/create/update/delete`，无数据库模式仅 `read`。HTTP GET 列表和详情映射 read，POST 映射 create，PATCH 映射 update，DELETE 映射 delete。其他业务从模块的纯权限描述显式登记，未声明的资源或操作拒绝；声明权限不代表授予任何用户。Biz 始终继续校验主体及资源归属，拥有操作权限不代表可以访问他人的资源；JWT 主体不能自行指定角色。
+
+模块通过 `module_<name>.go` 中的 `<name>Permissions()` 声明 HTTP method 与 RPC FullMethod 对应操作；工厂和登记使用同一来源，工厂返回不同映射时拒绝组装。生成索引的 `bootstrap.PermissionCatalog()` 汇总目录，启动与离线策略导入共用，不构造业务、不连接外部服务、不读取运行时 goseed.yaml。资源名沿用模块命名，操作是小写字母开头的小写字母/数字/下划线名称（最多 32 个字符）；拒绝非法 HTTP 方法、非法/重复 FullMethod 和未知权限。authz 及 SQL/File Store 显式接收并复制目录，后续修改调用方 map/slice 不改变校验边界。新组装入口版本为 2，旧入口或缺纯描述的工厂在生成前拒绝，需要人工显式升级。
 
 策略 CSV 采用 `p, role:reader, example, read` 和 `g, user:alice, role:reader`；请求主体自动加 `user:` 前缀，角色只能为 `role:` 加小写字母开头的字母/数字/下划线名称（最多 32 个字符）。用户部分沿用 JWT 的 1 至 128 字符、UTF-8、无控制字符与首尾空白规则。仅接受 p 的三字段与 g 的两字段，不接受额外字段、未知资源/操作、重复规则或角色继承；所有用户与角色命名空间严格分离。策略最多 4096 条，文件最多 1MiB，文件必须为非符号链接的普通文件；未知/损坏策略及存储错误在启动时失败，空策略合法且默认拒绝。策略正文、主体和原始存储错误不进入日志。
 

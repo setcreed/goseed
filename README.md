@@ -12,6 +12,8 @@ Go 工具链固定为 **1.26.4**，主模块为 **`github.com/setcreed/goseed`**
 
 内部 `generator.PrepareResource` 已提供只读资源目标计划：校验 spec、当前组装入口、协议工具、迁移版本和文件冲突，预览输出目标，并在输入变化后拒绝旧计划。该入口尚不渲染 CRUD、不提供 Write，也未接入公共 CLI；接口与接入边界见 [资源接入方案](docs/resource-generation.md) 。
 
+模块工厂通过 `<name>Permissions()` 纯函数声明协议权限；启用 Casbin 时，启动和离线策略导入共用 `bootstrap.PermissionCatalog()`，显式接受已登记业务资源并默认拒绝未知权限。组装入口已升级到版本 2；旧项目缺入口或纯描述时拒绝继续生成，需要人工升级。使用与边界见 [授权契约](docs/template-options.md#casbin-可选能力) 。
+
 | 模板能力 | 当前支持 | 默认值 |
 |---|---|---|
 | `Options.Database` | `sqlite`、`mysql`、`postgres`、`none` | `sqlite` |

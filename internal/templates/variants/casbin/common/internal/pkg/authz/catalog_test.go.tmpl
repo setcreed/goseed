@@ -1,0 +1,46 @@
+package authz
+
+import (
+ "context"
+ "errors"
+ "os"
+ "path/filepath"
+ "testing"
+ "[[.Module]]/internal/pkg/errno"
+)
+
+func TestExplicitCatalogAndImmutableSnapshots(t *testing.T){
+ ctx:=context.Background();catalog:=Catalog{"orders":{"read","publish"}}
+ rules:=[]Rule{{Ptype:"p",V0:"role:reader",V1:"orders",V2:"read"},{Ptype:"g",V0:"user:alice",V1:"role:reader"}}
+ source:=&memoryStore{rules:rules};service,err:=New(ctx,source,catalog);if err!=nil{t.Fatal(err)}
+ if err:=service.Authorize(ctx,"alice","orders","read");err!=nil{t.Fatal("registered resource was denied",err)}
+ for _,permission:=range [][2]string{{"example","read"},{"orders","delete"},{"orders","publish"},{"unknown","read"}}{if !errors.Is(service.Authorize(ctx,"alice",permission[0],permission[1]),errno.Forbidden){t.Fatal("unregistered or ungranted permission allowed")}}
+ // The SDK cannot retain caller-owned mutable catalog maps or slices.
+ catalog["orders"][0]="delete";delete(catalog,"orders");catalog["unknown"]=[]string{"read"}
+ if err:=service.Authorize(ctx,"alice","orders","read");err!=nil{t.Fatal("caller changed manager catalog",err)}
+ if err:=service.Replace(ctx,[]Rule{{Ptype:"p",V0:"role:reader",V1:"unknown",V2:"read"}});err==nil{t.Fatal("caller expanded manager permissions")}
+ if err:=service.Reload(ctx);err!=nil{t.Fatal("reload used the caller's changed catalog",err)}
+ if err:=service.Authorize(ctx,"alice","orders","read");err!=nil{t.Fatal("failed replacement changed snapshot",err)}
+ canceled,cancel:=context.WithCancel(ctx);cancel();if err:=ValidateRules(canceled,nil,Catalog{"*":{"*"}});!errors.Is(err,context.Canceled){t.Fatal("catalog validation ignored context")}
+}
+
+func TestInvalidCatalogAndOfflineParity(t *testing.T){
+ ctx:=context.Background()
+ for _,catalog:=range []Catalog{{"Orders":{"read"}},{"*":{"read"}},{"orders":{"*"}},{"orders":{"read","read"}},{"orders":{""}}}{
+  if err:=ValidateCatalog(catalog);err==nil{t.Fatal("invalid catalog accepted")}
+  if _,err:=New(ctx,&memoryStore{},catalog);err==nil{t.Fatal("startup accepted invalid catalog")}
+  if _,err:=NewFile("unused",catalog).Load(ctx);err==nil{t.Fatal("file store accepted invalid catalog")}
+ }
+ path:=filepath.Join(t.TempDir(),"policy.csv");data:="p,role:reader,orders,read\ng,user:alice,role:reader\n"
+ if err:=os.WriteFile(path,[]byte(data),0600);err!=nil{t.Fatal(err)}
+ catalog:=Catalog{"orders":{"read"}};file:=NewFile(path,catalog);catalog["orders"][0]="delete"
+ if _,err:=file.Load(ctx);err!=nil{t.Fatal("caller changed file store catalog",err)}
+ allowed:=Catalog{"orders":{"read"}};store:=&memoryStore{}
+ if err:=Import(ctx,store,path,allowed);err!=nil{t.Fatal("offline import rejected declared resource",err)}
+ service,err:=New(ctx,store,allowed);if err!=nil{t.Fatal(err)}
+ if err:=service.Authorize(ctx,"alice","orders","read");err!=nil{t.Fatal("startup and import catalogs differ",err)}
+ if _,err:=ReadFile(ctx,path,testCatalog());err==nil{t.Fatal("unknown resource accepted by CSV reader")}
+ before:=append([]Rule(nil),store.rules...)
+ if err:=Import(ctx,store,path,testCatalog());err==nil{t.Fatal("unknown resource accepted by offline import")}
+ if len(store.rules)!=len(before)||store.rules[0]!=before[0]{t.Fatal("invalid offline import changed storage")}
+}

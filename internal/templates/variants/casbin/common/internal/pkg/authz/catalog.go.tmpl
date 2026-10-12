@@ -1,0 +1,29 @@
+package authz
+
+import (
+ "errors"
+ "regexp"
+)
+
+// Catalog explicitly declares permissions; it never grants them to a user.
+type Catalog map[string][]string
+type permissionSet map[string]map[string]struct{}
+
+var resourcePattern=regexp.MustCompile(`^[a-z][a-z0-9]*$`)
+var operationPattern=regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
+
+func newPermissionSet(catalog Catalog)(permissionSet,error){
+ permissions:=make(permissionSet,len(catalog))
+ for resource,operations:=range catalog {
+  if !resourcePattern.MatchString(resource){return nil,errors.New("invalid permission resource")}
+  allowed:=make(map[string]struct{},len(operations))
+  for _,operation:=range operations {
+   if !operationPattern.MatchString(operation){return nil,errors.New("invalid permission operation")}
+   if _,exists:=allowed[operation];exists{return nil,errors.New("duplicate permission operation")}
+   allowed[operation]=struct{}{}
+  };permissions[resource]=allowed
+ };return permissions,nil
+}
+
+func ValidateCatalog(catalog Catalog)error{_,err:=newPermissionSet(catalog);return err}
+func(p permissionSet)allows(resource,operation string)bool{_,allowed:=p[resource][operation];return allowed}

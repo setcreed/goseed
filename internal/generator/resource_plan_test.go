@@ -354,7 +354,7 @@ func TestResourcePlanUnsafePathsAndProjection(t *testing.T) {
 			}
 		})
 	}
-	for _, replacement := range []string{"const moduleAssemblyVersion = 0", "const injected = true\nconst moduleAssemblyVersion = 1"} {
+	for _, replacement := range []string{"const moduleAssemblyVersion = 0", "const injected = true\nconst moduleAssemblyVersion = 2"} {
 		t.Run(replacement, func(t *testing.T) {
 			root := resourcePlanProject(t, templates.Options{Transport: "http"}, false)
 			path := filepath.Join(root, "internal/apiserver/bootstrap/modules_gen.go")
@@ -362,7 +362,7 @@ func TestResourcePlanUnsafePathsAndProjection(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			data = bytes.Replace(data, []byte("const moduleAssemblyVersion = 1"), []byte(replacement), 1)
+			data = bytes.Replace(data, []byte("const moduleAssemblyVersion = 2"), []byte(replacement), 1)
 			if err := os.WriteFile(path, data, 0644); err != nil {
 				t.Fatal(err)
 			}
