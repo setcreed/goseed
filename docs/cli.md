@@ -1,18 +1,30 @@
-# 命令契约
+# CLI 参考
 
-本文件定义当前根命令的项目、业务模块与 CRUD 资源生成行为。可执行能力以仓库 README 为准。
+本文件定义 CLI 的项目、业务模块与 CRUD 资源生成行为。安装与快速开始见仓库 README。
+
+| 入口 | 用途 |
+|---|---|
+| `goseed`、`goseed --help` | 查看帮助与子命令 |
+| `goseed --version` | 查看 CLI、模板和资源 spec 版本 |
+| `goseed init` | 在当前目录生成项目 |
+| `goseed gen module <name>` | 在已有项目中增加业务模块 |
+| `goseed gen resource <name> --spec <path>` | 根据 YAML 规范增加 CRUD 资源 |
+
+所有子命令均支持 `--help`；生成命令支持 `--dry-run`，先校验并预览、不写入文件。
 
 ## 创建项目
 
-根命令不带子命令时生成项目；内部模板渲染与根 CLI 使用相同的能力契约。
+使用 `init` 在当前目录生成项目；内部模板渲染与 CLI 使用相同的能力契约。裸执行 `goseed` 显示帮助，不写入文件；`goseed --help`、`goseed init --help` 和 `goseed gen --help` 分别提供命令导航。
 
 ```bash
 mkdir shop
 cd shop
-goseed
+goseed init
 ```
 
-根命令不带参数时，在当前目录生成 HTTP + SQLite + JWT 项目。当前目录必须没有业务文件；可保留 `.git` Git 元数据和 `.DS_Store`、`Thumbs.db` 系统文件，不遍历或修改这些保留内容。其他已有文件会导致生成前失败。
+`goseed init` 不带参数时，在当前目录生成 HTTP + SQLite + JWT 项目。当前目录必须没有业务文件；可保留 `.git` Git 元数据和 `.DS_Store`、`Thumbs.db` 系统文件，不遍历或修改这些保留内容。其他已有文件会导致生成前失败。
+
+兼容旧入口：`goseed --name shop`、`goseed --db=postgres` 等带生成参数的根命令继续生成项目，参数语义与 `init` 一致。旧版裸执行 `goseed` 的脚本需改为 `goseed init`。
 
 HTTP、dual 与 Gateway 项目会同时生成内置 `example` 模块的 `api/openapi/example.yaml` 源文件和规范化的 `api/openapi/swagger.json` 汇总索引；纯 gRPC 项目不生成 HTTP OpenAPI 文件。生成器内部的索引更新计划会复核 `goseed.yaml`、模块源文件与目标字节，模块源变化时重建待写索引；若当前汇总索引与登记摘要不符则失败。此计划尚未作为公开 CLI 命令提供。
 
@@ -27,15 +39,15 @@ HTTP、dual 与 Gateway 项目会同时生成内置 `example` 模块的 `api/ope
 - 写入位置始终为当前目录。`--name` 不创建子目录，也不重命名当前目录；目录名、项目名和模块路径末段可以不同。
 - 显式传入不合法的名称或模块路径时，在任何文件写入前失败；不自动转小写、删字符或修正路径。
 
-以下为计划用法，目录名包含连字符时，可以显式指定合法项目名：
+目录名包含连字符时，可以显式指定合法项目名：
 
 ```bash
 mkdir shop-service
 cd shop-service
-goseed --name shop --module github.com/setcreed/shop
+goseed init --name shop --module github.com/setcreed/shop
 ```
 
-该命令计划在 `shop-service` 当前目录生成项目，项目与服务名称为 `shop`，Go 模块路径为 `github.com/setcreed/shop`；不会再创建 `shop` 子目录。
+该命令在 `shop-service` 当前目录生成项目，项目与服务名称为 `shop`，Go 模块路径为 `github.com/setcreed/shop`；不会再创建 `shop` 子目录。
 
 ### 参数
 
@@ -53,12 +65,12 @@ goseed --name shop --module github.com/setcreed/shop
 | `--dry-run` | 布尔值 | `false` | 校验并展示文件、依赖版本及冲突，不写入文件 |
 
 ```bash
-goseed --module github.com/acme/shop
-goseed --db=postgres --redis --authz=casbin --transport=dual
-goseed --db=mysql --transport=gateway
-goseed --db=none --redis --transport=grpc
-goseed --transport=gateway --metrics --tracing
-goseed --db=postgres --transport=dual --deployment=single-host
+goseed init --module github.com/acme/shop
+goseed init --db=postgres --redis --authz=casbin --transport=dual
+goseed init --db=mysql --transport=gateway
+goseed init --db=none --redis --transport=grpc
+goseed init --transport=gateway --metrics --tracing
+goseed init --db=postgres --transport=dual --deployment=single-host
 ```
 
 示例中的 GitHub 路径仅展示模块参数格式，生成器不创建远端仓库、不提交或推送。

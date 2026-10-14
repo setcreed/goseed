@@ -11,23 +11,50 @@
 - 使用 `gen module` 增加业务模块，使用 `gen resource` 生成 CRUD 资源和协议适配。
 - 生成的服务带有配置校验、显式迁移、健康检查和有期限的优雅关闭。
 
-## 快速开始
+## 安装
 
-需要 Go 1.26.4 或更新的兼容版本、Git 和 Make。首次构建会从 Go 模块代理下载依赖。克隆并构建生成器：
+需要 Go 1.26.4 或更新的兼容版本。任选一种方式；首次安装或构建会下载 Go 模块依赖。
+
+### 使用 go install
+
+```sh
+go install github.com/setcreed/goseed/cmd/goseed@latest
+```
+
+确保 Go 的可执行文件目录位于 `PATH` 中：设置过 `GOBIN` 时使用该目录，否则使用 `go env GOPATH` 输出目录下的 `bin`。默认配置的 macOS/Linux shell 可执行：
+
+```sh
+export PATH="$(go env GOPATH)/bin:$PATH"
+goseed --version
+```
+
+更新时重新执行安装命令；需要固定已发布版本时，将 `@latest` 替换为对应的 `@vX.Y.Z`。
+
+### 拉取源码编译
+
+此方式还需要 Git 和 Make：
 
 ```sh
 git clone https://github.com/setcreed/goseed.git
 cd goseed
 make build
+./bin/goseed --version
+export PATH="$(pwd)/bin:$PATH"
+cd ..
 ```
+
+上面的 `PATH` 设置仅对当前 shell 生效；持久使用时，将实际可执行文件目录加入 shell 配置。两种方式均使用同一命令树和内嵌模板。
+
+## 快速开始
 
 在一个新的空目录中生成默认项目并启动本地开发服务：
 
+以下步骤使用 Make；也可将 `make build` 替换为 `go build -mod=readonly -o bin/apiserver ./cmd/apiserver`。
+
 ```sh
-GOSEED="$(pwd)/bin/goseed"
-mkdir -p ../goseed-demo
-cd ../goseed-demo
-"$GOSEED" --name demo --module example.com/demo
+mkdir goseed-demo
+cd goseed-demo
+goseed init --name demo --module example.com/demo
 
 make build
 ./bin/apiserver dev init
@@ -54,7 +81,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 生成器默认使用 SQLite 和 HTTP。下面的示例展示其他组合；需要外部数据库或 Redis 时，先准备对应服务，再按生成项目 README 配置连接信息。
 
 ```sh
-goseed --name shop --module github.com/acme/shop \
+goseed init --name shop --module github.com/acme/shop \
   --db=postgres --redis --authz=casbin --transport=dual
 ```
 
@@ -70,6 +97,8 @@ goseed gen resource product --spec specs/product.yaml --migration
 ```
 
 资源 spec 示例和字段约束见 CLI 参考。`--migration` 只生成待审阅的 SQL 草稿，不连接或修改数据库。gRPC、dual 和 Gateway 项目在生成资源前，先于业务项目执行 `make proto-tools`。
+
+执行 `goseed` 或 `goseed --help` 查看全部命令，执行 `goseed init --help`、`goseed gen module --help` 或 `goseed gen resource --help` 查看具体用法。裸执行 `goseed` 只显示帮助；旧的 `goseed --name ...` 等带生成参数用法继续兼容。
 
 ## 部署
 

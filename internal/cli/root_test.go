@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestDefaultCommandGeneratesProjectInCurrentDirectory(t *testing.T) {
+func TestInitGeneratesProjectInCurrentDirectory(t *testing.T) {
 	dir := projectDir(t)
 	if err := os.Mkdir(filepath.Join(dir, ".git"), 0755); err != nil {
 		t.Fatal(err)
@@ -20,6 +20,7 @@ func TestDefaultCommandGeneratesProjectInCurrentDirectory(t *testing.T) {
 
 	var output bytes.Buffer
 	cmd := NewCommand("v0.0.0-test")
+	cmd.SetArgs([]string{"init"})
 	cmd.SetOut(&output)
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
@@ -43,7 +44,7 @@ func TestDryRunReportsPlanWithoutWriting(t *testing.T) {
 
 	var output bytes.Buffer
 	cmd := NewCommand("test")
-	cmd.SetArgs([]string{"--name", "shopapi", "--module", "github.com/acme/shop", "--db", "postgres", "--redis", "--authz", "casbin", "--transport", "dual", "--deployment", "single-host", "--dry-run"})
+	cmd.SetArgs([]string{"init", "--name", "shopapi", "--module", "github.com/acme/shop", "--db", "postgres", "--redis", "--authz", "casbin", "--transport", "dual", "--deployment", "single-host", "--dry-run"})
 	cmd.SetOut(&output)
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
@@ -90,6 +91,7 @@ func TestGenModuleDryRunAndWrite(t *testing.T) {
 	dir := projectDir(t)
 	t.Chdir(dir)
 	create := NewCommand("test")
+	create.SetArgs([]string{"init"})
 	if err := create.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +128,9 @@ func TestGenModuleDryRunAndWrite(t *testing.T) {
 func TestGenResourceDryRunAndWrite(t *testing.T) {
 	dir := projectDir(t)
 	t.Chdir(dir)
-	if err := NewCommand("test").Execute(); err != nil {
+	create := NewCommand("test")
+	create.SetArgs([]string{"init"})
+	if err := create.Execute(); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "specs"), 0755); err != nil {
@@ -182,7 +186,7 @@ func TestGenResourceProtocolCLI(t *testing.T) {
 			dir := projectDir(t)
 			t.Chdir(dir)
 			create := NewCommand("test")
-			create.SetArgs([]string{"--transport", transport})
+			create.SetArgs([]string{"init", "--transport", transport})
 			if err := create.Execute(); err != nil {
 				t.Fatal(err)
 			}
@@ -231,6 +235,7 @@ func TestGenModuleDryRunReportsOutputConflicts(t *testing.T) {
 	dir := projectDir(t)
 	t.Chdir(dir)
 	create := NewCommand("test")
+	create.SetArgs([]string{"init"})
 	if err := create.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -308,10 +313,16 @@ func TestHelpAndVersionRemainAvailable(t *testing.T) {
 		args []string
 		want string
 	}{
+		{args: []string{}, want: "Available Commands:"},
+		{args: []string{"--help=false", "--version=false"}, want: "Available Commands:"},
 		{args: []string{"--help"}, want: "Generate a standalone Go business project"},
+		{args: []string{"init", "--help"}, want: "--db"},
+		{args: []string{"gen", "--help"}, want: "resource"},
 		{args: []string{"--version"}, want: "v0.0.0-test"},
 	}
 	for _, tt := range tests {
+		dir := projectDir(t)
+		t.Chdir(dir)
 		var output bytes.Buffer
 		cmd := NewCommand("v0.0.0-test")
 		cmd.SetArgs(tt.args)
@@ -321,6 +332,64 @@ func TestHelpAndVersionRemainAvailable(t *testing.T) {
 		}
 		if !strings.Contains(output.String(), tt.want) {
 			t.Fatalf("output %q does not contain %q", output.String(), tt.want)
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil || len(entries) != 0 {
+			t.Fatalf("help/version changed the directory: %v, %v", entries, err)
+		}
+	}
+}
+
+func TestInitRejectsInvalidInputWithoutWriting(t *testing.T) {
+	for _, args := range [][]string{
+		{"init", "--name", "Bad-Name"},
+		{"init", "--db", "oracle"},
+		{"init", "shop"},
+		{"init", "--unknown"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			dir := projectDir(t)
+			t.Chdir(dir)
+			cmd := NewCommand("test")
+			cmd.SetArgs(args)
+			if err := cmd.Execute(); err == nil {
+				t.Fatal("invalid init command succeeded")
+			}
+			entries, err := os.ReadDir(dir)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("invalid init wrote files: %v, %v", entries, err)
+			}
+		})
+	}
+}
+
+func TestInitRefusesExistingFilesAndRepeatedGeneration(t *testing.T) {
+	for _, generated := range []bool{false, true} {
+		dir := projectDir(t)
+		t.Chdir(dir)
+		path := filepath.Join(dir, "keep.txt")
+		if generated {
+			cmd := NewCommand("test")
+			cmd.SetArgs([]string{"init"})
+			if err := cmd.Execute(); err != nil {
+				t.Fatal(err)
+			}
+			path = filepath.Join(dir, "go.mod")
+		} else if err := os.WriteFile(path, []byte("keep"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		before, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmd := NewCommand("test")
+		cmd.SetArgs([]string{"init"})
+		if err := cmd.Execute(); err == nil {
+			t.Fatal("init accepted an existing project/file")
+		}
+		after, err := os.ReadFile(path)
+		if err != nil || !bytes.Equal(before, after) {
+			t.Fatal("init changed an existing file")
 		}
 	}
 }

@@ -21,9 +21,17 @@ func main() {
 }
 
 func versionString() string {
+	info, _ := debug.ReadBuildInfo()
+	return formatVersion(version, commit, info)
+}
+
+func formatVersion(version, commit string, info *debug.BuildInfo) string {
 	resolvedVersion := version
 	resolvedCommit := commit
-	if info, ok := debug.ReadBuildInfo(); ok {
+	if info != nil {
+		if resolvedVersion == "dev" && info.Main.Version != "" && info.Main.Version != "(devel)" {
+			resolvedVersion = info.Main.Version
+		}
 		if resolvedCommit == "unknown" {
 			for _, setting := range info.Settings {
 				if setting.Key == "vcs.revision" {

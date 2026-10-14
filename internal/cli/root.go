@@ -12,13 +12,34 @@ import (
 
 // NewCommand creates a command tree without global flag or output state.
 func NewCommand(version string) *cobra.Command {
+	command := newProjectCommand("goseed")
+	command.Short = "Generate Go business projects and modules"
+	command.Long = "Generate a standalone Go business project with init, then add modules and resources with gen."
+	command.Version = version
+	generate := command.RunE
+	command.RunE = func(cmd *cobra.Command, args []string) error {
+		changed := cmd.Flags().NFlag()
+		for _, name := range []string{"help", "version"} {
+			if cmd.Flags().Changed(name) {
+				changed--
+			}
+		}
+		if changed == 0 {
+			return cmd.Help()
+		}
+		return generate(cmd, args)
+	}
+	command.AddCommand(newProjectCommand("init"), newGenCommand())
+	return command
+}
+
+func newProjectCommand(use string) *cobra.Command {
 	var name, module, database, authorization, transport, deployment string
 	var redis, metrics, tracing, dryRun bool
 	command := &cobra.Command{
-		Use:           "goseed",
-		Short:         "Generate Go business projects and modules",
+		Use:           use,
+		Short:         "Generate a standalone Go project in the current directory",
 		Long:          "Generate a standalone Go business project in the current directory.",
-		Version:       version,
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -56,7 +77,6 @@ func NewCommand(version string) *cobra.Command {
 			return err
 		},
 	}
-	command.AddCommand(newGenCommand())
 	flags := command.Flags()
 	flags.StringVar(&name, "name", "", "project and service name (defaults to the current directory name)")
 	flags.StringVar(&module, "module", "", "Go module path (defaults to example.com/<name>)")
