@@ -113,7 +113,7 @@ make test GO_PACKAGES='./tests/integration -run TestResourceCoreProjects -count=
 
 ## 从当前代码继续开发
 
-以 ROADMAP 的状态为准，不在本文另行维护阶段进度或临时测试决定。首版后的全部方向、阶段依赖与待决事项见 [完整施工计划](implementation.md#阶段依赖与交付物)，共同实施门槛见 [后续执行规则](implementation.md#后续阶段的共同执行门槛)。获得实施指令后从 [D8 快速验收](implementation.md#检查点-d8默认使用快速验收) 开始，只检查干净源码构建和默认使用流程；可复用已有 Go 缓存，复杂组合仅按发现的问题补测，不代表独立机器、无缓存或其他操作系统恢复验证。新增 RPC 必须登记精确 FullMethod；普通构建继续使用已生成 Proto。
+以 ROADMAP 的状态为准，不在本文另行维护阶段进度或临时测试决定。首版后的全部方向、阶段依赖与待决事项见 [完整施工计划](implementation.md#阶段依赖与交付物)，共同实施门槛见 [后续执行规则](implementation.md#后续阶段的共同执行门槛)。获得实施指令后从 [D8 快速验收](implementation.md#检查点-d8基础使用快速验收) 开始，检查干净源码构建、默认使用流程和一个真实 MySQL＋纯 gRPC 代表项目；复用已有 Go 缓存和已生成 Proto，仅数据库代表项目需要 Docker，其他复杂组合按实际问题补测。不代表独立机器、无缓存或跨平台恢复验证。新增 RPC 必须登记精确 FullMethod；普通构建继续使用已生成 Proto。
 
 资源计划通过 `CoreFiles()`、`HTTPFiles()`、`RPCFiles()`、`SchemaStore()` 和 `MigrationDraft()` 暴露可审阅副本；`PrepareResource` 负责协议工具检查和完整渲染，公共 `gen resource` 负责预览或执行受保护写入，并同步登记与 OpenAPI 汇总。SchemaStore 是只读 schema 原型，不得与 CoreFiles 的完整 Store 写入同一路径。迁移草稿只生成待审阅 SQL，不自动应用；新资源运行前仍须显式执行迁移。
 
