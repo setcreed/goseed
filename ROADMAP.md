@@ -19,11 +19,11 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 | D4 多协议 | 已交付 | 既有示例的 gRPC/dual/Gateway、安全链、协议复现与生命周期 |
 | D5 项目生成 | 已交付 | 根命令、参数、元数据、dry-run、冲突与恢复保护 |
 | D6 模块与资源 | 已交付 | gen module 与资源 R01 至 R10 已验收；48 种资源组合及真实 SQL/Redis/容器验证通过 |
-| D7 首版收口 | 待开始 | 全部需求覆盖、文档/部署边界、交付验证 |
+| D7 首版收口 | 进行中 | 需求覆盖与文档收口进行中；`make race` 按用户决定暂缓 |
 
 ## 下一步施工顺序
 
-1. **D7**：首版范围核验与使用说明收口。源码公开可以先于首版功能完成，README 按当前真实能力表述。
+1. **D7（进行中）**：完成首版范围核验与使用说明收口；源码公开可以先于首版功能完成，README 按当前真实能力表述。race 暂缓，不能记录为通过。
 
 详细修改范围、依赖与失败门槛统一见 [D6 清单](docs/implementation.md#d6-资源生成施工清单)。
 
@@ -34,11 +34,13 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 - SchemaStore 是只读 schema 原型；CoreFiles 提供完整 Store，不得混用输出路径。ResourcePlan 提供完整 Write 与公共 CLI；R10 的生成项目组合和运行行为已完成验收。
 - 模块组装版本 2 表示纯权限/单次组装；R09/R10 已覆盖 Context/schema、旧项目兼容及多模块协议复现。
 - R08 已交付 Gateway RPC 资源映射、ProtoJSON 说明及多模块协议/Swagger 复现；R09 已开放 `gen resource` 并完成完整写入回滚；R10 完成全矩阵和外部服务验收。
-- 全仓 `make check` 已通过。用户要求避免继续等待后，额外的全仓 `make race` 在集成测试运行 919.608 秒时中断；该轮 race 未完成，D7 首版收口仍需完成 race 验证。
+- D6 全仓 `make check`、真实服务矩阵和生成产物集成验证均通过。用户要求暂缓全仓 `make race`；它曾在集成测试运行 919.608 秒时中断，D7 不把它记录为通过。
 - go-redis 取消、pgx 人工延迟 Write 竞争边界仍按 [依赖记录](docs/dependencies.md) 保留；固定版本不意味着上游问题消失。
 - 仓库采用 MIT；第三方依赖及生成代码仍保留适用许可。源码仓库已经公开，首版交付仍按上述施工顺序推进。
 
 ## 最近完成
+
+- 2026-10-14 17:06 D7 文档与命令入口核对：更新开发指南中仍描述 R06–R09 未完成的源码导航、资源 CLI、真实策略/缓存验收与后续施工顺序；核对 README 与当前 `gen module`/`gen resource` 命令契约一致。D7 继续进行，全仓 race 按用户决定暂缓。
 
 - 2026-10-14 17:03 D6-R10 与 D6 收口完成：48 种 SQL×协议×Redis×Casbin 资源项目 readonly 编译、16 种无数据库拒绝、原有 64 项目协议/存储组合检查及四协议资源运行回归通过。真实 MySQL 8.4.11、PostgreSQL 18.6、TLS Redis 与 HTTP/gRPC/dual/Gateway/无数据库/Casbin 容器验收均通过，测试资源已清理。完整 `make check` 通过；额外全仓 race 按用户要求停止，未作为通过项记录。D7 转为下一阶段。
 
@@ -59,6 +61,8 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 - 2026-10-12 13:03 R04 提交 `a123019`：迁移版本/应用集合核验、SQL 草稿、资源只读 schema 与启动 Context；生成器不执行数据库操作。
 
 ## 最近验证
+
+- 2026-10-14 17:06 D7 文档与入口验证：`make contract-check`（79 个本地链接、372 个交付文件）、`git diff --check`、`make build` 通过；构建产物实际响应 `goseed --help`、`--version`、`gen module --help` 与 `gen resource --help`，资源参数显示 `--spec`、`--dry-run` 和 `--migration`，与 README 示例一致。全仓 race 按用户决定暂缓。
 
 - 2026-10-14 17:03 D6-R10 验证：48 种 SQL×协议×Redis×Casbin 资源项目实际经 `PrepareResource`/`Write` 生成并通过 readonly 测试编译；16 种无数据库拒绝及现有 64 项目组合回归通过。真实 MySQL 8.4.11/PostgreSQL 18.6 的 `make template-db`、TLS 密码 Redis 的 `make template-redis`、非 root/只读文件系统等组合的 `make template-container` 全部通过，Docker 测试容器/卷已清理。`make protocol-check`、`make check`（集成包 2195.054 秒、vet、lint 0 issues）、`make build` 通过；工具超时边界增加至 15 秒，定向测试通过。`make race` 按用户要求中断，`tests/integration` 报告 `signal: interrupt`，运行 919.608 秒，不计为通过。中断后仅发现并清理本轮遗留的 `.tmp/d2/render-16425610`；Docker 测试标签无残留容器。
 
