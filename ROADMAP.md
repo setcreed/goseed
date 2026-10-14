@@ -35,7 +35,7 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 2. **后续按证据维护生成能力**。仅修复实际试用中复现的阻断或正确性问题；没有具体问题时不新增功能。
 3. **候选方向不自动恢复**。账号、消息、任务、多实例、Kubernetes 和资源声明增强均需具体需求及独立实施指令。
 
-业务试用步骤与验收见 [施工清单](docs/implementation.md#下一步业务试用与生成质量收口)，候选方向见 [需求清单](docs/requirements.md#已盘点但暂不实施的方向)。后续仅按改动风险定向验证，不默认重复 D7 全量长测。
+当前维护边界见 [施工清单](docs/implementation.md#证据驱动的生成质量维护)，候选方向见 [需求清单](docs/requirements.md#已盘点但暂不实施的方向)。后续仅按改动风险定向验证，不默认重复 D7 全量长测。
 
 ## 已知缺口与验证边界
 
@@ -51,7 +51,7 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 
 ## 最近完成
 
-- 2026-10-14 23:14 路线聚焦完成：D0 至 D11 既有交付保持不变，D12 至 D17 转为暂缓候选；后续只围绕项目生成、模块骨架和简单 CRUD 的实际试用问题维护，不自动扩展账号、消息、任务、多实例、Kubernetes 或资源 DSL。恢复候选方向须有具体业务问题、最小范围、验收方式和对应实施指令。
+- 2026-10-14 23:17 业务试用路线收口：将已完成的小型业务试用从“下一步”改为已完成，并明确当前没有待启动的功能开发项；后续按实际反馈维护生成质量。原 D12 至 D17 继续暂缓，候选方向须有具体业务问题、最小范围、验收方式和对应实施指令。
 
 - 2026-10-14 23:04 默认业务试用完成：Go 1.27.2 下生成 HTTP/SQLite/JWT 项目，生成 item CRUD 与 SQLite 迁移，再增量添加 checkout/returns 模块；生成项目构建、`go test ./...`、`go vet ./...` 通过。实际请求验证未认证拒绝、认证 CRUD、零值 PATCH、主体隔离及手写 checkout 操作；新增模块后手写 Biz/Handler 字节保持不变。没有发现生成流程的功能阻断。试用发现 Makefile 曾强制下载 Go 1.26.4；本机 Go 1.27.2 验证通过，因此将版本策略复核列为下一项。
 
@@ -93,6 +93,8 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 
 ## 最近验证
 
+- 2026-10-14 23:17 业务试用状态文档核对：`make contract-check`（97 个本地链接、397 个交付文件）与 `git diff --check` 通过；核对施工清单、需求、CLI、开发指南和 ROADMAP 均将小型业务试用标为已完成，并指向证据驱动维护。未运行代码、数据库、Docker 或 race 测试。
+
 - 2026-10-14 23:14 路线聚焦文档检查：`make contract-check`（96 个本地链接、397 个交付文件）与 `git diff --check` 通过；核对 ROADMAP、施工清单、需求、架构、CLI、开发指南和项目规范指向一致，最近完成/验证记录按时间倒序且不超过 20 条。未运行代码、数据库、Docker 或 race 测试。
 
 - 2026-10-14 23:12 Go 版本策略验证：本机 Go 1.27.2 下 `make build`、`make test GO_PACKAGES='./cmd/goseed ./internal/cli ./internal/generator'`、对应 `make vet`、`make contract-check`（96 个本地链接、397 个交付文件）与 `git diff --check` 均通过；确认仅发行包脚本仍请求固定 Go 1.26.4，未运行打包流程、外部数据库/Redis 或 race。
@@ -130,5 +132,3 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 - 2026-10-14 15:42 R10 前置代码与生成项目矩阵：48 种 SQL×协议×Redis×Casbin resource 项目均经 `PrepareResource`/`Write` 生成并通过 `go test -mod=readonly -run '^$' ./...`；16 种无数据库拒绝由生成器测试覆盖。现有 gRPC/dual 32 种数据库/Redis/Casbin 项目组合通过；纯 gRPC、dual、Gateway 两资源生成、Proto 多模块逐字节复现及 RPC 运行用例通过。修复 gRPC Proto 源名导致的复现差异，并修正纯 gRPC 资源夹具不应读取 OpenAPI 的前提。此前的 protocol-check、contract-check（79 个本地链接、372 个交付文件）、fmt-check、lint（0 issues）、vet、定向 generator/CLI/templates 测试、build 与 diff 检查通过；真实数据库、Redis 和容器结果见本次 17:01 记录。
 
 - 2026-10-14 14:26 R09：`go test ./internal/generator ./internal/cli ./internal/templates` 通过；`make contract-check`（79 个本地链接、371 个交付文件）、`make fmt-check`、`make lint`（0 issues）及 `git diff --check` 通过。覆盖四协议公共 CLI、四协议资源写入、SQLite/MySQL/PostgreSQL × 四协议共 12 种生成写入组合（Redis + Casbin）、无数据库拒绝、冲突/过期输入及注入失败后的字节级恢复。R10 接手真实项目组合与外部服务验收。
-
-- 2026-10-14 14:13 R08：`go test ./internal/templates ./internal/generator`、`go test ./tests/integration -run 'TestResourceGRPCProjects/gateway' -count=1 -v`、`make contract-check`（78 个本地链接、369 个交付文件）、`make fmt-check`、`make lint`（0 issues）与 `git diff --check` 通过。真实 TLS Gateway 项目含内置模块与两个资源，复现后 Proto/Gateway/各模块 Swagger/汇总/摘要逐字节一致；测试 HTTP→RPC 请求 ID、JWT、主体隔离、非法 query、ProtoJSON int64 字符串与跨协议 CRUD。外部真实 SQL/Redis 与容器留 R10；测试临时项目由套件清理。

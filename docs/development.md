@@ -116,7 +116,7 @@ make test GO_PACKAGES='./tests/integration -run TestResourceCoreProjects -count=
 
 ## 从当前代码继续开发
 
-以 ROADMAP 的状态为准，不在本文另行维护阶段进度或临时测试决定。下一步为 [业务试用与生成质量收口](implementation.md#下一步业务试用与生成质量收口)：验证实际业务扩展和增量生成，只处理已复现的问题；原 D12 至 D17 全部暂缓。相关改动遵循 [执行门槛](implementation.md#后续阶段的共同执行门槛)，不默认重跑 D7 全量长测。新增 RPC 必须登记精确 FullMethod；普通构建继续使用已生成 Proto。
+以 ROADMAP 的状态为准，不在本文另行维护阶段进度或临时测试决定。小型业务试用已完成，当前没有待启动的功能开发项；后续按 [证据驱动的生成质量维护](implementation.md#证据驱动的生成质量维护) 处理可复现的生成与增量开发问题。原 D12 至 D17 全部暂缓。相关改动遵循 [执行门槛](implementation.md#后续阶段的共同执行门槛)，不默认重跑 D7 全量长测。新增 RPC 必须登记精确 FullMethod；普通构建继续使用已生成 Proto。
 
 资源计划通过 `CoreFiles()`、`HTTPFiles()`、`RPCFiles()`、`SchemaStore()` 和 `MigrationDraft()` 暴露可审阅副本；`PrepareResource` 负责协议工具检查和完整渲染，公共 `gen resource` 负责预览或执行受保护写入，并同步登记与 OpenAPI 汇总。SchemaStore 是只读 schema 原型，不得与 CoreFiles 的完整 Store 写入同一路径。迁移草稿只生成待审阅 SQL，不自动应用；新资源运行前仍须显式执行迁移。
 
