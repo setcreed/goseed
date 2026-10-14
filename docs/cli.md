@@ -47,6 +47,8 @@ goseed --name shop --module github.com/setcreed/shop
 | `--authz` | `casbin`、`none` | `none` | 选择通用授权组件 |
 | `--redis` | 布尔值 | `false` | 增加 Redis 客户端与缓存示例 |
 | `--transport` | `http`、`grpc`、`dual`、`gateway` | `http` | 选择业务协议入口 |
+| `--metrics` | 布尔值 | `false` | 增加 OpenTelemetry 请求/依赖指标并主动推送 |
+| `--tracing` | 布尔值 | `false` | 增加 OpenTelemetry HTTP/RPC/Gateway 追踪并主动推送 |
 | `--dry-run` | 布尔值 | `false` | 校验并展示文件、依赖版本及冲突，不写入文件 |
 
 ```bash
@@ -54,6 +56,7 @@ goseed --module github.com/acme/shop
 goseed --db=postgres --redis --authz=casbin --transport=dual
 goseed --db=mysql --transport=gateway
 goseed --db=none --redis --transport=grpc
+goseed --transport=gateway --metrics --tracing
 ```
 
 示例中的 GitHub 路径仅展示模块参数格式，生成器不创建远端仓库、不提交或推送。
@@ -73,6 +76,7 @@ goseed --db=none --redis --transport=grpc
 - Redis 独立于数据库选项，可与 `--db=none` 组合。
 - JWT 是固定基础能力，不提供关闭认证的生成参数；Casbin 在 JWT 身份基础上增加授权。
 - `--db=none`：移除 ORM、数据库驱动和数据库迁移；生成无持久化示例。
+- `--metrics` 与 `--tracing` 独立选择，默认均关闭；未选择时不生成遥测代码或引入 OpenTelemetry 运行依赖。选择后，服务从 `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`、`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 和各自的 `*_HEADERS` 读取信号出口；不回退到共享 endpoint/headers，不开放入站指标端点。出口远端必须 HTTPS，HTTP 只接受 loopback；端点 URL 不得包含凭据。生成项目的变量与安全要求写在其 README。
 - 参数决定生成源码与依赖，不是服务运行时开关；已有项目不支持通过重复执行根命令补装或替换能力。
 - TLS、pprof、Reflection、缓存是否必需等属于服务运行配置，不增加平行的生成参数。
 - 未知参数、未知枚举值、无效组合直接报错。首版不提供覆盖开关。

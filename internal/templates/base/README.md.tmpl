@@ -49,6 +49,22 @@ APP_ENV=production APP_HTTP_ADDRESS=0.0.0.0:8080 ./bin/apiserver serve
 
 HTTP 有请求体/Header 大小限制及超时预算。TLS 证书/私钥通过 `http.tls_cert/tls_key` 成对提供；CORS 仅接受 `http.allowed_origins` 中的确切来源；pprof 默认关闭，仅允许开发环境回环监听。
 
+[[if .Observability]]## 可观测性
+
+本项目已启用[[if .Metrics]]请求与依赖指标[[end]][[if and .Metrics .Tracing]]和[[end]][[if .Tracing]]请求链路追踪[[end]]，通过 OTLP/HTTP protobuf 主动推送，不开放入站指标端点。服务启动前，从部署环境设置所选信号的完整接收 URL 和可选请求头：
+
+```sh
+[[if .Metrics]]export OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://collector.example.com/v1/metrics
+# 可选，格式为逗号分隔的 key=value
+# export OTEL_EXPORTER_OTLP_METRICS_HEADERS='authorization=Bearer <token>'
+[[end]][[if .Tracing]]export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://collector.example.com/v1/traces
+# 可选，格式为逗号分隔的 key=value
+# export OTEL_EXPORTER_OTLP_TRACES_HEADERS='authorization=Bearer <token>'
+[[end]]./bin/apiserver serve
+```
+
+远端出口只接受 HTTPS；明文 HTTP 仅用于 loopback 测试。不要把凭据写进 endpoint URL。追踪只传播 W3C TraceContext，不传播 baggage，不记录 Token 或请求正文；采样默认 10%。出口超时为 3s，服务关闭时最多用 5s 排空遥测导出。[[end]]
+
 ## 接口
 
 接口文件：[Swagger 2.0](api/openapi/swagger.json) 。公开健康入口为 `/healthz` 与 `/readyz`。下列示例业务均需 `Authorization: Bearer <token>`，每个主体只操作自己的资源。

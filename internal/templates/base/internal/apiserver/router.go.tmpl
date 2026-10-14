@@ -3,12 +3,18 @@ package apiserver
 import (
 	"net/http"
 	"net/http/pprof"
+	[[if .Metrics]]"fmt"[[end]]
+	[[if .Metrics]]"time"[[end]]
 
 	"[[.Module]]/internal/pkg/config"
 	"[[.Module]]/internal/pkg/auth"
 	"[[.Module]]/internal/pkg/errno"
 	"[[.Module]]/internal/pkg/middleware"
 	"[[.Module]]/internal/pkg/server"
+	[[if .Observability]]"[[.Module]]/internal/pkg/observability"[[end]]
+	[[if .Tracing]]"go.opentelemetry.io/otel/propagation"[[end]]
+	[[if .Tracing]]"go.opentelemetry.io/otel/trace"[[end]]
+	[[if .Tracing]]"go.opentelemetry.io/otel/attribute"[[end]]
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -20,11 +26,14 @@ type HTTPModule struct {
 	Register func(*gin.RouterGroup)
 }
 
-func NewRouter(settings config.HTTP, ready *server.Readiness, logger *zap.Logger, authentication *auth.JWT, modules []HTTPModule[[if eq .Authz "casbin"]],authorization middleware.Authorizer[[end]]) http.Handler {
+func NewRouter(settings config.HTTP, ready *server.Readiness, logger *zap.Logger, authentication *auth.JWT, modules []HTTPModule[[if eq .Authz "casbin"]],authorization middleware.Authorizer[[end]][[if .Observability]],telemetry ...any[[end]]) http.Handler {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	_ = router.SetTrustedProxies(nil)
 	router.HandleMethodNotAllowed = true
+	[[if .Metrics]]var metrics *observability.Metrics;[[end]][[if .Tracing]]var tracing *observability.Tracing[[end]]
+	[[if .Observability]]for _, item := range telemetry { [[if .Metrics]]if value,ok:=item.(*observability.Metrics);ok{metrics=value};[[end]][[if .Tracing]]if value,ok:=item.(*observability.Tracing);ok{tracing=value}[[end]] }[[end]]
+	[[if .Observability]]router.Use(func(c *gin.Context){[[if .Metrics]]start:=time.Now();[[end]]ctx:=c.Request.Context();[[if .Tracing]]var span trace.Span;if tracing!=nil{ctx,span=tracing.StartServer(ctx,propagation.HeaderCarrier(c.Request.Header),"http.server","http",c.Request.Method,"");c.Request=c.Request.WithContext(ctx)};[[end]]c.Next();route:=c.FullPath();if route==""{route="_unmatched"};[[if .Tracing]]if tracing!=nil{span.SetAttributes(attribute.String("http.route",route))};[[end]]statusCode:=c.Writer.Status();[[if .Metrics]]if metrics!=nil{metrics.Record(ctx,"http",route,c.Request.Method,fmt.Sprintf("%dxx",statusCode/100),time.Since(start))};[[end]][[if .Tracing]]if tracing!=nil{observability.FinishHTTP(span,statusCode)}[[end]]})[[end]]
 	router.Use(middleware.RequestID(),middleware.Access(logger),middleware.Recovery(logger),middleware.Limits(settings),middleware.CORS(settings.AllowedOrigins))
 	router.GET("/healthz",func(c *gin.Context){ c.JSON(200,gin.H{"status":"ok"}) })
 	router.GET("/readyz",func(c *gin.Context){ if err := ready.Check(c.Request.Context()); err != nil { c.JSON(503,gin.H{"status":"unavailable"}); return }; c.JSON(200,gin.H{"status":"ok"}) })

@@ -264,7 +264,14 @@ func renderMetadata(project templates.Project, options templates.Options) ([]byt
 
 func renderMetadataModules(project templates.Project, options templates.Options, modules []ModuleMetadata) []byte {
 	var output strings.Builder
-	fmt.Fprintf(&output, "version: %d\ntemplate_version: %d\nname: %s\nmodule: %s\ndatabase: %s\nauthentication: jwt\nauthorization: %s\nredis: %t\ntransport: %s\nmodules:\n", ProjectMetadataVersion, TemplateVersion, project.Name, project.Module, optionOr(options.Database, "sqlite"), optionOr(options.Authz, "none"), options.Redis, optionOr(options.Transport, "http"))
+	fmt.Fprintf(&output, "version: %d\ntemplate_version: %d\nname: %s\nmodule: %s\ndatabase: %s\nauthentication: jwt\nauthorization: %s\nredis: %t\ntransport: %s\n", ProjectMetadataVersion, TemplateVersion, project.Name, project.Module, optionOr(options.Database, "sqlite"), optionOr(options.Authz, "none"), options.Redis, optionOr(options.Transport, "http"))
+	if options.Metrics {
+		output.WriteString("metrics: true\n")
+	}
+	if options.Tracing {
+		output.WriteString("tracing: true\n")
+	}
+	output.WriteString("modules:\n")
 	for _, module := range modules {
 		fmt.Fprintf(&output, "  - name: %s\n    type: %s\n", module.Name, module.Type)
 		if module.Type == "resource" {

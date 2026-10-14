@@ -7,6 +7,7 @@ import (
  "encoding/hex"
  "encoding/json"
  "errors"
+ [[if .Metrics]]"fmt"[[end]]
  "io"
  "mime"
  "net/http"
@@ -18,6 +19,7 @@ import (
  "unicode/utf8"
 
  "[[.Module]]/internal/pkg/config"
+	[[if .Observability]]"[[.Module]]/internal/pkg/observability"[[end]]
  "[[.Module]]/internal/pkg/server"
  "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
  "go.uber.org/zap"
@@ -25,6 +27,10 @@ import (
  "google.golang.org/grpc/codes"
  "google.golang.org/grpc/status"
  "google.golang.org/protobuf/encoding/protojson"
+	[[if .Tracing]]"go.opentelemetry.io/otel"[[end]]
+	[[if .Tracing]]"go.opentelemetry.io/otel/propagation"[[end]]
+	[[if .Tracing]]"go.opentelemetry.io/otel/trace"[[end]]
+	[[if .Tracing]]"google.golang.org/grpc/metadata"[[end]]
 )
 
 var requestIDPattern=regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
@@ -37,11 +43,14 @@ type Registration struct {
  Register func(context.Context,*runtime.ServeMux,*grpc.ClientConn)error
 }
 
-func NewHandler(connection *grpc.ClientConn,settings config.HTTP,ready *server.Readiness,logger *zap.Logger,modules []Registration)(http.Handler,error){
+func NewHandler(connection *grpc.ClientConn,settings config.HTTP,ready *server.Readiness,logger *zap.Logger,modules []Registration[[if .Observability]],telemetry ...any[[end]])(http.Handler,error){
+ [[if .Metrics]]var metrics *observability.Metrics;[[end]][[if .Tracing]]var tracing *observability.Tracing[[end]]
+ [[if .Observability]]for _,item:=range telemetry{[[if .Metrics]]if value,ok:=item.(*observability.Metrics);ok{metrics=value};[[end]][[if .Tracing]]if value,ok:=item.(*observability.Tracing);ok{tracing=value}[[end]]}[[end]]
  mux:=runtime.NewServeMux(
   runtime.WithMarshalerOption(runtime.MIMEWildcard,&runtime.JSONPb{MarshalOptions:protojson.MarshalOptions{UseProtoNames:true,EmitUnpopulated:true},UnmarshalOptions:protojson.UnmarshalOptions{DiscardUnknown:false}}),
   runtime.WithIncomingHeaderMatcher(func(key string)(string,bool){if strings.EqualFold(key,"X-Request-ID"){return "x-request-id",true};return "",false}),
   runtime.WithOutgoingHeaderMatcher(func(key string)(string,bool){if key=="x-request-id"{return "X-Request-ID",true};return "",false}),
+  [[if .Tracing]]runtime.WithMetadata(func(ctx context.Context,_ *http.Request)metadata.MD{carrier:=propagation.MapCarrier{};otel.GetTextMapPropagator().Inject(ctx,carrier);return metadata.New(carrier)}),[[end]]
   runtime.WithDisableHTTPMethodOverride(),runtime.WithDisablePathLengthFallback(),
   runtime.WithErrorHandler(func(_ context.Context,_ *runtime.ServeMux,_ runtime.Marshaler,w http.ResponseWriter,_ *http.Request,err error){writeError(w,status.Code(err))}),
  )
@@ -62,7 +71,8 @@ func NewHandler(connection *grpc.ClientConn,settings config.HTTP,ready *server.R
   if len(values)==1&&requestIDPattern.MatchString(values[0]){id=values[0]}else if len(values)!=0{writeError(w,codes.InvalidArgument);return}else{var random [16]byte;if _,err:=rand.Read(random[:]);err!=nil{writeError(w,codes.Internal);return};id=hex.EncodeToString(random[:])}
   w.Header().Set("X-Request-ID",id);r.Header.Set("X-Request-ID",id)
   route:="unknown";if module,ok:=moduleForPath(r.URL.Path,modules);ok{route=module.Path;if r.URL.Path!=module.Path{route+="/{id}"}}else if r.URL.Path=="/healthz"||r.URL.Path=="/readyz"{route=r.URL.Path}
-  defer func(){if recover()!=nil{writeError(w,codes.Internal)};logger.Info("Gateway request completed",zap.String("method",r.Method),zap.String("route",route),zap.String("request_id",id),zap.Int("status",out.status),zap.Duration("duration",time.Since(started)))}()
+  [[if .Tracing]]var span trace.Span;if tracing!=nil{ctx,startedSpan:=tracing.StartServer(r.Context(),propagation.HeaderCarrier(r.Header),route,"gateway",r.Method,route);span=startedSpan;r=r.WithContext(ctx)}[[end]]
+  defer func(){if recover()!=nil{writeError(w,codes.Internal)};[[if .Metrics]]if metrics!=nil{metrics.Record(r.Context(),"gateway",route,r.Method,fmt.Sprintf("%dxx",out.status/100),time.Since(started))};[[end]][[if .Tracing]]if tracing!=nil{observability.FinishHTTP(span,out.status)}[[end]];logger.Info("Gateway request completed",zap.String("method",r.Method),zap.String("route",route),zap.String("request_id",id),zap.Int("status",out.status),zap.Duration("duration",time.Since(started)))}()
   origin:=r.Header.Get("Origin");if origin!=""{allowed:=false;for _,value:=range settings.AllowedOrigins{if origin==value{allowed=true;break}};if !allowed{writeError(w,codes.PermissionDenied);return};w.Header().Set("Access-Control-Allow-Origin",origin);w.Header().Add("Vary","Origin");w.Header().Set("Access-Control-Expose-Headers","X-Request-ID");if r.Method==http.MethodOptions{w.Header().Set("Access-Control-Allow-Methods","GET,POST,PATCH,DELETE,OPTIONS");w.Header().Set("Access-Control-Allow-Headers","Authorization,Content-Type,X-Request-ID");w.WriteHeader(204);return}}
   if len(r.Header.Values("Authorization"))>1{writeError(w,codes.Unauthenticated);return}
   r.Header.Del("Grpc-Timeout")

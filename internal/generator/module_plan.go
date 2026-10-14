@@ -47,7 +47,7 @@ func PrepareModule(root, name string) (ModulePlan, error) {
 		}
 	}
 	project := templates.Project{Name: state.Metadata.Name, Module: state.Metadata.Module}
-	options := templates.Options{Database: state.Metadata.Database, Redis: state.Metadata.Redis, Authz: state.Metadata.Authorization, Transport: state.Metadata.Transport}
+	options := templates.Options{Database: state.Metadata.Database, Redis: state.Metadata.Redis, Authz: state.Metadata.Authorization, Transport: state.Metadata.Transport, Metrics: state.Metadata.Metrics, Tracing: state.Metadata.Tracing}
 	moduleFiles, err := templates.RenderBusinessModule(project, options, name)
 	if err != nil {
 		return ModulePlan{}, err

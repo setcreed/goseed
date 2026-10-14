@@ -23,6 +23,11 @@ func TestDeliveredContracts(t *testing.T) {
 			})
 		}
 	}
+	t.Run("observability-metrics", func(t *testing.T) { checkDeliveredOptions(t, Options{Database: "sqlite", Metrics: true}) })
+	t.Run("observability-tracing", func(t *testing.T) { checkDeliveredOptions(t, Options{Database: "sqlite", Tracing: true}) })
+	t.Run("observability-both", func(t *testing.T) {
+		checkDeliveredOptions(t, Options{Database: "sqlite", Metrics: true, Tracing: true})
+	})
 }
 
 func TestGRPCContracts(t *testing.T) {
@@ -81,10 +86,11 @@ func checkDeliveredOptions(t *testing.T, options Options) {
 		t.Fatal(err)
 	}
 	var lock struct {
-		Go         string            `json:"go"`
-		Runtime    map[string]string `json:"runtime"`
-		Builder    string            `json:"service_builder_image"`
-		Connectors map[string]string `json:"sql_connectors"`
+		Go            string            `json:"go"`
+		Runtime       map[string]string `json:"runtime"`
+		Observability map[string]string `json:"observability"`
+		Builder       string            `json:"service_builder_image"`
+		Connectors    map[string]string `json:"sql_connectors"`
 	}
 	if err := json.Unmarshal(data, &lock); err != nil {
 		t.Fatal(err)
@@ -92,7 +98,22 @@ func checkDeliveredOptions(t *testing.T, options Options) {
 	for name, version := range lock.Connectors {
 		lock.Runtime[name] = version
 	}
+	for name, version := range lock.Observability {
+		lock.Runtime[name] = version
+	}
 	manifest := string(files["go.mod"])
+	observabilitySelected := options.Metrics || options.Tracing
+	if strings.Contains(manifest, "go.opentelemetry.io/") != observabilitySelected {
+		t.Fatal("observability dependency pruning does not match selected options")
+	}
+	for filename, selected := range map[string]bool{
+		"internal/pkg/observability/metrics.go": options.Metrics,
+		"internal/pkg/observability/tracing.go": options.Tracing,
+	} {
+		if _, exists := files[filename]; exists != selected {
+			t.Fatalf("observability source pruning does not match selected option: %s", filename)
+		}
+	}
 	casbin := options.Authz == "casbin"
 	if strings.Contains(manifest, "github.com/casbin/casbin/v3 ") != casbin {
 		t.Fatal("incorrect Casbin dependency composition")

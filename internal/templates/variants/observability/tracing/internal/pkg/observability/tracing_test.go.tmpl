@@ -1,0 +1,148 @@
+package observability
+
+import (
+	"context"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	collector "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	"google.golang.org/protobuf/proto"
+)
+
+func TestTracingExportPropagationAndEndpointPolicy(t *testing.T) {
+	received := make(chan *collector.ExportTraceServiceRequest, 1)
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/traces" || r.Header.Get("Content-Type") != "application/x-protobuf" {
+			t.Errorf("unexpected OTLP request: %s %s", r.Method, r.URL.Path)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read OTLP body: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		request := new(collector.ExportTraceServiceRequest)
+		if err := proto.Unmarshal(body, request); err != nil {
+			t.Errorf("decode OTLP traces: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		select {
+		case received <- request:
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.Listener = listener
+	server.Start()
+	defer server.Close()
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", server.URL+"/v1/traces")
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_HEADERS", "x-test-key=secret-trace-token")
+	if err := validateTraceEndpoint("http://example.invalid/v1/traces"); err == nil {
+		t.Fatal("remote cleartext endpoint accepted")
+	}
+	tracing, err := NewTracing(context.Background(), "test-service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	carrier := map[string]string{
+		"traceparent": "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01",
+		"baggage":    "private=must-not-propagate",
+	}
+	ctx, span := tracing.StartServer(context.Background(), mapCarrier(carrier), "GET /v1/examples", "http", "GET", "/v1/examples")
+	_ = ctx
+	FinishHTTP(span, http.StatusOK)
+	shutdown, cancel := context.WithTimeout(context.Background(), TraceShutdownTimeout)
+	defer cancel()
+	if err := tracing.Shutdown(shutdown); err != nil {
+		t.Fatal("traces shutdown/export failed")
+	}
+	var exported *collector.ExportTraceServiceRequest
+	select {
+	case exported = <-received:
+	default:
+	}
+	if exported == nil || len(exported.ResourceSpans) != 1 || len(exported.ResourceSpans[0].ScopeSpans) == 0 {
+		t.Fatal("collector did not receive spans")
+	}
+	spans := exported.ResourceSpans[0].ScopeSpans[0].Spans
+	if len(spans) != 1 || len(spans[0].TraceId) != 16 || len(spans[0].ParentSpanId) != 8 || spans[0].ParentSpanId[0] != 0x01 {
+		t.Fatal("incoming TraceContext parent was not preserved")
+	}
+	if strings.Contains(exported.String(), "private") || strings.Contains(exported.String(), "must-not-propagate") || strings.Contains(exported.String(), "secret-trace-token") || strings.Contains(exported.String(), "x-test-key") {
+		t.Fatal("exported spans contain baggage or exporter credential")
+	}
+}
+
+func TestTracingUnavailableCollectorShutdownBounded(t *testing.T) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := "http://" + listener.Addr().String() + "/v1/traces"
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", endpoint)
+	tracing, err := NewTracing(context.Background(), "test-service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	_, span := tracing.StartServer(context.Background(), propagation.MapCarrier{}, "http.server", "http", "GET", "/v1/examples")
+	FinishHTTP(span, http.StatusOK)
+	if time.Since(started) > 100*time.Millisecond {
+		t.Fatal("unavailable collector blocked request instrumentation")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), TraceShutdownTimeout)
+	defer cancel()
+	_ = tracing.Shutdown(ctx)
+	if time.Since(started) > TraceShutdownTimeout+time.Second {
+		t.Fatal("tracing shutdown exceeded its bounded budget")
+	}
+}
+
+func BenchmarkTracingSpan(b *testing.B) {
+	provider := sdktrace.NewTracerProvider(sdktrace.WithBatcher(benchmarkSpanExporter{}), sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(0.1))))
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	tracing := &Tracing{provider: provider, tracer: provider.Tracer("benchmark")}
+	b.ReportAllocs()
+	ctx := context.Background()
+	carrier := propagation.MapCarrier{}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, span := tracing.StartServer(ctx, carrier, "http.server", "http", "GET", "/v1/examples")
+		FinishHTTP(span, http.StatusOK)
+	}
+	b.StopTimer()
+	_ = provider.Shutdown(context.Background())
+}
+
+type benchmarkSpanExporter struct{}
+
+func (benchmarkSpanExporter) ExportSpans(context.Context, []sdktrace.ReadOnlySpan) error { return nil }
+func (benchmarkSpanExporter) Shutdown(context.Context) error { return nil }
+
+type mapCarrier map[string]string
+
+func (c mapCarrier) Get(key string) string { return c[key] }
+func (c mapCarrier) Set(key, value string) { c[key] = value }
+func (c mapCarrier) Keys() []string {
+	keys := make([]string, 0, len(c))
+	for key := range c {
+		keys = append(keys, key)
+	}
+	return keys
+}

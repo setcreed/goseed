@@ -1,0 +1,113 @@
+package observability
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net"
+	"net/url"
+	"os"
+	"strings"
+	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"go.opentelemetry.io/otel/metric"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+)
+
+const ExportTimeout = 3 * time.Second
+const ShutdownTimeout = 5 * time.Second
+
+type Metrics struct {
+	provider *sdkmetric.MeterProvider
+	requests metric.Int64Counter
+	duration metric.Float64Histogram
+	dependency metric.Int64Gauge
+}
+
+func NewMetrics(ctx context.Context, service string) (*Metrics, error) {
+	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")
+	if err := validateEndpoint(endpoint); err != nil {
+		return nil, errors.New("invalid OTLP metrics endpoint")
+	}
+	options := []otlpmetrichttp.Option{otlpmetrichttp.WithEndpointURL(endpoint), otlpmetrichttp.WithTimeout(ExportTimeout)}
+	if raw := os.Getenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS"); raw != "" {
+		headers, err := parseHeaders(raw)
+		if err != nil {
+			return nil, errors.New("invalid OTLP metrics headers")
+		}
+		options = append(options, otlpmetrichttp.WithHeaders(headers))
+	}
+	exporter, err := otlpmetrichttp.New(ctx, options...)
+	if err != nil {
+		return nil, errors.New("cannot initialize OTLP metrics exporter")
+	}
+	reader := sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(30*time.Second), sdkmetric.WithTimeout(ExportTimeout))
+	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader), sdkmetric.WithResource(resource.NewWithAttributes("", attribute.String("service.name", service))))
+	meter := provider.Meter("github.com/setcreed/goseed")
+	requests, err := meter.Int64Counter("server.requests", metric.WithUnit("{request}"))
+	if err != nil { _ = provider.Shutdown(ctx); return nil, errors.New("cannot initialize request metric") }
+	duration, err := meter.Float64Histogram("server.request.duration", metric.WithUnit("s"))
+	if err != nil { _ = provider.Shutdown(ctx); return nil, errors.New("cannot initialize duration metric") }
+	dependency, err := meter.Int64Gauge("server.dependency.available", metric.WithUnit("{dependency}"))
+	if err != nil { _ = provider.Shutdown(ctx); return nil, errors.New("cannot initialize dependency metric") }
+	return &Metrics{provider: provider, requests: requests, duration: duration, dependency: dependency}, nil
+}
+
+func (m *Metrics) Record(ctx context.Context, protocol, route, method, status string, elapsed time.Duration) {
+	if m == nil { return }
+	labels := metric.WithAttributes(attribute.String("network.protocol.name", protocol), attribute.String("http.route", route), attribute.String("http.request.method", boundedMethod(method)), attribute.String("http.response.status_class", status))
+	m.requests.Add(ctx, 1, labels)
+	m.duration.Record(ctx, elapsed.Seconds(), labels)
+}
+
+func (m *Metrics) RecordRPC(ctx context.Context, method, code string, elapsed time.Duration) {
+	if m == nil { return }
+	labels := metric.WithAttributes(attribute.String("rpc.system.name", "grpc"), attribute.String("rpc.method", method), attribute.String("rpc.response.status_code", boundedCode(code)))
+	m.requests.Add(ctx, 1, labels)
+	m.duration.Record(ctx, elapsed.Seconds(), labels)
+}
+
+func (m *Metrics) RecordDependency(ctx context.Context, name string, available bool) {
+	if m == nil { return }
+	value := int64(0); if available { value = 1 }
+	m.dependency.Record(ctx, value, metric.WithAttributes(attribute.String("dependency.name", name)))
+}
+
+func (m *Metrics) Shutdown(ctx context.Context) error {
+	if m == nil { return nil }
+	return m.provider.Shutdown(ctx)
+}
+
+func validateEndpoint(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" { return errors.New("invalid endpoint") }
+	if u.Scheme == "https" { return nil }
+	if u.Scheme != "http" { return errors.New("invalid scheme") }
+	host := u.Hostname()
+	if strings.EqualFold(host, "localhost") { return nil }
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() { return errors.New("non-loopback HTTP is forbidden") }
+	return nil
+}
+
+func parseHeaders(raw string) (map[string]string, error) {
+	result := make(map[string]string)
+	for _, part := range strings.Split(raw, ",") {
+		key, value, ok := strings.Cut(part, "=")
+		key, value = strings.TrimSpace(key), strings.TrimSpace(value)
+		if !ok || key == "" || value == "" || strings.ContainsAny(key+value, "\r\n") { return nil, fmt.Errorf("invalid header") }
+		result[key] = value
+	}
+	return result, nil
+}
+
+func boundedMethod(method string) string {
+	switch method { case "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS": return method; default: return "_OTHER" }
+}
+
+func boundedCode(code string) string {
+	switch code { case "OK", "Canceled", "InvalidArgument", "DeadlineExceeded", "NotFound", "AlreadyExists", "PermissionDenied", "ResourceExhausted", "FailedPrecondition", "Aborted", "OutOfRange", "Unauthenticated", "Internal", "Unavailable", "DataLoss", "Unimplemented": return code; default: return "Unknown" }
+}

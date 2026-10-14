@@ -9,6 +9,7 @@ import (
  "time"
  "[[.Module]]/internal/pkg/auth"
  "[[.Module]]/internal/pkg/config"
+ [[if .Observability]]"[[.Module]]/internal/pkg/observability"[[end]]
  "go.uber.org/zap"
  "google.golang.org/grpc"
  "google.golang.org/grpc/codes"
@@ -17,21 +18,40 @@ import (
  healthpb "google.golang.org/grpc/health/grpc_health_v1"
  "google.golang.org/grpc/reflection"
  "google.golang.org/grpc/status"
+ [[if .Tracing]]"google.golang.org/grpc/metadata"[[end]]
+ [[if .Tracing]]"go.opentelemetry.io/otel/propagation"[[end]]
+ [[if .Tracing]]"go.opentelemetry.io/otel/trace"[[end]]
 )
 const ExampleService="example.v1.ExampleService"
 type Readiness struct{stopping atomic.Bool;CheckDependency func(context.Context)error}
 func(r *Readiness)Check(ctx context.Context)error{if r.stopping.Load(){return errors.New("service is stopping")};if r.CheckDependency!=nil{return r.CheckDependency(ctx)};return ctx.Err()}
 func(r *Readiness)Stop(){r.stopping.Store(true)}
 type Server struct{grpc *grpc.Server;settings config.GRPC;ready *Readiness;health *health.Server;logger *zap.Logger;running atomic.Bool;watchStop context.CancelFunc}
-func New(settings config.GRPC,ready *Readiness,logger *zap.Logger,jwt *auth.JWT,permissions map[string]Permission,register func(grpc.ServiceRegistrar)[[if eq .Authz "casbin"]],authorization Authorizer[[end]])(*Server,error){
+func New(settings config.GRPC,ready *Readiness,logger *zap.Logger,jwt *auth.JWT,permissions map[string]Permission,register func(grpc.ServiceRegistrar)[[if eq .Authz "casbin"]],authorization Authorizer[[end]][[if .Observability]],telemetry ...any[[end]])(*Server,error){
  [[if eq .Authz "casbin"]]if authorization==nil{return nil,errors.New("authorization is required")}[[end]]
  watchContext,watchStop:=context.WithCancel(context.Background())
- options:=[]grpc.ServerOption{grpc.MaxRecvMsgSize(settings.MaxRecvBytes),grpc.MaxSendMsgSize(settings.MaxSendBytes),grpc.MaxHeaderListSize(uint32(settings.MaxHeaderBytes)),grpc.MaxConcurrentStreams(uint32(settings.MaxConcurrentStreams)),grpc.ChainUnaryInterceptor(Unary(jwt,[[if eq .Authz "casbin"]]authorization[[else]]nil[[end]],permissions,settings.RequestTimeout,logger)),grpc.ChainStreamInterceptor(Streams(jwt,settings.Reflection,watchContext))}
+ unary:=Unary(jwt,[[if eq .Authz "casbin"]]authorization[[else]]nil[[end]],permissions,settings.RequestTimeout,logger)
+ [[if .Metrics]]var metrics *observability.Metrics;[[end]][[if .Tracing]]var tracing *observability.Tracing[[end]]
+ [[if .Observability]]for _,item:=range telemetry{[[if .Metrics]]if value,ok:=item.(*observability.Metrics);ok{metrics=value};[[end]][[if .Tracing]]if value,ok:=item.(*observability.Tracing);ok{tracing=value}[[end]]}[[end]]
+ [[if .Observability]]nextTelemetry:=unary;unary=func(ctx context.Context,request any,info *grpc.UnaryServerInfo,handler grpc.UnaryHandler)(any,error){[[if .Metrics]]started:=time.Now();[[end]]method:=info.FullMethod;if _,ok:=permissions[method];!ok&&method!="/grpc.health.v1.Health/Check"&&method!="/grpc.health.v1.Health/Watch"{method="_unregistered"};[[if .Tracing]]var span trace.Span;if tracing!=nil{var carrier propagation.TextMapCarrier=propagation.MapCarrier{};if incoming,ok:=metadata.FromIncomingContext(ctx);ok{carrier=grpcMetadataCarrier(incoming.Copy())};ctx,span=tracing.StartRPC(ctx,carrier,method)};[[end]]response,err:=nextTelemetry(ctx,request,info,handler);[[if .Metrics]]if metrics!=nil{metrics.RecordRPC(ctx,method,status.Code(err).String(),time.Since(started))};[[end]][[if .Tracing]]if tracing!=nil{observability.FinishRPC(span,status.Code(err).String())}[[end]];return response,err}[[end]]
+ stream:=Streams(jwt,settings.Reflection,watchContext)
+ [[if .Observability]]nextStream:=stream;stream=func(service any,serverStream grpc.ServerStream,info *grpc.StreamServerInfo,handler grpc.StreamHandler)error{[[if .Metrics]]started:=time.Now();[[end]]method:=info.FullMethod;if method!="/grpc.health.v1.Health/Watch"{method="_unregistered"};[[if .Tracing]]var span trace.Span;[[end]]ctx:=serverStream.Context();[[if .Tracing]]if tracing!=nil{var carrier propagation.TextMapCarrier=propagation.MapCarrier{};if incoming,ok:=metadata.FromIncomingContext(ctx);ok{carrier=grpcMetadataCarrier(incoming.Copy())};ctx,span=tracing.StartRPC(ctx,carrier,method)};[[end]]err:=nextStream(service,&contextServerStream{ServerStream:serverStream,ctx:ctx},info,handler);[[if .Metrics]]if metrics!=nil{metrics.RecordRPC(ctx,method,status.Code(err).String(),time.Since(started))};[[end]][[if .Tracing]]if tracing!=nil{observability.FinishRPC(span,status.Code(err).String())};[[end]]return err}[[end]]
+ options:=[]grpc.ServerOption{grpc.MaxRecvMsgSize(settings.MaxRecvBytes),grpc.MaxSendMsgSize(settings.MaxSendBytes),grpc.MaxHeaderListSize(uint32(settings.MaxHeaderBytes)),grpc.MaxConcurrentStreams(uint32(settings.MaxConcurrentStreams)),grpc.ChainUnaryInterceptor(unary),grpc.ChainStreamInterceptor(stream)}
  if settings.TLSCert!=""{certificate,err:=tls.LoadX509KeyPair(settings.TLSCert,settings.TLSKey);if err!=nil{watchStop();return nil,errors.New("invalid TLS certificate or private key")};options=append(options,grpc.Creds(credentials.NewTLS(&tls.Config{MinVersion:tls.VersionTLS12,Certificates:[]tls.Certificate{certificate}})))}
  server:=grpc.NewServer(options...);register(server);healthy:=health.NewServer();healthy.SetServingStatus("",healthpb.HealthCheckResponse_NOT_SERVING);healthy.SetServingStatus(ExampleService,healthpb.HealthCheckResponse_NOT_SERVING);healthy.SetServingStatus("liveness",healthpb.HealthCheckResponse_NOT_SERVING)
  healthpb.RegisterHealthServer(server,&healthService{Server:healthy,ready:ready});if settings.Reflection{reflection.Register(server)}
  return &Server{grpc:server,settings:settings,ready:ready,health:healthy,logger:logger,watchStop:watchStop},nil
 }
+[[if .Tracing]]
+type grpcMetadataCarrier metadata.MD
+func(c grpcMetadataCarrier)Get(key string)string{values:=metadata.MD(c).Get(key);if len(values)==0{return ""};return values[0]}
+func(c grpcMetadataCarrier)Set(key,value string){metadata.MD(c).Set(key,value)}
+func(c grpcMetadataCarrier)Keys()[]string{keys:=make([]string,0,len(c));for key:=range c{keys=append(keys,key)};return keys}
+[[end]]
+[[if .Observability]]
+type contextServerStream struct{grpc.ServerStream;ctx context.Context}
+func(s *contextServerStream)Context()context.Context{return s.ctx}
+[[end]]
 type healthService struct{*health.Server;ready *Readiness}
 func(h *healthService)Watch(request *healthpb.HealthCheckRequest,stream grpc.ServerStreamingServer[healthpb.HealthCheckResponse])error{if len(request.ProtoReflect().GetUnknown())!=0{return status.Error(codes.InvalidArgument,"unknown request field")};if request.Service!=""&&request.Service!=ExampleService&&request.Service!="liveness"{return status.Error(codes.NotFound,"unknown service")};return h.Server.Watch(request,stream)}
 func(h *healthService)Check(ctx context.Context,request *healthpb.HealthCheckRequest)(*healthpb.HealthCheckResponse,error){

@@ -1,0 +1,129 @@
+package observability
+
+import (
+	"context"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	collector "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
+	"google.golang.org/protobuf/proto"
+)
+
+func TestMetricsExportAndEndpointPolicy(t *testing.T) {
+	received := make(chan *collector.ExportMetricsServiceRequest, 1)
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/metrics" || r.Header.Get("Content-Type") != "application/x-protobuf" {
+			t.Errorf("unexpected OTLP request: %s %s", r.Method, r.URL.Path)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read OTLP body: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		request := new(collector.ExportMetricsServiceRequest)
+		if err := proto.Unmarshal(body, request); err != nil {
+			t.Errorf("decode OTLP metrics: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		select {
+		case received <- request:
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.Listener = listener
+	server.Start()
+	defer server.Close()
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", server.URL+"/v1/metrics")
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "x-test-key=secret-metrics-token")
+	if err := validateEndpoint("http://example.invalid"); err == nil {
+		t.Fatal("remote cleartext endpoint accepted")
+	}
+	if err := validateEndpoint("https://user:secret@example.invalid"); err == nil {
+		t.Fatal("endpoint credentials accepted")
+	}
+	metrics, err := NewMetrics(context.Background(), "test-service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metrics.Record(context.Background(), "http", "/v1/examples", "GET", "2xx", time.Millisecond)
+	metrics.RecordDependency(context.Background(), "database", true)
+	ctx, cancel := context.WithTimeout(context.Background(), ShutdownTimeout)
+	defer cancel()
+	if err := metrics.Shutdown(ctx); err != nil {
+		t.Fatal("metrics shutdown/export failed")
+	}
+	var exported *collector.ExportMetricsServiceRequest
+	select {
+	case exported = <-received:
+	default:
+	}
+	if exported == nil || len(exported.ResourceMetrics) == 0 {
+		t.Fatal("collector did not receive metrics")
+	}
+	if strings.Contains(exported.String(), "secret-metrics-token") || strings.Contains(exported.String(), "x-test-key") {
+		t.Fatal("exported metrics contain exporter credential")
+	}
+}
+
+func TestMetricsUnavailableCollectorShutdownBounded(t *testing.T) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := "http://" + listener.Addr().String() + "/v1/metrics"
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", endpoint)
+	metrics, err := NewMetrics(context.Background(), "test-service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	metrics.Record(context.Background(), "http", "/v1/examples", "GET", "2xx", time.Millisecond)
+	if time.Since(started) > 100*time.Millisecond {
+		t.Fatal("unavailable collector blocked request instrumentation")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), ShutdownTimeout)
+	defer cancel()
+	_ = metrics.Shutdown(ctx)
+	if time.Since(started) > ShutdownTimeout+time.Second {
+		t.Fatal("metrics shutdown exceeded its bounded budget")
+	}
+}
+
+func BenchmarkMetricsRecord(b *testing.B) {
+	reader := sdkmetric.NewManualReader()
+	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	meter := provider.Meter("benchmark")
+	requests, err := meter.Int64Counter("server.requests")
+	if err != nil {
+		b.Fatal(err)
+	}
+	duration, err := meter.Float64Histogram("server.request.duration")
+	if err != nil {
+		b.Fatal(err)
+	}
+	metrics := &Metrics{provider: provider, requests: requests, duration: duration}
+	ctx := context.Background()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		metrics.Record(ctx, "http", "/v1/examples", "GET", "2xx", time.Millisecond)
+	}
+	b.StopTimer()
+	_ = provider.Shutdown(context.Background())
+}

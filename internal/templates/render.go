@@ -31,10 +31,13 @@ type Project struct {
 
 // Options selects source at generation time, never at service runtime.
 type Options struct {
-	Database  string
-	Redis     bool
-	Authz     string
-	Transport string
+	Database      string
+	Redis         bool
+	Authz         string
+	Transport     string
+	Metrics       bool
+	Tracing       bool
+	Observability bool
 }
 
 // ModuleEntry is the manifest projection used to render protocol registries.
@@ -127,12 +130,13 @@ func RenderWithModules(project Project, options Options, modules []ModuleEntry) 
 	if !hasExample {
 		return nil, fmt.Errorf("built-in example module is required")
 	}
+	options.Observability = options.Metrics || options.Tracing
 	data := templateData{Project: project, Options: options, Modules: modules}
 	base, err := renderTree(sources, "base", data)
 	if err != nil {
 		return nil, err
 	}
-	if options.Database == "sqlite" && !options.Redis && options.Authz == "none" && options.Transport == "http" {
+	if options.Database == "sqlite" && !options.Redis && options.Authz == "none" && options.Transport == "http" && !options.Metrics && !options.Tracing {
 		return finalize(base)
 	}
 	// Variant directories intentionally replace matching base files, and add
@@ -188,6 +192,14 @@ func RenderWithModules(project Project, options Options, modules []ModuleEntry) 
 			}
 		}
 	}
+	if options.Metrics || options.Tracing {
+		if options.Metrics {
+			directories = append(directories, "variants/observability/metrics")
+		}
+		if options.Tracing {
+			directories = append(directories, "variants/observability/tracing")
+		}
+	}
 	for _, directory := range directories {
 		variant, err := renderTree(sources, directory, data)
 		if err != nil {
@@ -201,8 +213,170 @@ func RenderWithModules(project Project, options Options, modules []ModuleEntry) 
 	for _, file := range files {
 		result = append(result, file)
 	}
+	if options.Metrics || options.Tracing {
+		result, err = mergeObservabilityManifest(result, options)
+		if err != nil {
+			return nil, err
+		}
+	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
 	return finalize(result)
+}
+
+func mergeObservabilityManifest(files []File, options Options) ([]File, error) {
+	var manifest, sums *File
+	for i := range files {
+		switch files[i].Path {
+		case "go.mod":
+			manifest = &files[i]
+		case "go.sum":
+			sums = &files[i]
+		}
+	}
+	if manifest == nil || sums == nil {
+		return nil, fmt.Errorf("observability selected but module manifest is missing")
+	}
+	requirements := []string{"\tgo.opentelemetry.io/otel v1.47.0", "\tgo.opentelemetry.io/otel/sdk v1.47.0", "\tgo.opentelemetry.io/proto/otlp v1.11.0", "\tgoogle.golang.org/protobuf v1.36.12"}
+	indirectRequirements := []string{
+		"\tgithub.com/cenkalti/backoff/v5 v5.0.3 // indirect",
+		"\tgithub.com/cespare/xxhash/v2 v2.3.0 // indirect",
+		"\tgithub.com/go-logr/logr v1.4.4 // indirect",
+		"\tgithub.com/go-logr/stdr v1.2.2 // indirect",
+		"\tgithub.com/go-viper/mapstructure/v2 v2.5.0 // indirect",
+		"\tgithub.com/google/uuid v1.6.0 // indirect",
+		"\tgithub.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect",
+		"\tgithub.com/rogpeppe/go-internal v1.14.1 // indirect",
+		"\tgo.opentelemetry.io/auto/sdk v1.2.1 // indirect",
+		"\tgo.opentelemetry.io/otel/exporters/otlp/otlptrace v1.47.0 // indirect",
+		"\tgo.opentelemetry.io/otel/log v1.47.0 // indirect",
+		"\tgo.opentelemetry.io/otel/metric v1.47.0 // indirect",
+		"\tgo.opentelemetry.io/otel/trace v1.47.0 // indirect",
+		"\tgoogle.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc // indirect",
+		"\tgoogle.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc // indirect",
+		"\tgoogle.golang.org/grpc v1.83.2 // indirect",
+		"\tgolang.org/x/crypto v0.57.0 // indirect",
+		"\tgolang.org/x/net v0.59.0 // indirect",
+		"\tgolang.org/x/sys v0.48.0 // indirect",
+		"\tgolang.org/x/text v0.42.0 // indirect",
+	}
+	if options.Metrics {
+		requirements = append(requirements, "\tgo.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.47.0")
+		requirements = append(requirements, "\tgo.opentelemetry.io/otel/metric v1.47.0", "\tgo.opentelemetry.io/otel/sdk/metric v1.47.0")
+	}
+	if options.Tracing {
+		requirements = append(requirements, "\tgo.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.47.0")
+		requirements = append(requirements, "\tgo.opentelemetry.io/otel/trace v1.47.0")
+		indirectRequirements = filterRequirement(indirectRequirements, "go.opentelemetry.io/otel/trace")
+	}
+	modText := string(manifest.Content)
+	block := strings.Index(modText, "require (")
+	if block < 0 {
+		return nil, fmt.Errorf("observability selected but go.mod has no require block")
+	}
+	indirectBlock := strings.LastIndex(modText, "require (")
+	modText = mergeRequirementBlock(modText, block, requirements, false)
+	if indirectBlock != block {
+		indirectBlock = strings.LastIndex(modText, "require (")
+		modText = mergeRequirementBlock(modText, indirectBlock, indirectRequirements, true)
+	}
+	manifest.Content = []byte(modText)
+
+	addition, err := sources.ReadFile("variants/observability/otel.sum")
+	if err != nil {
+		return nil, fmt.Errorf("read pinned observability checksums: %w", err)
+	}
+	lines := make(map[string]bool)
+	for _, line := range strings.Split(strings.TrimSpace(string(sums.Content)), "\n") {
+		if line != "" {
+			lines[line] = true
+		}
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(addition)), "\n") {
+		if line != "" {
+			lines[line] = true
+		}
+	}
+	merged := make([]string, 0, len(lines))
+	for line := range lines {
+		merged = append(merged, line)
+	}
+	sort.Strings(merged)
+	sums.Content = []byte(strings.Join(merged, "\n") + "\n")
+	return files, nil
+}
+
+func filterRequirement(requirements []string, module string) []string {
+	filtered := requirements[:0]
+	for _, requirement := range requirements {
+		fields := strings.Fields(strings.TrimSpace(requirement))
+		if len(fields) > 0 && fields[0] != module {
+			filtered = append(filtered, requirement)
+		}
+	}
+	return filtered
+}
+
+func mergeRequirementBlock(modText string, start int, additions []string, last bool) string {
+	seen := make(map[string]bool, len(additions))
+	versions := make(map[string]string, len(additions))
+	comments := make(map[string]string, len(additions))
+	for _, requirement := range additions {
+		fields := strings.Fields(strings.TrimSpace(requirement))
+		versions[fields[0]] = fields[1]
+		if len(fields) > 2 && fields[2] == "//" {
+			comments[fields[0]] = " // indirect"
+		}
+	}
+	lines := strings.Split(modText, "\n")
+	for i, line := range lines {
+		fields := strings.Fields(strings.TrimSpace(line))
+		if len(fields) < 2 {
+			continue
+		}
+		version, ok := versions[fields[0]]
+		if !ok {
+			continue
+		}
+		comment := ""
+		if len(fields) > 2 && fields[2] == "//" {
+			comment = " // indirect"
+		}
+		if comments[fields[0]] == "" {
+			comment = ""
+		}
+		lines[i] = "\t" + fields[0] + " " + version + comment
+		seen[fields[0]] = true
+	}
+	modText = strings.Join(lines, "\n")
+	start = strings.Index(modText, "require (")
+	if last && strings.Count(modText, "require (") > 1 {
+		start = strings.LastIndex(modText, "require (")
+	}
+	end := strings.Index(modText[start:], "\n)")
+	if end < 0 {
+		return modText
+	}
+	end += start
+	block := modText[start : end+1]
+	var missing []string
+	for _, requirement := range additions {
+		fields := strings.Fields(strings.TrimSpace(requirement))
+		if !seen[fields[0]] {
+			missing = append(missing, requirement)
+			seen[fields[0]] = true
+		}
+	}
+	if len(missing) > 0 {
+		block = strings.TrimSuffix(block, "\n") + "\n" + strings.Join(missing, "\n") + "\n"
+	}
+	blockLines := strings.Split(strings.TrimSuffix(block, "\n"), "\n")
+	if len(blockLines) > 2 {
+		sort.Slice(blockLines[1:], func(i, j int) bool {
+			return strings.Fields(strings.TrimSpace(blockLines[i+1]))[0] < strings.Fields(strings.TrimSpace(blockLines[j+1]))[0]
+		})
+		block = strings.Join(blockLines, "\n") + "\n"
+	}
+	return modText[:start] + block + modText[end+1:]
 }
 
 // RenderBusinessModule returns the small, behavior-free source skeleton for a

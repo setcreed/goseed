@@ -1,0 +1,138 @@
+package observability
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net"
+	"net/url"
+	"os"
+	"strings"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
+)
+
+const TraceExportTimeout = 3 * time.Second
+const TraceShutdownTimeout = 5 * time.Second
+
+type Tracing struct {
+	provider *sdktrace.TracerProvider
+	tracer   trace.Tracer
+}
+
+func NewTracing(ctx context.Context, service string) (*Tracing, error) {
+	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+	if err := validateTraceEndpoint(endpoint); err != nil {
+		return nil, errors.New("invalid OTLP traces endpoint")
+	}
+	options := []otlptracehttp.Option{otlptracehttp.WithEndpointURL(endpoint), otlptracehttp.WithTimeout(TraceExportTimeout)}
+	if raw := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_HEADERS"); raw != "" {
+		headers, err := parseTraceHeaders(raw)
+		if err != nil {
+			return nil, errors.New("invalid OTLP traces headers")
+		}
+		options = append(options, otlptracehttp.WithHeaders(headers))
+	}
+	exporter, err := otlptracehttp.New(ctx, options...)
+	if err != nil {
+		return nil, errors.New("cannot initialize OTLP traces exporter")
+	}
+	provider := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter, sdktrace.WithMaxQueueSize(2048), sdktrace.WithMaxExportBatchSize(512), sdktrace.WithBatchTimeout(time.Second), sdktrace.WithExportTimeout(TraceExportTimeout)),
+		sdktrace.WithResource(resource.NewWithAttributes("", attribute.String("service.name", service))),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(0.1))),
+	)
+	propagator := propagation.TraceContext{}
+	otel.SetTracerProvider(provider)
+	otel.SetTextMapPropagator(propagator)
+	return &Tracing{provider: provider, tracer: provider.Tracer("github.com/setcreed/goseed")}, nil
+}
+
+func (t *Tracing) StartServer(ctx context.Context, carrier propagation.TextMapCarrier, name, protocol, method, route string) (context.Context, trace.Span) {
+	if t == nil {
+		return ctx, trace.SpanFromContext(ctx)
+	}
+	ctx = otel.GetTextMapPropagator().Extract(ctx, carrier)
+	return t.tracer.Start(ctx, name,
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String("network.protocol.name", protocol),
+			attribute.String("http.request.method", method),
+			attribute.String("http.route", route),
+		),
+	)
+}
+
+func (t *Tracing) StartRPC(ctx context.Context, carrier propagation.TextMapCarrier, method string) (context.Context, trace.Span) {
+	if t == nil {
+		return ctx, trace.SpanFromContext(ctx)
+	}
+	ctx = otel.GetTextMapPropagator().Extract(ctx, carrier)
+	return t.tracer.Start(ctx, method, trace.WithSpanKind(trace.SpanKindServer), trace.WithAttributes(attribute.String("rpc.system.name", "grpc"), attribute.String("rpc.method", method)))
+}
+
+func (t *Tracing) Shutdown(ctx context.Context) error {
+	if t == nil {
+		return nil
+	}
+	return t.provider.Shutdown(ctx)
+}
+
+func FinishHTTP(span trace.Span, status int) {
+	span.SetAttributes(attribute.Int("http.response.status_code", status))
+	if status >= 500 {
+		span.SetStatus(codes.Error, "HTTP server error")
+	}
+	span.End()
+}
+
+func FinishRPC(span trace.Span, code string) {
+	span.SetAttributes(attribute.String("rpc.response.status_code", code))
+	if code != "OK" {
+		span.SetStatus(codes.Error, code)
+	}
+	span.End()
+}
+
+func validateTraceEndpoint(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return errors.New("invalid endpoint")
+	}
+	if u.Scheme == "https" {
+		return nil
+	}
+	if u.Scheme != "http" {
+		return errors.New("invalid scheme")
+	}
+	host := u.Hostname()
+	if strings.EqualFold(host, "localhost") {
+		return nil
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		return errors.New("non-loopback HTTP is forbidden")
+	}
+	return nil
+}
+
+func parseTraceHeaders(raw string) (map[string]string, error) {
+	result := make(map[string]string)
+	for _, part := range strings.Split(raw, ",") {
+		key, value, ok := strings.Cut(part, "=")
+		key, value = strings.TrimSpace(key), strings.TrimSpace(value)
+		if !ok || key == "" || value == "" || strings.ContainsAny(key+value, "\r\n") {
+			return nil, fmt.Errorf("invalid header")
+		}
+		result[key] = value
+	}
+	return result, nil
+}

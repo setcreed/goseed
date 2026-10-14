@@ -52,7 +52,7 @@ func (p *ResourcePlan) prepareCommit(state ProjectState) error {
 		entries = append(entries, templates.ModuleEntry{Name: module.Name, Type: module.Type})
 	}
 	project := templates.Project{Name: state.Metadata.Name, Module: state.Metadata.Module}
-	options := templates.Options{Database: state.Metadata.Database, Redis: state.Metadata.Redis, Authz: state.Metadata.Authorization, Transport: state.Metadata.Transport}
+	options := templates.Options{Database: state.Metadata.Database, Redis: state.Metadata.Redis, Authz: state.Metadata.Authorization, Transport: state.Metadata.Transport, Metrics: state.Metadata.Metrics, Tracing: state.Metadata.Tracing}
 	registryFiles, err := templates.RenderWithModules(project, options, entries)
 	if err != nil {
 		return fmt.Errorf("render resource registration index: %w", err)

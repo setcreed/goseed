@@ -13,6 +13,7 @@ import (
 	"[[.Module]]/internal/pkg/config"
 	[[if ne .Database "none"]]"[[.Module]]/internal/pkg/database"[[end]]
 	logx "[[.Module]]/internal/pkg/log"
+	[[if .Observability]]"[[.Module]]/internal/pkg/observability"[[end]]
 	"[[.Module]]/internal/pkg/rpc"
 	[[if ne .Database "none"]]"gorm.io/gorm"[[end]]
 	"github.com/samber/do/v2"
@@ -27,13 +28,17 @@ type moduleDependencies struct {
     [[if .Redis]]Cache *cache.Client[[end]]
 }
 
-type App struct { Server *rpc.Server; Logger *zap.Logger[[if ne .Database "none"]];Database *database.Database[[end]][[if .Redis]];Cache *cache.Client[[end]][[if eq .Authz "casbin"]];Authorization *authz.Manager[[end]] }
+type App struct { Server *rpc.Server; Logger *zap.Logger[[if .Metrics]];Metrics *observability.Metrics[[end]][[if .Tracing]];Tracing *observability.Tracing[[end]][[if ne .Database "none"]];Database *database.Database[[end]][[if .Redis]];Cache *cache.Client[[end]][[if eq .Authz "casbin"]];Authorization *authz.Manager[[end]] }
 
 func New(settings config.Config, version string) (*App,error) {
 	logger,err := logx.New(settings.Log,version)
 	if err != nil { return nil,err }
 	[[if eq .Authz "casbin"]]catalog,err:=PermissionCatalog();if err!=nil{_ = logger.Sync();return nil,err}[[end]]
 	startup,cancel:=context.WithTimeout(context.Background(),10*time.Second);defer cancel()
+	[[if .Metrics]]var metrics *observability.Metrics;[[end]][[if .Tracing]]var tracing *observability.Tracing[[end]]
+	[[if .Observability]]telemetryOwned:=true;defer func(){if telemetryOwned{shutdown,stop:=context.WithTimeout(context.Background(),observability.[[if .Tracing]]TraceShutdownTimeout[[else]]ShutdownTimeout[[end]]);defer stop();[[if .Tracing]]if tracing!=nil{_ = tracing.Shutdown(shutdown)};[[end]][[if .Metrics]]if metrics!=nil{_ = metrics.Shutdown(shutdown)}[[end]]}}()[[end]]
+	[[if .Metrics]]metrics,err=observability.NewMetrics(startup,"[[.Name]]");if err!=nil{_ = logger.Sync();return nil,err}[[end]]
+	[[if .Tracing]]tracing,err=observability.NewTracing(startup,"[[.Name]]");if err!=nil{_ = logger.Sync();return nil,err}[[end]]
 	[[if ne .Database "none"]]db,err:=database.Open(startup,settings.Database,logger)
 	if err!=nil { _ = logger.Sync(); return nil,err }
 	if err:=db.CheckSchema(startup);err!=nil {_ = db.Close(); _ = logger.Sync(); return nil,err}[[end]]
@@ -50,7 +55,8 @@ func New(settings config.Config, version string) (*App,error) {
 	modules,err:=newModuleServices(moduleDependencies{Context:startup,Logger:logger,[[if ne .Database "none"]]Database:db.DB,[[end]][[if .Redis]]Cache:caching,[[end]]})
 	if err!=nil{[[if .Redis]]_ = caching.Close();[[end]][[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}
 	do.ProvideValue(injector,examplehandler.New(examplebiz.[[if .Redis]]NewCached([[if ne .Database "none"]]examplestore.New(db.DB),[[end]]caching)[[else]]New([[if ne .Database "none"]]examplestore.New(db.DB)[[end]])[[end]]))
-	do.ProvideValue(injector,&rpc.Readiness{[[if .Redis]]CheckDependency:func(ctx context.Context)error{[[if ne .Database "none"]]if err:=db.Pool.PingContext(ctx);err!=nil{return err};[[end]]return caching.Check(ctx)}[[else if ne .Database "none"]]CheckDependency:db.Pool.PingContext[[end]]})
+	checkDependency:=func(ctx context.Context)error{[[if ne .Database "none"]]if err:=db.Pool.PingContext(ctx);err!=nil{[[if .Metrics]]metrics.RecordDependency(ctx,"database",false)[[end]];return err};[[if .Metrics]]metrics.RecordDependency(ctx,"database",true)[[end]][[end]][[if .Redis]]if err:=caching.Check(ctx);err!=nil{[[if .Metrics]]metrics.RecordDependency(ctx,"redis",false)[[end]];return err};[[if .Metrics]]metrics.RecordDependency(ctx,"redis",true)[[end]];return nil[[else]]return ctx.Err()[[end]]}
+	do.ProvideValue(injector,&rpc.Readiness{CheckDependency:checkDependency})
 	do.Provide(injector,func(i do.Injector)(*rpc.Server,error){
 		configuration,err := do.Invoke[config.Config](i); if err != nil { return nil,err }
 		logging,err := do.Invoke[*zap.Logger](i); if err != nil { return nil,err }
@@ -60,11 +66,12 @@ func New(settings config.Config, version string) (*App,error) {
 		[[if eq .Authz "casbin"]]authorization,err:=do.Invoke[*authz.Manager](i);if err!=nil{return nil,err}[[end]]
 		permissions,register,err:=rpcModules(examples,modules)
 		if err!=nil{return nil,err}
-		return rpc.New(configuration.GRPC,ready,logging,authentication,permissions,register[[if eq .Authz "casbin"]],authorization[[end]])
+		return rpc.New(configuration.GRPC,ready,logging,authentication,permissions,register[[if eq .Authz "casbin"]],authorization[[end]][[if .Metrics]],metrics[[end]][[if .Tracing]],tracing[[end]])
 	})
 	rpcServer,err := do.Invoke[*rpc.Server](injector)
 	if err != nil { [[if .Redis]]_ = caching.Close();[[end]][[if ne .Database "none"]]_ = db.Close();[[end]] _ = logger.Sync(); return nil,err }
-	return &App{Server:rpcServer,Logger:logger,[[if ne .Database "none"]]Database:db,[[end]][[if .Redis]]Cache:caching,[[end]][[if eq .Authz "casbin"]]Authorization:authorization,[[end]]},nil
+	[[if .Observability]]telemetryOwned=false[[end]]
+	return &App{Server:rpcServer,Logger:logger,[[if .Metrics]]Metrics:metrics,[[end]][[if .Tracing]]Tracing:tracing,[[end]][[if ne .Database "none"]]Database:db,[[end]][[if .Redis]]Cache:caching,[[end]][[if eq .Authz "casbin"]]Authorization:authorization,[[end]]},nil
 }
 
-func (a *App) Run(ctx context.Context) error { rpc.InstallProtocolLogger(a.Logger); defer func(){ [[if .Redis]]_ = a.Cache.Close();[[end]][[if ne .Database "none"]]_ = a.Database.Close();[[end]] _ = a.Logger.Sync() }(); return a.Server.Run(ctx) }
+func (a *App) Run(ctx context.Context) error { rpc.InstallProtocolLogger(a.Logger); defer func(){[[if .Observability]]shutdown,cancel:=context.WithTimeout(context.Background(),observability.[[if .Tracing]]TraceShutdownTimeout[[else]]ShutdownTimeout[[end]]);[[if .Metrics]]_ = a.Metrics.Shutdown(shutdown);[[end]][[if .Tracing]]_ = a.Tracing.Shutdown(shutdown);[[end]]cancel();[[end]] [[if .Redis]]_ = a.Cache.Close();[[end]][[if ne .Database "none"]]_ = a.Database.Close();[[end]] _ = a.Logger.Sync() }(); return a.Server.Run(ctx) }

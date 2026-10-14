@@ -17,6 +17,7 @@ import (
 	"[[.Module]]/internal/pkg/config"
 	[[if ne .Database "none"]]"[[.Module]]/internal/pkg/database"[[end]]
 	logx "[[.Module]]/internal/pkg/log"
+	[[if .Observability]]"[[.Module]]/internal/pkg/observability"[[end]]
 	"[[.Module]]/internal/pkg/server"
 	[[if ne .Database "none"]]"gorm.io/gorm"[[end]]
 	"github.com/samber/do/v2"
@@ -31,13 +32,17 @@ type moduleDependencies struct {
     [[if .Redis]]Cache *cache.Client[[end]]
 }
 
-type App struct { Server *server.Server; Logger *zap.Logger[[if eq .Transport "dual"]];RPC *rpc.Server;Dual *dual.Server[[end]][[if ne .Database "none"]];Database *database.Database[[end]][[if .Redis]];Cache *cache.Client[[end]][[if eq .Authz "casbin"]];Authorization *authz.Manager[[end]] }
+	type App struct { Server *server.Server; Logger *zap.Logger[[if .Metrics]];Metrics *observability.Metrics[[end]][[if .Tracing]];Tracing *observability.Tracing[[end]][[if eq .Transport "dual"]];RPC *rpc.Server;Dual *dual.Server[[end]][[if ne .Database "none"]];Database *database.Database[[end]][[if .Redis]];Cache *cache.Client[[end]][[if eq .Authz "casbin"]];Authorization *authz.Manager[[end]] }
 
 func New(settings config.Config, version string) (*App,error) {
 	logger,err := logx.New(settings.Log,version)
 	if err != nil { return nil,err }
 	[[if eq .Authz "casbin"]]catalog,err:=PermissionCatalog();if err!=nil{_ = logger.Sync();return nil,err}[[end]]
 	startup,cancel:=context.WithTimeout(context.Background(),10*time.Second);defer cancel()
+	[[if .Metrics]]var metrics *observability.Metrics;[[end]][[if .Tracing]]var tracing *observability.Tracing[[end]]
+	[[if .Observability]]telemetryOwned:=true;defer func(){if telemetryOwned{shutdown,stop:=context.WithTimeout(context.Background(),observability.[[if .Tracing]]TraceShutdownTimeout[[else]]ShutdownTimeout[[end]]);defer stop();[[if .Tracing]]if tracing!=nil{_ = tracing.Shutdown(shutdown)};[[end]][[if .Metrics]]if metrics!=nil{_ = metrics.Shutdown(shutdown)}[[end]]}}()[[end]]
+	[[if .Metrics]]metrics,err=observability.NewMetrics(startup,"[[.Name]]");if err!=nil{_ = logger.Sync();return nil,err}[[end]]
+	[[if .Tracing]]tracing,err=observability.NewTracing(startup,"[[.Name]]");if err!=nil{_ = logger.Sync();return nil,err}[[end]]
 	[[if ne .Database "none"]]db,err:=database.Open(startup,settings.Database,logger)
 	if err!=nil { _ = logger.Sync(); return nil,err }
 	if err:=db.CheckSchema(startup);err!=nil {_ = db.Close(); _ = logger.Sync(); return nil,err}[[end]]
@@ -55,7 +60,10 @@ func New(settings config.Config, version string) (*App,error) {
 	if err!=nil{[[if .Redis]]_ = caching.Close();[[end]][[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}
 	business:=examplebiz.[[if .Redis]]NewCached([[if ne .Database "none"]]examplestore.New(db.DB),[[end]]caching)[[else]]New([[if ne .Database "none"]]examplestore.New(db.DB)[[end]])[[end]]
 	do.ProvideValue(injector,examplehandler.New(business))
-	checkDependency:=func(ctx context.Context)error{[[if ne .Database "none"]]if err:=db.Pool.PingContext(ctx);err!=nil{return err};[[end]][[if .Redis]]return caching.Check(ctx)[[else]]return ctx.Err()[[end]]}
+	checkDependency:=func(ctx context.Context)error{
+		[[if ne .Database "none"]]if err:=db.Pool.PingContext(ctx);err!=nil{[[if .Metrics]]metrics.RecordDependency(ctx,"database",false)[[end]];return err};[[if .Metrics]]metrics.RecordDependency(ctx,"database",true)[[end]][[end]]
+		[[if .Redis]]if err:=caching.Check(ctx);err!=nil{[[if .Metrics]]metrics.RecordDependency(ctx,"redis",false)[[end]];return err};[[if .Metrics]]metrics.RecordDependency(ctx,"redis",true)[[end]];return nil[[else]]return ctx.Err()[[end]]
+	}
 	httpReady:=&server.Readiness{CheckDependency:checkDependency}
 	do.ProvideValue(injector,httpReady)
 	do.Provide(injector,func(i do.Injector)(*server.Server,error){
@@ -65,7 +73,7 @@ func New(settings config.Config, version string) (*App,error) {
 		authentication,err:=do.Invoke[*auth.JWT](i);if err!=nil{return nil,err}
 		examples,err:=do.Invoke[*examplehandler.Handler](i);if err!=nil{return nil,err}
 		[[if eq .Authz "casbin"]]authorization,err:=do.Invoke[*authz.Manager](i);if err!=nil{return nil,err}[[end]]
-		return server.New(apiserver.NewRouter(configuration.HTTP,ready,logging,authentication,httpModules(examples,modules)[[if eq .Authz "casbin"]],authorization[[end]]),configuration.HTTP,ready,logging)
+		return server.New(apiserver.NewRouter(configuration.HTTP,ready,logging,authentication,httpModules(examples,modules)[[if eq .Authz "casbin"]],authorization[[end]][[if .Metrics]],metrics[[end]][[if .Tracing]],tracing[[end]]),configuration.HTTP,ready,logging)
 	})
 	httpServer,err := do.Invoke[*server.Server](injector)
 	if err != nil { [[if .Redis]]_ = caching.Close();[[end]][[if ne .Database "none"]]_ = db.Close();[[end]] _ = logger.Sync(); return nil,err }
@@ -73,9 +81,10 @@ func New(settings config.Config, version string) (*App,error) {
 	examples:=rpchandler.New(business)
 	permissions,register,err:=rpcModules(examples,modules)
 	if err!=nil{[[if .Redis]]_ = caching.Close();[[end]][[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}
-	rpcServer,err:=rpc.New(settings.GRPC,rpcReady,logger,authentication,permissions,register[[if eq .Authz "casbin"]],authorization[[end]])
+	rpcServer,err:=rpc.New(settings.GRPC,rpcReady,logger,authentication,permissions,register[[if eq .Authz "casbin"]],authorization[[end]][[if .Metrics]],metrics[[end]][[if .Tracing]],tracing[[end]])
 	if err!=nil{[[if .Redis]]_ = caching.Close();[[end]][[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}[[end]]
-	return &App{Server:httpServer,Logger:logger,[[if eq .Transport "dual"]]RPC:rpcServer,Dual:dual.New(settings,httpServer,rpcServer,httpReady,rpcReady),[[end]][[if ne .Database "none"]]Database:db,[[end]][[if .Redis]]Cache:caching,[[end]][[if eq .Authz "casbin"]]Authorization:authorization,[[end]]},nil
+	[[if .Observability]]telemetryOwned=false[[end]]
+	return &App{Server:httpServer,Logger:logger,[[if .Metrics]]Metrics:metrics,[[end]][[if .Tracing]]Tracing:tracing,[[end]][[if eq .Transport "dual"]]RPC:rpcServer,Dual:dual.New(settings,httpServer,rpcServer,httpReady,rpcReady),[[end]][[if ne .Database "none"]]Database:db,[[end]][[if .Redis]]Cache:caching,[[end]][[if eq .Authz "casbin"]]Authorization:authorization,[[end]]},nil
 }
 
-func (a *App) Run(ctx context.Context) error { [[if eq .Transport "dual"]]rpc.InstallProtocolLogger(a.Logger);[[end]]defer func(){ [[if .Redis]]_ = a.Cache.Close();[[end]][[if ne .Database "none"]]_ = a.Database.Close();[[end]] _ = a.Logger.Sync() }(); return a.[[if eq .Transport "dual"]]Dual[[else]]Server[[end]].Run(ctx) }
+func (a *App) Run(ctx context.Context) error { [[if eq .Transport "dual"]]rpc.InstallProtocolLogger(a.Logger);[[end]]defer func(){[[if .Observability]]shutdown,cancel:=context.WithTimeout(context.Background(),observability.[[if .Tracing]]TraceShutdownTimeout[[else]]ShutdownTimeout[[end]]);[[if .Metrics]]_ = a.Metrics.Shutdown(shutdown);[[end]][[if .Tracing]]_ = a.Tracing.Shutdown(shutdown);[[end]]cancel();[[end]] [[if .Redis]]_ = a.Cache.Close();[[end]][[if ne .Database "none"]]_ = a.Database.Close();[[end]] _ = a.Logger.Sync() }(); return a.[[if eq .Transport "dual"]]Dual[[else]]Server[[end]].Run(ctx) }

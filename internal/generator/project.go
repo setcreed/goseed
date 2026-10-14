@@ -32,6 +32,8 @@ type ProjectMetadata struct {
 	Authorization   string           `yaml:"authorization"`
 	Redis           bool             `yaml:"redis"`
 	Transport       string           `yaml:"transport"`
+	Metrics         bool             `yaml:"metrics,omitempty"`
+	Tracing         bool             `yaml:"tracing,omitempty"`
 	Modules         []ModuleMetadata `yaml:"-"`
 }
 
@@ -168,13 +170,15 @@ func parseProjectMetadata(data []byte) (ProjectMetadata, error) {
 		Authorization   string    `yaml:"authorization"`
 		Redis           bool      `yaml:"redis"`
 		Transport       string    `yaml:"transport"`
+		Metrics         bool      `yaml:"metrics"`
+		Tracing         bool      `yaml:"tracing"`
 		Modules         yaml.Node `yaml:"modules"`
 	}
 	strict.KnownFields(true)
 	if err := strict.Decode(&raw); err != nil {
 		return ProjectMetadata{}, fmt.Errorf("decode goseed.yaml: %w", err)
 	}
-	metadata = ProjectMetadata{Version: raw.Version, TemplateVersion: raw.TemplateVersion, Name: raw.Name, Module: raw.Module, Database: raw.Database, Authentication: raw.Authentication, Authorization: raw.Authorization, Redis: raw.Redis, Transport: raw.Transport}
+	metadata = ProjectMetadata{Version: raw.Version, TemplateVersion: raw.TemplateVersion, Name: raw.Name, Module: raw.Module, Database: raw.Database, Authentication: raw.Authentication, Authorization: raw.Authorization, Redis: raw.Redis, Transport: raw.Transport, Metrics: raw.Metrics, Tracing: raw.Tracing}
 	if raw.Modules.Kind != 0 {
 		list := &raw.Modules
 		if list.Kind != yaml.SequenceNode {
