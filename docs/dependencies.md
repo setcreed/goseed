@@ -1,5 +1,11 @@
 # 依赖与工具核验
 
+## GitHub Actions
+
+2026-10-15 核对 GitHub 官方 Actions 仓库及最新正式发布：以下仓库均未归档，近期有代码更新，许可证均为 MIT，运行时为 Node.js 24。固定引用以 `.github/workflows/ci.yml` 中的完整提交 SHA 为准，版本对应 [checkout v7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1)、[setup-go v7.0.0](https://github.com/actions/setup-go/releases/tag/v7.0.0) 和 [cache v6.1.0](https://github.com/actions/cache/releases/tag/v6.1.0)。工作流只读取仓库内容，使用 GitHub 托管的 Ubuntu runner；这些工具不进入生成器或生成项目的运行依赖。
+
+## Go 依赖与工具
+
 运行库维护核验日期：2026-10-10；YAML parser 补充核验日期：2026-10-11。版本清单以 [dependencies.lock.json](../dependencies.lock.json) 为准；原始官方仓库响应快照见 [dependency-audit.json](dependency-audit.json) 。固定直接依赖、间接依赖与校验和保存在主模块、兼容性模块及独立业务模板的依赖清单中。
 
 D10 观测依赖于 2026-10-14 通过 OpenTelemetry 官方 Go 文档、GitHub 发布页、固定标签模块清单及仓库 issue 核验，固定 `go.opentelemetry.io/otel` API/SDK 与 OTLP metric HTTP、trace HTTP exporter 为 v1.47.0；生成项目的本地 OTLP 接收器测试使用官方生成的 `go.opentelemetry.io/proto/otlp` v1.11.0 消息类型。上游 Go v1.47.0 于 2026-10-02 发布，许可证 Apache-2.0；固定模块 go.mod 要求 Go 1.26.0，与项目 Go 1.26.4 一致。OTLP protobuf v1.11.0 的官方发布说明为生成代码更新，协议仓库将 OTLP 二进制 protobuf 定义列为稳定；证据见 [Go SDK v1.47.0 release](https://github.com/open-telemetry/opentelemetry-go/releases/tag/v1.47.0)、[固定 API go.mod](https://github.com/open-telemetry/opentelemetry-go/blob/v1.47.0/go.mod)、[trace HTTP exporter go.mod](https://raw.githubusercontent.com/open-telemetry/opentelemetry-go/v1.47.0/exporters/otlp/otlptrace/otlptracehttp/go.mod)、[metric HTTP exporter go.mod](https://raw.githubusercontent.com/open-telemetry/opentelemetry-go/v1.47.0/exporters/otlp/otlpmetric/otlpmetrichttp/go.mod)、[OTLP protobuf Go v1.11.0 release](https://github.com/open-telemetry/opentelemetry-proto-go/releases/tag/v1.11.0)、[OTLP 稳定定义](https://github.com/open-telemetry/opentelemetry-proto/blob/main/docs/specification.md)、[官方 Go 状态](https://opentelemetry.io/docs/languages/go/) 与 [exporter 文档](https://opentelemetry.io/docs/languages/go/exporters/)。官方 issue 样本显示 HTTP exporter 当前仍带有 gRPC 模块依赖（[#2579](https://github.com/open-telemetry/opentelemetry-go/issues/2579)）；接受其对已启用观测项目的依赖体积影响，观测未启用时整个依赖组不进入生成项目。该选择只用于可选指标/追踪，不引入日志遥测或自动 exporter 环境发现。

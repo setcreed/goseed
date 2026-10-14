@@ -25,6 +25,7 @@ goseed 是面向中小型 Go 后端业务的项目与业务代码生成器。生
 
 ## 目录职责
 
+- `.github/workflows/`：GitHub Actions 基础 CI，检查入口与覆盖范围见开发指南；发布由显式授权后的 gh 流程执行。
 - `cmd/goseed/`：生成器入口，不承载生成逻辑。
 - `internal/cli/`：命令解析、用户输出和参数校验。
 - `internal/generator/`：生成计划、冲突检查、渲染、文件写入与模块登记。

@@ -38,6 +38,14 @@ make protocol-check
 
 验证只使用本次专用测试资源；外部数据库与 Redis 用例不允许静默跳过。详细边界见 [模板指南](templates.md)、[部署指南](deployment.md) 和 ROADMAP 中的最近验证记录。
 
+## 持续集成
+
+[CI 工作流](../.github/workflows/ci.yml) 在推送 main、面向 main 的 PR 和手动触发时运行。使用 Ubuntu 24.04，Go 版本从 `go.mod` 读取；官方 Actions 以完整提交 SHA 固定，工作流仅申请仓库内容读取权限。
+
+CI 检查格式与文档契约，安装锁定协议工具，执行生成器/CLI/模板单元测试、缓存位置定向集成回归、vet 和构建。缓存覆盖仓库实际使用的 `.tmp/go-cache` 与 `.tmp/mod-cache`；新 runner 首次构建需要下载模板运行依赖。普通 CI 不运行 Docker、外部数据库、race 或完整生成组合运行矩阵，不能代替这些能力的专项验收。
+
+发布仍按施工计划的版本发布流程人工执行，CI 不自动创建标签或 Release。
+
 ## 源码导航
 
 | 关注点 | 入口 |

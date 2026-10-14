@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Go checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GOTOOLCHAIN: local
+      GOWORK: "off"
+      GOCACHE: ${{ github.workspace }}/.tmp/go-cache
+      GOMODCACHE: ${{ github.workspace }}/.tmp/mod-cache
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        id: go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Cache Go modules and build outputs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .tmp/go-cache
+            .tmp/mod-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.sum', 'dependencies.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go.outputs.go-version }}-
+
+      - name: Check formatting and documentation contracts
+        run: |
+          make fmt-check
+          make contract-check
+          git diff --check
+
+      - name: Install pinned protocol tools
+        run: make protocol-tools
+
+      - name: Test generator and templates
+        run: go test -mod=readonly -timeout=5m ./cmd/goseed ./internal/...
+
+      - name: Test generated project cache behavior
+        run: go test -mod=readonly -timeout=5m -count=1 ./tests/integration -run '^TestGeneratedMakefileRespectsGoCaches$'
+
+      - name: Vet and build
+        run: |
+          go vet -mod=readonly ./cmd/goseed ./internal/... ./tests/integration
+          make build

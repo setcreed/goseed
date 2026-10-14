@@ -24,7 +24,7 @@ func TestGeneratedMakefileRespectsGoCaches(t *testing.T) {
 		}
 		base = append(base, variable)
 	}
-	base = append(base, "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
+	base = append(base, "GOTOOLCHAIN=local", "GOWORK=off")
 	for _, database := range []string{"sqlite", "none"} {
 		t.Run(database, func(t *testing.T) {
 			directory := renderProjectWith(t, templates.Options{Database: database})
