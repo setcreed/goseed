@@ -13,6 +13,9 @@ import (
 
 var resourceFieldName = regexp.MustCompile(`^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$`)
 
+// ResourceSpecVersion is the current resource field declaration format.
+const ResourceSpecVersion = 1
+
 // ResourceSpec describes the deliberately small, versioned resource field DSL.
 type ResourceSpec struct {
 	Version int
@@ -69,13 +72,13 @@ func ParseResourceSpec(data []byte) (ResourceSpec, error) {
 	if err := strict.Decode(&raw); err != nil {
 		return ResourceSpec{}, fmt.Errorf("decode resource spec: %w", err)
 	}
-	if raw.Version == nil || *raw.Version != 1 {
-		return ResourceSpec{}, fmt.Errorf("resource spec version must be 1")
+	if raw.Version == nil || *raw.Version != ResourceSpecVersion {
+		return ResourceSpec{}, fmt.Errorf("resource spec version must be %d", ResourceSpecVersion)
 	}
 	if len(raw.Fields) < 1 || len(raw.Fields) > 32 {
 		return ResourceSpec{}, fmt.Errorf("resource spec must declare 1 to 32 fields")
 	}
-	result := ResourceSpec{Version: 1, Fields: make([]ResourceField, 0, len(raw.Fields))}
+	result := ResourceSpec{Version: ResourceSpecVersion, Fields: make([]ResourceField, 0, len(raw.Fields))}
 	seen := make(map[string]bool, len(raw.Fields))
 	goNames := map[string]bool{"ID": true, "Owner": true, "CreatedAt": true, "UpdatedAt": true, "TableName": true}
 	for i, field := range raw.Fields {

@@ -1,5 +1,6 @@
 GO ?= go
 VERSION ?= dev
+COMMIT ?= $(shell git rev-parse --verify HEAD 2>/dev/null || printf unknown)
 LINT := .tools/bin/golangci-lint
 LINT_VERSION := v2.14.0
 GO_PACKAGES := ./...
@@ -12,10 +13,25 @@ export GOWORK := off
 export GOTOOLCHAIN := go1.26.4
 
 .DEFAULT_GOAL := check
-.PHONY: build test race vet lint fmt fmt-check check contract-check tools compatibility compatibility-cross compatibility-db protocol-tools protocol-check template-container template-db template-redis
+.PHONY: build install package verify-package test race vet lint fmt fmt-check check contract-check tools compatibility compatibility-cross compatibility-db protocol-tools protocol-check template-container template-db template-redis
 
 build:
-	$(GO) build -mod=readonly -trimpath -ldflags '-X main.version=$(VERSION)' -o bin/goseed ./cmd/goseed
+	$(GO) build -mod=readonly -trimpath -ldflags '-X main.version=$(VERSION) -X main.commit=$(COMMIT)' -o bin/goseed ./cmd/goseed
+
+# Install explicitly into a caller-selected Go bin directory.
+install:
+	@test -n "$(GOBIN)" || { printf '%s\n' 'Set GOBIN to the directory where goseed should be installed.'; exit 1; }
+	@test "$(VERSION)" != dev || { printf '%s\n' 'Set VERSION to a release-style version, for example v0.1.0.'; exit 1; }
+	python3 scripts/distribution.py validate-version "$(VERSION)"
+	@mkdir -p "$(GOBIN)"
+	$(GO) build -mod=readonly -trimpath -ldflags '-X main.version=$(VERSION) -X main.commit=$(COMMIT)' -o "$(GOBIN)/goseed" ./cmd/goseed
+
+package:
+	python3 scripts/distribution.py package --version "$(VERSION)" --goos "$(GOOS)" --goarch "$(GOARCH)" --output .tmp/dist
+
+verify-package:
+	@test -n "$(ARCHIVE)" || { printf '%s\n' 'Set ARCHIVE to the package archive to verify.'; exit 1; }
+	python3 scripts/distribution.py verify "$(ARCHIVE)"
 
 test:
 	$(GO) test -mod=readonly -timeout=40m $(GO_PACKAGES)

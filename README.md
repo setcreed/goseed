@@ -34,6 +34,25 @@ make build
 ./bin/goseed --version
 ```
 
+从固定源码版本安装到指定目录：
+
+```sh
+git checkout v0.1.0
+make install VERSION=v0.1.0 GOBIN="$HOME/.local/bin"
+"$HOME/.local/bin/goseed" --version
+```
+
+`v0.1.0` 仅为命令示例；执行前应替换成仓库中已存在且经过审核的 tag。本项目尚未创建 tag 或公开 release。
+
+本地生成单平台归档并校验：
+
+```sh
+make package VERSION=v0.1.0 GOOS=darwin GOARCH=arm64
+make verify-package ARCHIVE=.tmp/dist/v0.1.0/goseed_v0.1.0_darwin_arm64.tar.gz
+```
+
+归档包含生成器、README、MIT 许可证、构建依赖许可证副本和版本清单；清单记录源提交、生成器/模板/spec 版本及二进制摘要。SHA-256 文件用于检测归档损坏，不是签名或来源证明。`make install` 需要显式指定 `GOBIN` 和版本，`make package` 拒绝未固定版本、非 Go 1.26.4 或有改动的工作区；本地归档保存在忽略目录 `.tmp/dist/`，当前不代表公开发行包。
+
 使用刚构建的可执行文件生成独立项目：
 
 ```sh
