@@ -1,6 +1,6 @@
 # 生成项目模板指南
 
-本文集中说明生成项目的运行、配置与验收契约。命令参数见 [CLI 契约](cli.md)，目录与组件边界见 [技术架构](architecture.md)，单机部署见 [部署契约](deployment.md)；当前状态以 [ROADMAP](../ROADMAP.md) 为准。
+本文集中说明生成项目的运行、配置与安全规则。命令参数见 [CLI 参考](cli.md)，单机部署见 [部署指南](deployment.md)。生成项目自身的 README 会列出与所选能力匹配的启动步骤和配置示例。
 
 ## 导航
 
@@ -12,13 +12,13 @@
 
 ## 默认 HTTP 模板
 
-本节说明默认 HTTP 项目的运行、配置与验收边界。服务命令以生成项目 README 和实际产物为准，当前状态见 ROADMAP。
+本节说明默认 HTTP 项目的运行、配置和安全规则。服务命令以生成项目 README 为准。
 
 ### 源码与验证
 
-模板源码是唯一维护入口，渲染项目不导入 goseed。Go 最低版本为 1.26.4，写入生成项目的 `go.mod`；运行依赖使用已核验版本。渲染与端到端测试使用项目 `.tmp/d2/` 下本次独立目录。
+生成项目包含完整源码，不在运行时依赖 goseed。生成项目要求 Go 1.26.4 或更新的兼容版本；Go 版本要求由生成的 `go.mod` 声明。
 
-目录沿用架构文档中的 Handler → Biz → Store；所有可写模型字段由转换代码显式选择。普通构造函数传递依赖，do 仅在 Bootstrap 注册和调用。
+持久化业务采用 Handler → Biz → Store 分层。HTTP 或 gRPC Handler 处理协议输入，Biz 执行业务规则，Store 负责数据读写。
 
 ### 服务与开发命令
 
@@ -72,25 +72,15 @@ JWT 解析前限制长度并校验三段 Base64URL 字符；要求有效签名�
 
 所有写入拒绝未知字段、重复 JSON 键、null、额外 JSON 值、无效 UTF-8 和超限请求体。业务身份与资源归属由 Biz/Store 检查，不能靠客户端自行约束。数据库内部异常在 Store 转为稳定业务错误；约束始终由数据库兜底。
 
-### 验收
-
-渲染结果经过 readonly 构建、测试、vet、lint 和 race；不依赖 goseed 源码或 `.tmp/` 输入。进程级验收覆盖开发初始化保留密钥、显式迁移与重复执行、生产禁用开发命令、配置覆盖与未知键、缺失 schema、非法 TLS、端口占用、认证与 CRUD、跨主体隔离、分页、零值更新、非法正文、请求取消及重启持久化。
-
-Store 层以同一事务连接创建两个仓储写入，主动失败后验证整体回滚；不把 GORM 对象暴露给 Biz。生命周期测试覆盖启动失败资源关闭、就绪转变、请求排空与关闭到期强停；日志和错误输出核对测试秘密、Token 与 SQL 数据均不出现。
-
-交付包含配置示例、项目规范与使用文档、Makefile、SQLite 迁移、Swagger 2.0 接口文档及 Dockerfile。容量、备份恢复、多实例和具体业务上线评估不由本检查点代替。
-
-容器验证入口 `make template-container`：实际渲染独立项目，使用固定摘要的官方 Go 1.26.4 镜像构建，以非 root 运行，使用本次专用数据卷和随机回环端口验证显式迁移、生产禁用签发、CRUD 及容器重启持久化，结束清理本次容器、卷与测试镜像。常规 `make check` 不自动启动 Docker。
-
 ## 数据库与可选能力
 
-本节说明数据库选择、无数据库模式及 Redis/Casbin 的组合与验收约定。生成参数见 [CLI 契约](cli.md)，当前交付状态以 ROADMAP 为准。
+本节说明数据库选择、无数据库模式及 Redis/Casbin 的组合规则。生成参数见 [CLI 参考](cli.md)。
 
 ### SQL 数据库变体
 
-内部 `templates.Render(Project, Options)` 返回完整文件计划；`Options.Database` 为空时采用 SQLite，数据库枚举为 `sqlite`、`mysql`、`postgres`、`none`。未知枚举直接拒绝，不生成部分文件。`Default` 保持默认模板语义。
+数据库在生成时确定，生成后的服务不会在运行时切换数据库。省略 `--db` 时使用 SQLite；支持 SQLite、MySQL、PostgreSQL 和无数据库模式。未知选项会在写入文件前被拒绝。
 
-选择发生在生成阶段：产物只包含对应驱动、配置字段、SQL 方言、测试与使用文档，不在运行时切换数据库。共用 Handler → Biz → Store、JWT、错误和生命周期。依赖清单按变体固定，构建使用 readonly；渲染不联网、不 tidy、不写文件。
+数据库选择在生成项目时确定，服务运行期间不会切换数据库。生成结果只包含所选数据库对应的驱动、配置、迁移和使用说明；各数据库选项共用相同的业务层和认证规则。
 
 SQLite 保持文件、连接 PRAGMA 和单实例约定。MySQL、PostgreSQL 采用强类型 host/port/user/password/name，不接受自由 DSN；默认端口分别为 3306、5432，用户及数据库名默认项目名，密码无默认值。连接池默认最多 4 个连接、2 个空闲连接，连接寿命 30m、空闲寿命 5m、连接预算 5s，慢查询阈值 200ms。连接预算限制在 1s 至 30s，池寿命必须为正且空闲寿命不得超过连接寿命。
 
@@ -98,31 +88,21 @@ SQLite 保持文件、连接 PRAGMA 和单实例约定。MySQL、PostgreSQL 采�
 
 JWT 主体限制为 1 至 128 个 Unicode 字符，拒绝控制字符及首尾空白，三个数据库保持一致的资源归属与名称唯一语义。MySQL 使用 utf8mb4 二进制排序规则；PostgreSQL 文本使用 C 排序规则。所有读写时间使用 UTC。MySQL 更新使用匹配行数，重复写入相同值不能把已有资源误报为 404。
 
-显式 `migrate status/up` 共用命令；status 和启动检查不创建 Goose 表。期望版本从嵌入 SQL 推导；status 只显示已应用最大版本，启动核对完整已应用集合及实际列，up 只接受有序前缀，拒绝未知版本和中间断档，不自动修复历史。就绪依赖 Ping。资源 schema 原型与方言草稿的约束见 [资源接入方案](resource-generation.md#迁移版本与资源-schema) ，完整 CRUD/CLI 状态见 ROADMAP。SQLite/PostgreSQL 迁移使用方言支持的事务；MySQL DDL 不具备事务回滚，迁移失败后必须核对实际 schema，不通过自动重试修补部分 schema。退出和启动失败均关闭连接池。
+迁移通过 `migrate up` 显式执行；服务启动只检查 schema，不会自动建表或迁移。`migrate status` 显示已应用的最高版本，不代替 schema 核验。迁移失败后检查数据库实际结构，再决定如何处理；MySQL DDL 不能事务回滚。启动失败和服务退出都会关闭连接池。
 
 外部数据库的 `dev init` 只创建开发 JWT 密钥并设置开发明文连接；需要先由环境安全提供数据库密码，再执行保留已有配置、Token、迁移与服务命令。脚手架不部署数据库、不创建生产账号。
 
-### 验收
-
-普通检查对三个 SQL 变体执行实际渲染、readonly 测试、vet、race、lint 与构建，并核对驱动裁剪、清单不可变及文档链接。外部数据库未配置时，生成项目明确跳过需要真实服务的测试，不能据此声明数据库已验证。
-
-`make template-db` 显式启动本次隔离的固定摘要 MySQL、PostgreSQL 容器、全新数据卷和随机回环端口。测试账号仅用于该次验证；测试夹具创建随机命名的独立数据库，结束关闭连接并仅删除自己创建的数据库。真实验收禁止跳过外部用例，覆盖空库只读检查、迁移重放、约束与大小写、事务回滚、零值更新、Context、数据库关闭、错误脱敏、HTTP 跨主体隔离与服务重启持久化。
-
-数据库认证失败、TLS 不可信、无效 CA、取消、缺 schema、错误 schema 或池关闭均必须失败；启动失败不能泄露连接池。基础 CRUD 验证不代替业务上线前的容量、备份恢复和数据库权限评估。
-
 ### 无数据库变体
 
-`Database: "none"` 在生成时移除数据库配置、ORM、数据库驱动、迁移、模型与 Store；目录 `variants/none/` 仅维护无数据库示例、必要测试、依赖清单和使用文档的替换模板，其余 HTTP/JWT 基础能力共用基础模板。生成项目不使用内存仓储模拟持久化。
+使用 `--db=none` 时，生成项目不包含数据库驱动、迁移、模型或 Store，也不会用内存仓储假装数据已经持久化。此模式保留 HTTP/JWT 能力，示例接口提供认证后的问候响应。
 
 示例采用 Handler → Biz，`GET /v1/examples` 必须通过 JWT 认证，返回 `{"message":"hello, world","subject":"alice"}`。可选 query `name` 默认 `world`，显式提供时为 1 至 80 个 Unicode 字符，拒绝无效 UTF-8、控制字符与首尾空白。Handler 拒绝未知或重复参数及错误百分号编码；Biz 校验输入、请求主体并传播取消或 deadline。没有资源 CRUD 路由、写入或重启持久化承诺。
 
 保留配置优先级与强类型校验、开发密钥初始化/签发、HTTP TLS/CORS、日志脱敏、请求预算和优雅退出；就绪只反映服务生命周期。`migrate` 命令直接报错且不创建文件，帮助与 Makefile 不登记迁移；`make dev` 仅初始化并启动。旧数据库 YAML 字段作为未知配置拒绝。Docker 继续使用固定构建镜像与非 root scratch 运行，不创建或声明数据库数据目录。
 
-验收以实际生成模块为对象：readonly 测试、vet、race、lint、本机构建与 Linux 纯 Go 构建；核对依赖树和交付文件不含 ORM/驱动/迁移，清单不变。真实进程无需数据库即可启动，覆盖 JWT、两个主体、输入边界、未登记方法/资源、重启、退出及日志脱敏。数据库模板继续执行原有回归。
-
 ### Redis 可选能力
 
-`Options.Redis` 默认 false，可与四个数据库枚举组合。开启时才生成 `internal/pkg/cache/`、Biz 缓存接口与示例、配置、依赖、测试、Swagger 错误响应和 `docs/redis.md`。`variants/redis/common/` 保存共用客户端及缓存模板；各数据库子目录保存对应完整依赖清单。运行时不提供启停功能开关。缓存不改变 JWT 或 Casbin 存储，不包含集群、锁、队列或限流。
+`--redis` 默认关闭。开启后才生成缓存接口、Redis 客户端和相关配置。运行时不提供缓存开关；缓存不改变 JWT 或 Casbin 存储，也不提供集群、锁、队列或限流。
 
 强类型配置为 address、username、password、db、key_prefix、ttl、command_timeout、dial_timeout、pool_size、required、tls、ca_file。默认地址 `127.0.0.1:6379`、DB 0、项目名 namespace、TTL 30s、命令预算 200ms、拨号上限 1s、池大小 4、required false、TLS true；无默认密码。TTL 限 1s 至 5m，命令预算限 1ms 至 5s 且小于 HTTP 请求预算，拨号限 1ms 至 5s，池大小 1 至 64，DB 0 至 15，namespace 只允许 1 至 64 个 ASCII 字母/数字/冒号/下划线/连字符。生产需要密码和验证证书的 TLS 1.2+，私有 CA 通过 ca_file 加入；开发初始化设置开发明文连接，不提供密码或部署 Redis。真实密钥和凭据不进入日志。
 
@@ -132,11 +112,11 @@ SQL 示例只缓存按主体与 ID 读取的成功结果，列表、404 与错�
 
 默认可选缓存：连接不可用或内部缓存预算用尽时记录脱敏事件，读取回源，不影响就绪；调用方取消/deadline 仍返回超时，不作为可选故障吞掉。required true：启动连接失败关闭客户端并失败，就绪依赖 Ping；读取和业务写入前检查失败返回 `unavailable`（HTTP 503）。缓存写入与 SQL 不具备跨系统事务，已完成的 SQL 写入不因后续缓存失效失败而报错；失效失败记录事件，旧值由 TTL 限制。并发 miss 与写入也可能回填旧值，首版不承诺强一致，资源撤销或强一致读取应绕过缓存。Redis 不能作为示例业务的唯一权威状态。
 
-生命周期统一由 App 持有，启动失败及退出关闭连接池；可选依赖恢复后下一次操作重新使用连接。TLS、CA 或配置本身无效始终失败，不能借可选模式忽略安全配置错误。普通检查验证四种开启组合与默认裁剪；真实验收使用独立 Redis 实例、随机端口、密码、TLS 证书和 namespace，不 FLUSHDB/FLUSHALL，不修改已有实例，覆盖 TTL、命中/失效/回源、坏值、主体隔离、运行中取消、认证/TLS、必需依赖故障、恢复与关闭。
+应用负责关闭 Redis 连接。可选缓存不可用时读取回源；必需缓存不可用时请求失败。TLS、CA 或配置错误始终会使启动失败，不会因为缓存设置为可选而忽略。
 
 ### Casbin 可选能力
 
-`Options.Authz` 支持 `none`（默认）与 `casbin`，其他值在渲染前拒绝；可与四种存储选择及 Redis 组合，当前生成项目均使用 JWT。开启时才生成授权组件、配置、策略文档、测试和 Casbin 依赖。所有业务入口在 JWT 之后、业务处理之前执行授权；存活/就绪检查保持公共入口，未登记入口不获得权限。后续 HTTP/RPC 统一使用资源与操作，而不是将 URL 当作策略。
+`--authz=casbin` 可启用 RBAC 授权，默认关闭。开启后所有业务入口先验证 JWT，再检查授权；未配置允许规则时默认拒绝。健康检查仍可公开访问。HTTP 和 RPC 使用相同的资源与操作权限定义。
 
 首版使用固定简单 RBAC 模型、精确匹配，不接受自定义模型、通配符、表达式、角色继承或超级管理员绕过。内置权限资源为 `example`，SQL 模式操作为 `read/create/update/delete`，无数据库模式仅 `read`。HTTP GET 列表和详情映射 read，POST 映射 create，PATCH 映射 update，DELETE 映射 delete。其他业务从模块的纯权限描述显式登记，未声明的资源或操作拒绝；声明权限不代表授予任何用户。Biz 始终继续校验主体及资源归属，拥有操作权限不代表可以访问他人的资源；JWT 主体不能自行指定角色。
 
@@ -152,13 +132,11 @@ SQL 策略复用已选 GORM 连接，独立 `casbin_rules` 表由 Goose 第 2 �
 
 授权判定使用普通同步 Enforcer，关闭判定缓存和 g 函数缓存；只发布经过校验的完整模型，不暴露 SDK 指针。调用方 Context 在加载、保存和判定前后检查；未知资源/操作、无角色或无权限均拒绝，未认证返回 401、权限不足返回 403，内部模型错误返回脱敏 500，调用方取消/deadline 返回 504。
 
-验收覆盖开启/关闭时的文件、依赖、配置与迁移裁剪，四种存储及 Redis 的 16 种渲染组合；所有新增开启组合完成 readonly 测试/vet/race/lint 与 Linux 纯 Go 构建。真实 SQLite、MySQL、PostgreSQL 和只读文件验证默认拒绝、允许/拒绝、角色命名碰撞、主体隔离、导入与撤销、重载、输入边界、取消、存储失败及事务回滚；Redis 组合验证缓存命中不会绕过授权。外部数据库验收显式运行且不得跳过，不触及已有数据库或生产策略。
-
 ## 纯 gRPC 模板
 
-`Options.Transport` 支持 `http`（默认）、`grpc`、`dual` 与 `gateway`；dual 约束见 [dual 模板](templates.md#dual-模板)，Gateway 约束见 [Gateway 模板](templates.md#gateway-模板)。复用 Biz、Store、JWT、Casbin 与 Redis，纯 gRPC 不交付 Gin、HTTP 配置／中间件、Swagger 或业务 HTTP 服务。
+`--transport` 支持 `http`（默认）、`grpc`、`dual` 与 `gateway`。各协议共用相同的业务层、存储、JWT、Casbin 与 Redis 规则；纯 gRPC 项目不提供 HTTP 服务或 HTTP 接口文档。
 
-Proto 源位于 `api/proto/example/v1/`，已生成代码位于 `pkg/api/example/v1/`，供其他 Go 服务导入协议类型；Handler 位于 `internal/apiserver/handler/grpc/example/`，服务及拦截器位于 `internal/pkg/rpc/`。提供示例客户端和固定版本的显式协议生成入口，普通构建不运行 protoc、不安装工具或 tidy。四种存储 × Redis 开关 × Casbin 开关共 16 种组合均需 readonly 编译，代表组合完成实际调用。
+Proto 源位于 `api/proto/example/v1/`，已生成代码位于 `pkg/api/example/v1/`，可供其他 Go 服务导入。生成项目提供示例客户端和显式协议生成入口；普通构建使用已生成代码，不要求安装 Proto 工具。
 
 资源模块各自使用 `api/proto/<module>/v1/<module>.proto` 与 `pkg/api/<module>/v1/`。`scripts/proto.py` 按模块路径排序并复现所有模块协议，检查 protoc 与插件固定版本；新资源的 HTTP、RPC 与 dual 渲染共用一次 Store/Biz 组装，dual 的两种 Handler 接收同一个 Biz。资源 CRUD 使用独立 `<Name>Service`，权限目录按每个服务的 FullMethod 精确映射；创建必需字段与 PATCH 更新字段采用 Proto3 optional 保留出现性，不暴露 owner。
 
@@ -178,15 +156,9 @@ SQL 提供 CRUD，无数据库提供认证问候。Proto3 optional 保留 PATCH 
 
 不生成业务流。Stream 拦截器仅放行 Health Watch，以及已显式开启且通过 JWT 的 Reflection；其他流式入口拒绝。证书或监听失败关闭已初始化资源，不自动迁移。
 
-### 验收与依据
-
-验证 16 组合裁剪、固定清单、Linux 纯 Go 构建；代表产物执行 test/vet/race/lint 与真实 RPC，覆盖 CRUD／问候、零值／分页、归属与角色隔离、未知字段、JWT/Casbin、请求 ID、取消/deadline、panic／原始错误脱敏、消息限制、健康 Watch／故障恢复、优雅与强制退出、TLS 信任／主机名、Reflection、启动失败、持久化及日志脱敏。实际执行交付的 Proto 生成脚本逐字节比对产物，并用独立 Go 模块导入 `pkg/api/example/v1`；新增 RPC 的权限登记遵循安全链要求。真实 SQL／Redis 沿用隔离夹具，禁止跳过或触及已有实例；生产 TLS 容器验证非 root、只读根文件系统与证书／策略只读挂载。
-
-依据：[Health 文档](https://grpc.io/docs/guides/health-checking/) 、[优雅关闭文档](https://grpc.io/docs/guides/server-graceful-stop/) 、[Reflection 文档](https://grpc.io/docs/guides/reflection/) 。固定版本及维护证据沿用本日已核验的 [依赖方案](dependencies.md) 。
-
 ## dual 模板
 
-`Options.Transport: "dual"` 选择双协议模板。Gin HTTP 与 gRPC 使用独立 Handler，共用同一个 Biz 实例、JWT、所选存储及可选 Redis 和 Casbin；启用数据库时共用 Store 与连接池，无数据库时仅采用 Handler → Biz。HTTP 不转发到 gRPC。当前交付与后续检查点状态统一见 [ROADMAP](../ROADMAP.md)。
+`--transport=dual` 同时启动 HTTP 与 gRPC。两种协议分别处理请求，但共用业务逻辑、数据库连接、JWT 和授权规则；HTTP 请求不会转发到 gRPC。
 
 ### 配置与源码
 
@@ -202,17 +174,9 @@ Redis 命令预算必须小于两个协议的请求预算。所有业务入口�
 
 两个服务并发运行；收到退出信号或任一服务返回时，先停止两侧就绪，再取消两侧服务生命周期。HTTP 与 gRPC 并发排空，各使用其配置的关闭预算，整体排空预算为二者较大值，而非两者相加；超时分别强制关闭连接／RPC。两个 Serve 均返回后再统一关闭缓存、数据库和日志。健康 Watch 和开发 Reflection 遵循纯 gRPC 规则。
 
-### 验收
-
-四种存储 × Redis 开关 × Casbin 开关共 16 种 dual 组合均需生成、readonly 编译及 Linux 纯 Go 构建。SQLite／无数据库代表组合完成 test、vet、race、lint、实际 HTTP／RPC 调用与 Proto 复现。
-
-覆盖跨协议创建、读取、零值更新、删除、分页／文本边界、JWT 失败、主体与角色隔离、权限撤销先于缓存、请求 ID、取消与 deadline；验证两个端口分别占用、证书失败、启动清理、依赖关闭、同时排空、强制关闭、任一 Serve 异常和重启持久化。真实 MySQL／PostgreSQL、TLS Redis 与生产双端口容器使用现有隔离夹具，不触及已有实例。
-
-现有协议契约见 [HTTP](templates.md#默认-http-模板) 与 [gRPC](templates.md#纯-grpc-模板) ，缓存和授权见 [数据库与可选能力](templates.md#数据库与可选能力) 。
-
 ## Gateway 模板
 
-`Options.Transport: "gateway"` 选择 HTTP → gRPC Handler → Biz 的真实转发模式；保留直接 gRPC 入口，不生成 Gin、HTTP 业务 Handler 或重复 Biz。四种存储与 Redis／Casbin 开关组合，共 16 种；当前交付状态见 [ROADMAP](../ROADMAP.md)。
+`--transport=gateway` 同时提供 HTTP 和 gRPC 入口。HTTP 请求会通过 Gateway 转发到 gRPC，再调用业务逻辑；服务也保留直接 gRPC 入口，不会生成重复的业务实现。
 
 ### 协议与输入
 
@@ -229,9 +193,3 @@ CRUD 资源通过独立 RPC Handler 和 `http.yaml` 映射接入，不生成重�
 HTTP 默认 `127.0.0.1:8080`，gRPC 默认 `127.0.0.1:9090`；`serve --address` 与 `--grpc-address` 分别覆盖。沿用两侧预算、TLS、CORS、健康和开发 pprof 约定。新增 `gateway.ca_file`、`gateway.server_name` 仅用于本进程 Gateway 到本进程 RPC 的证书验证；生产 gRPC 必须 TLS，绝不跳过证书校验。客户端目标由实际监听地址确定，通配监听转为回环，不提供任意上游地址或独立外部服务模式。
 
 先绑定两端口，启动 RPC，再在有限启动预算内完成健康 RPC 和 TLS 验证，最后开放 HTTP。任一启动失败回收监听器、RPC、转发连接和共享依赖；不自动迁移。正常退出先停止两侧就绪，排空 HTTP，HTTP 返回后才关闭转发连接、排空 RPC，最后关闭共享依赖。关闭总预算为两侧预算之和。RPC 意外返回时同样回收 HTTP，允许其在预算内失败退出。
-
-### 验收
-
-16 种组合 readonly 编译、Linux 纯 Go 构建；SQLite／无数据库代表项目 test、vet、race、lint、实际 HTTP／RPC、Proto／Gateway／Swagger 逐字节复现。验证认证授权先于缓存、跨协议 CRUD／问候、零值更新、输入边界、错误脱敏、请求 ID、预算取消、端口占用、证书失败、失败回收和顺序排空。真实 MySQL／PostgreSQL、TLS Redis 和双端口生产容器复用隔离夹具，无外部用例跳过。
-
-业务规则及协议边界见 [gRPC](templates.md#纯-grpc-模板) 与 [数据库与可选能力](templates.md#数据库与可选能力) 。实现采用 [官方外部 HTTP 映射方式](https://grpc-ecosystem.github.io/grpc-gateway/docs/mapping/grpc_api_configuration/) 与 [Gateway 定制接口](https://grpc-ecosystem.github.io/grpc-gateway/docs/mapping/customizing_your_gateway/) 。

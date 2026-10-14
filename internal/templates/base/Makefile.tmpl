@@ -4,7 +4,7 @@ GOCACHE ?= $(CURDIR)/.tmp/go-cache
 GOMODCACHE ?= $(CURDIR)/.tmp/mod-cache
 GOLANGCI_LINT_CACHE ?= $(CURDIR)/.tmp/lint-cache
 export GOCACHE GOMODCACHE GOLANGCI_LINT_CACHE
-export GOTOOLCHAIN := go1.26.4
+export GOTOOLCHAIN := local
 export GOWORK := off
 
 .DEFAULT_GOAL := check

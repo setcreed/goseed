@@ -75,18 +75,23 @@ func TestDefaultPlan(t *testing.T) {
 			t.Fatalf("unexpanded variable: %s", file.Path)
 		}
 	}
-	var swagger, registry []byte
+	var swagger, registry, makefile []byte
 	for _, file := range first {
 		switch file.Path {
 		case "api/openapi/swagger.json":
 			swagger = file.Content
 		case "internal/apiserver/bootstrap/modules_gen.go":
 			registry = file.Content
+		case "Makefile":
+			makefile = file.Content
 		}
 	}
 	digest := sha256.Sum256(swagger)
 	if len(swagger) == 0 || !bytes.Contains(registry, []byte("const openAPISHA256 = \""+hex.EncodeToString(digest[:])+"\"")) {
 		t.Fatal("default module registration index does not contain the rendered OpenAPI digest")
+	}
+	if !bytes.Contains(makefile, []byte("export GOTOOLCHAIN := local")) || bytes.Contains(makefile, []byte("go1.26.4")) {
+		t.Fatal("generated projects must use the installed Go toolchain that satisfies go.mod")
 	}
 }
 

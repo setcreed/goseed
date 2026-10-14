@@ -4,16 +4,15 @@
 
 goseed 是面向中小型 Go 后端业务的项目与业务代码生成器。生成的业务项目包含完整源码，可以独立开发、测试和部署，不依赖 goseed 的运行时框架。
 
-目标默认行为是无参数生成 HTTP、SQLite、JWT 基础项目；数据库、协议、缓存和授权能力通过生成参数选择。完整功能契约以 `docs/requirements.md` 与 `docs/cli.md` 为准，当前可用能力以 README 为准。
+目标默认行为是无参数生成 HTTP、SQLite、JWT 基础项目；数据库、协议、缓存和授权能力通过生成参数选择。使用能力与命令契约以 README、`docs/cli.md` 和 `docs/templates.md` 为准，当前开发状态与后续规划见 ROADMAP 和施工计划。
 
 开发主线聚焦项目生成、模块骨架与简单 CRUD 的可用性和生成质量。扩展须有实际业务试用中的问题证据；账号、消息、任务、多实例和 Kubernetes 等候选方向不因已列入文档而自动进入开发。当前优先事项与启用条件统一以 ROADMAP 为准。
 
 ## 文档与工作流入口
 
-- `docs/development.md`：新电脑环境恢复、实现入口、验证层次和公开仓库准备；不依赖聊天记录。
+- `docs/development.md`：贡献者本地构建、验证入口和源码导航。
 - `ROADMAP.md`：当前状态、检查点、阻塞和最近验证；开始任务时先读。
 - `README.md`：仓库当前真实状态和已验证的使用入口。
-- `docs/requirements.md`：产品需求、范围和验收标准。
 - `docs/architecture.md`：目录、分层、技术方案和生产运行约定。
 - `docs/cli.md`：命令、参数、生成行为和组合约束。
 - `docs/implementation.md`：按依赖顺序执行的开发与验证计划；D6 资源生成施工清单定义任务编号、前置条件、修改范围、失败路径和验收门槛，当前任务状态只维护在 ROADMAP。

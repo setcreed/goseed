@@ -1,152 +1,94 @@
 # goseed
 
-面向中小型 Go 后端业务的项目脚手架与业务代码生成器。生成结果拥有完整源码，可以独立开发、测试和部署，不需要 goseed 运行时框架。
+面向中小型 Go 后端业务的项目与业务代码生成器。生成的项目包含完整源码，可以独立开发、测试和部署，不依赖 goseed 运行时。
 
-默认在空目录生成 **HTTP + SQLite + JWT** 项目；通过参数选择数据库、协议、Redis 和 Casbin。持久化业务采用 Handler → Biz → Store 分层，配置、日志、认证、迁移和服务生命周期按清晰边界组织。
+默认生成 **HTTP + SQLite + JWT** 项目，也可选择 MySQL、PostgreSQL、无数据库、Redis、Casbin、gRPC、dual 或 Gateway。
 
-## 当前能力
+## 功能
 
-| 能力 | 当前交付 |
-|---|---|
-| 项目生成 | 无参数默认项目、项目命名、Go module、dry-run、冲突保护 |
-| 数据库 | SQLite、MySQL、PostgreSQL、无数据库；按选项裁剪驱动、配置和源码 |
-| 协议 | HTTP、gRPC、dual、Gateway；已有示例业务与对应安全链 |
-| 认证 | JWT 为固定基础能力，提供明确的本地开发签发工具 |
-| 授权 | 可选 Casbin RBAC、默认拒绝、SQL 或只读文件策略 |
-| 缓存 | 可选 Redis；示例缓存、TTL、可选回源与必需依赖检查 |
-| 可观测性 | 可选 OpenTelemetry 指标与追踪，OTLP/HTTP 主动推送；默认关闭 |
-| 单机部署 | 显式生成 systemd/Nginx 配置副本、权限/TLS 指引与所选数据库备份恢复脚本 |
-| 工程基础 | 强类型配置、Zap 日志、Context、业务错误、显式迁移、健康检查、TLS 与有限期关闭 |
-| 部署文件 | 独立 Go module、Makefile、非 root Dockerfile、所选能力的开发配置 |
-| 业务模块 | `gen module` 创建无业务操作的结构骨架，登记协议与文档 |
-| CRUD 资源 | `gen resource` 按 spec 生成主体隔离 CRUD、四协议适配、登记与 OpenAPI 汇总，可选 SQL 迁移草稿 |
+- 生成可独立构建的 Go 服务，默认提供主体隔离的示例 CRUD。
+- 按选项生成数据库、协议、认证授权、缓存、可观测性和单机部署文件。
+- 使用 `gen module` 增加业务模块，使用 `gen resource` 生成 CRUD 资源和协议适配。
+- 生成的服务带有配置校验、显式迁移、健康检查和有期限的优雅关闭。
 
-四种协议 × 四种存储 × Redis 开关 × Casbin 开关，共 64 种初始项目组合。生成结果和必要运行依赖按能力选择，不默认引入所有驱动与服务。当前命令契约见 [CLI](docs/cli.md)，验收与进度见 [ROADMAP](ROADMAP.md)。
+## 快速开始
 
-## 从源码构建
-
-最低要求为 Go **1.26.4**；日常构建使用本机已安装的兼容版本，低于最低版本时会报错，不自动下载工具链。主模块为 `github.com/setcreed/goseed`。需要 Git、Make 和 Python 3.9+；首次构建仍需下载项目依赖。
+需要 Go 1.26.4 或更新的兼容版本、Git 和 Make。首次构建会从 Go 模块代理下载依赖。克隆并构建生成器：
 
 ```sh
 git clone https://github.com/setcreed/goseed.git
 cd goseed
-make contract-check
 make build
-./bin/goseed --help
-./bin/goseed --version
 ```
 
-从固定源码版本安装到指定目录：
+在一个新的空目录中生成默认项目并启动本地开发服务：
 
 ```sh
-git checkout v0.1.0
-make install VERSION=v0.1.0 GOBIN="$HOME/.local/bin"
-"$HOME/.local/bin/goseed" --version
+GOSEED="$(pwd)/bin/goseed"
+mkdir -p ../goseed-demo
+cd ../goseed-demo
+"$GOSEED" --name demo --module example.com/demo
+
+make build
+./bin/apiserver dev init
+./bin/apiserver migrate up
+./bin/apiserver serve
 ```
 
-`v0.1.0` 仅为命令示例；执行前应替换成仓库中已存在且经过审核的 tag。本项目尚未创建 tag 或公开 release。
-
-本地生成单平台归档并校验：
+`serve` 启动后默认监听 `127.0.0.1:8080`。另开终端，在生成项目目录中创建开发 Token 并调用示例接口：
 
 ```sh
-make package VERSION=v0.1.0 GOOS=darwin GOARCH=arm64
-make verify-package ARCHIVE=.tmp/dist/v0.1.0/goseed_v0.1.0_darwin_arm64.tar.gz
+cd /path/to/goseed-demo
+TOKEN="$(./bin/apiserver dev token --subject alice --ttl 15m)"
+curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"first","description":"hello"}' \
+  http://127.0.0.1:8080/v1/examples
+curl -H "Authorization: Bearer $TOKEN" \
+  http://127.0.0.1:8080/v1/examples
 ```
 
-归档包含生成器、README、MIT 许可证、构建依赖许可证副本和版本清单；清单记录源提交、生成器/模板/spec 版本及二进制摘要。SHA-256 文件用于检测归档损坏，不是签名或来源证明。`make install` 需要显式指定 `GOBIN` 和版本；为保证归档可复现，`make package` 固定使用 Go 1.26.4，并拒绝未固定版本或有改动的工作区。本地归档保存在忽略目录 `.tmp/dist/`，当前不代表公开发行包。
+`dev init` 只用于本地开发，会创建私有配置和随机 JWT 密钥。生产环境必须由部署方安全提供密钥；服务启动不会自动执行数据库迁移。生成项目的 README 包含该项目对应的运行、配置和部署说明。
 
-`goseed --version` 同时显示生成器版本、源码提交、模板版本和资源 spec 版本；项目元数据与旧项目兼容边界、人工升级方式见 [开发指南](docs/development.md#版本兼容与人工升级)。
+## 选择能力
 
-本地二进制运行证据：
-
-| 目标 | 归档构建 | 运行与生成检查 |
-|---|---|---|
-| macOS arm64 | 通过 | 本机运行通过 |
-| macOS amd64 | 通过 | Apple Silicon 上经 Rosetta 2 运行通过；未在 Intel Mac 实机验证 |
-| Linux arm64 | 通过 | 固定 Alpine 构建容器内运行与项目生成通过 |
-| Linux amd64 | 通过 | Debian amd64 容器模拟运行、默认项目生成及 HTTP 健康/认证创建与列表检查通过；未在原生 amd64 硬件验证 |
-
-Windows 原生运行不在当前支持范围。交叉构建成功本身不代表目标平台已验证；后续实际平台证据以路线图为准。
-
-使用刚构建的可执行文件生成独立项目：
-
-```sh
-GOSEED_BIN="$(pwd)/bin/goseed"
-mkdir ../shop
-cd ../shop
-
-# 项目名和 module 独立指定；先查看计划，再写入
-"$GOSEED_BIN" --name shop --module github.com/acme/shop --dry-run
-"$GOSEED_BIN" --name shop --module github.com/acme/shop
-```
-
-下面是另一种能力组合，应在另一个空项目目录执行：
+生成器默认使用 SQLite 和 HTTP。下面的示例展示其他组合；需要外部数据库或 Redis 时，先准备对应服务，再按生成项目 README 配置连接信息。
 
 ```sh
 goseed --name shop --module github.com/acme/shop \
   --db=postgres --redis --authz=casbin --transport=dual
 ```
 
-上例假定已将构建的 goseed 加入 PATH。生成命令只生成文件，不执行 Git、依赖安装、数据库迁移、容器启动或部署。已有文件冲突会被拒绝；业务项目的运行步骤以它自身生成的 README 为准。
+`--dry-run` 可先查看计划和文件冲突。项目生成、模块和资源命令的参数与组合规则见 [CLI 参考](docs/cli.md)；生成项目的协议、数据库、安全和缓存行为见 [模板指南](docs/templates.md)。
 
-`--metrics` 与 `--tracing` 可独立选择；它们默认关闭，启用时需在生成项目的运行环境设置独立 OTLP/HTTP 信号出口，见生成项目 README。
-
-`--deployment=single-host` 显式生成 systemd/Nginx 单机部署副本，默认不增加这些文件；SQLite、MySQL 和 PostgreSQL 项目会生成对应备份工具说明。样例不会安装系统服务、写主机目录或运行迁移。实际 systemd/Nginx 隔离运行验收状态见 [ROADMAP](ROADMAP.md)。
-
-## 为已有项目增加模块
-
-在 goseed 生成的业务项目目录执行：
+在已生成的项目中增加业务代码：
 
 ```sh
 goseed gen module orders --dry-run
 goseed gen module orders
-```
-
-该命令创建 Biz/Handler 与所选数据库的 Store 骨架，生成一次性模块工厂，安全更新元数据、协议登记和 OpenAPI 汇总。Handler 不虚构业务端点，开发者补齐领域规则、路由与权限。既有手工工厂和业务源码受到保护，写入失败恢复本次新增/更新内容。
-
-为业务项目增加 CRUD 资源：
-
-```sh
 goseed gen resource product --spec specs/product.yaml --dry-run
 goseed gen resource product --spec specs/product.yaml --migration
 ```
 
-`--spec` 必须位于项目 `specs/` 目录。gRPC、dual 和 Gateway 项目需要先在业务项目内执行 `make proto-tools`，生成器只使用项目锁定的本地工具。`--migration` 只创建待审核 SQL 草稿，不连接数据库或执行迁移；使用字段、写入保护与失败回滚契约见 [CLI](docs/cli.md) 和 [资源接入方案](docs/resource-generation.md)。
+资源 spec 示例和字段约束见 CLI 参考。`--migration` 只生成待审阅的 SQL 草稿，不连接或修改数据库。gRPC、dual 和 Gateway 项目在生成资源前，先于业务项目执行 `make proto-tools`。
 
-## 开发与验证
+## 部署
 
-```sh
-# 项目内固定工具；不安装全局依赖
-make tools
-make protocol-tools
+默认不生成主机部署文件。使用 `--deployment=single-host` 可加入 systemd/Nginx 配置副本和所选数据库的备份工具；这些文件不会安装服务、修改主机配置或执行迁移。操作步骤、权限、备份恢复和回退边界见[单机部署指南](docs/deployment.md)。
 
-# 全仓检查，含独立生成项目和回环进程验收
-make check
-make race
+## 文档
 
-# 显式真实服务/容器验收，需要 Docker、Compose 和 OpenSSL
-make template-db
-make template-redis
-make template-container
-```
+使用者从快速开始出发，按需要查阅以下参考：
 
-普通检查不启动 Docker；外部数据库/Redis 用例缺少专用凭据时可能跳过，显式真实服务目标禁止跳过。所有服务验证使用本次隔离资源、随机回环端口和独立数据，结束仅清理本次对象。验证临时项目与缓存位于 `.tmp/`，工具位于 `.tools/`，均不入 Git。
+- [CLI 参考](docs/cli.md)：项目、模块、资源命令和参数。
+- [模板指南](docs/templates.md)：生成服务的配置、协议、安全与运行行为。
+- [单机部署指南](docs/deployment.md)：systemd/Nginx、权限、备份恢复和升级回退。
 
-换电脑恢复、分层源码导航和定向检查命令见 [开发指南](docs/development.md)。项目固定版本见 [dependencies.lock.json](dependencies.lock.json)，维护与许可证核验记录见 [依赖方案](docs/dependencies.md)。历史验证结果不能代替新环境重跑。
+维护者资料、开发记录和后续规划单独列出，不影响使用者的上手路径：
 
-## 文档入口
-
-| 文档 | 内容 |
-|---|---|
-| [AGENTS](AGENTS.md) | 项目规范、工程边界和协作流程 |
-| [需求](docs/requirements.md) | 产品场景、默认行为、首版范围与验收 |
-| [架构](docs/architecture.md) | 目录、分层、配置、日志、存储和生命周期 |
-| [CLI](docs/cli.md) | 参数、生成行为、字段规范与文件归属 |
-| [施工清单](docs/implementation.md) | 从零建设的阶段、依赖、失败路径和交付门槛 |
-| [开发指南](docs/development.md) | 新电脑恢复、实现入口、验证与公开准备 |
-| [资源接入](docs/resource-generation.md) | 业务生成的计划、协议、权限与兼容设计 |
-| [模板指南](docs/templates.md) | HTTP、数据库与可选能力、gRPC、dual、Gateway 的运行和验收契约 |
+- [开发指南](docs/development.md) · [架构说明](docs/architecture.md) · [资源生成设计](docs/resource-generation.md)
+- [依赖与许可证记录](docs/dependencies.md) · [施工计划](docs/implementation.md) · [项目进度与验证记录](ROADMAP.md)
+- [协作规范](AGENTS.md)
 
 ## 许可证
 
-[MIT](LICENSE)。第三方依赖及生成代码中的版权/许可说明继续适用，详细范围见 [许可证记录](docs/dependencies.md#许可证范围)。
+[MIT](LICENSE)。第三方依赖和生成代码继续保留各自适用的版权与许可证声明。

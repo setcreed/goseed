@@ -6,13 +6,13 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 
 初始项目生成与 gen module 可用，支持四协议、四存储及可选 Redis/Casbin，共 64 种初始项目组合。资源阶段 R01 至 R10 已交付，包含公共 `gen resource`、四协议生成、安全写入与失败回滚，以及完整资源组合和真实服务回归。
 
-需求、架构及从零建设的工作顺序见 [施工清单](docs/implementation.md)，新电脑恢复、实现入口与验证方法见 [开发指南](docs/development.md)。本文件是状态唯一来源；从现有进度继续，保留已交付代码与 Git 历史。
+架构、命令行为及从零建设的工作顺序见 [架构说明](docs/architecture.md)、[CLI 参考](docs/cli.md) 和 [施工计划](docs/implementation.md)。本文件保留开发记录与当前状态；从现有进度继续，保留已交付代码与 Git 历史。
 
 ## 阶段快照
 
 | 阶段 | 状态 | 交付边界 |
 |---|---|---|
-| D0 文档与规范 | 已交付 | 独立需求、架构、命令、规范、MIT、公开说明与换机恢复指南 |
+| D0 文档与规范 | 已交付 | 产品范围、架构、命令、规范、MIT 与开发指南 |
 | D1 技术核验 | 已交付 | 固定依赖、工具链、兼容原型、工程检查入口 |
 | D2 默认模板 | 已交付 | HTTP + SQLite + JWT、示例 CRUD 与工程基础 |
 | D3 可选能力 | 已交付 | MySQL/PostgreSQL/无数据库/Redis/Casbin；真实服务验证记录见 Git 历史 |
@@ -35,7 +35,7 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 2. **后续按证据维护生成能力**。仅修复实际试用中复现的阻断或正确性问题；没有具体问题时不新增功能。
 3. **候选方向不自动恢复**。账号、消息、任务、多实例、Kubernetes 和资源声明增强均需具体需求及独立实施指令。
 
-当前维护边界见 [施工清单](docs/implementation.md#证据驱动的生成质量维护)，候选方向见 [需求清单](docs/requirements.md#已盘点但暂不实施的方向)。后续仅按改动风险定向验证，不默认重复 D7 全量长测。
+当前维护边界见 [施工计划](docs/implementation.md#证据驱动的生成质量维护)，候选方向及重新纳入条件见 [暂缓方向](docs/implementation.md#暂缓方向及重新纳入门槛)。后续仅按改动风险定向验证，不默认重复 D7 全量长测。
 
 ## 已知缺口与验证边界
 
@@ -51,6 +51,7 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 
 ## 最近完成
 
+- 2026-10-15 00:34 公开仓库文档整理：将快速开始和默认项目运行流程集中到 README，合并可选模板行为说明，删除重复的需求文档；保留 ROADMAP、施工计划和开发记录。精简贡献者开发指南，并修正生成项目 Makefile 强制下载 Go 1.26.4 的问题，使其使用满足最低版本要求的本机 Go。
 - 2026-10-14 23:59 文档导航整合：将 HTTP、数据库/可选能力、gRPC、dual 与 Gateway 五份模板契约合并为 [模板指南](docs/templates.md)，更新 README、开发阅读顺序及引用；清除已完成部署能力被列为后续方向的旧表述。文档检查器现在会跳过工作区已删除的文件，使文档合并可正常验证。
 
 - 2026-10-14 23:40 D9-P04 Linux amd64 运行补充验收：已校验的 Linux amd64 归档在 Apple Silicon Docker 的 Debian amd64 模拟容器中运行，并以该归档生成默认项目；D9 平台运行检查补齐。此结果不代表原生 amd64 硬件验收。
@@ -89,12 +90,12 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 
 - 2026-10-14 17:08 D7 首版范围与文档核对：对照需求验收项确认默认模板、数据库/无数据库、Redis、Casbin、四协议及 `gen module`/`gen resource` 均有已通过的集成或真实服务证据；同步开发指南至当前实现，核对 README 命令与 CLI 一致。race 按用户决定暂缓，D7 不标记完成。
 
-- 2026-10-14 17:03 D6-R10 与 D6 收口完成：48 种 SQL×协议×Redis×Casbin 资源项目 readonly 编译、16 种无数据库拒绝、原有 64 项目协议/存储组合检查及四协议资源运行回归通过。真实 MySQL 8.4.11、PostgreSQL 18.6、TLS Redis 与 HTTP/gRPC/dual/Gateway/无数据库/Casbin 容器验收均通过，测试资源已清理。完整 `make check` 通过；额外全仓 race 按用户要求停止，未作为通过项记录。D7 转为下一阶段。
 
 
 
 ## 最近验证
 
+- 2026-10-15 00:34 公开文档和生成模板回归：默认生成项目已按 README 流程完成构建、开发配置初始化、SQLite 迁移、健康检查及认证创建/列表请求；`make fmt-check`、`make test GO_PACKAGES='./internal/templates'`、`make contract-check`（71 个本地链接、392 个交付文件）与 `git diff --check` 通过。仅模板包测试使用缓存；未运行 Docker、外部数据库或 race。
 - 2026-10-15 00:06 文档导航整合验证：`make contract-check` 通过（99 个本地链接、393 个实际交付文件），Markdown 本地链接核对与 `git diff --check` 通过；旧模板文件名和已知过期部署/路线表述检索无命中。未运行代码、数据库、Docker 或 race 测试。
 
 - 2026-10-14 23:41 Linux amd64 发行包验收：`make verify-package ARCHIVE=.tmp/dist/goseed_v0.0.0-d9.1_linux_amd64.tar.gz` 通过；发行包在 Debian `trixie-slim` 的 `linux/amd64` 模拟容器中运行 `--version`、`--help` 并生成 52 文件默认项目。生成项目以 Go 1.27.2、`GOOS=linux GOARCH=amd64 CGO_ENABLED=0` readonly 构建；容器中显式初始化 SQLite 迁移、启动服务，health/ready、未认证拒绝（401）和认证创建/列表通过。`make contract-check`（97 个本地链接、397 个交付文件）与 `git diff --check` 通过。测试运行于 Apple Silicon Docker amd64 模拟环境，不代表原生硬件；专用容器和本轮临时目录已清理。
@@ -132,5 +133,3 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 - 2026-10-14 17:13 D7 补充检查：`make compatibility` 与 `make compatibility-cross` 通过，生成的 Linux amd64/arm64、Windows amd64 兼容性测试二进制随后清理；`make protocol-check`（固定 protoc、插件和生成文件匹配）、`make fmt-check`、`make vet` 通过。兼容性原型中的 MySQL/PostgreSQL 子用例按设计跳过，并非真实数据库验证；真实 MySQL/PostgreSQL 已由 `make template-db` 验收。共享 Go 模块缓存保留。全仓 race 暂缓。
 
 - 2026-10-14 17:08 D7 文档与入口验证：`make contract-check`（79 个本地链接、372 个交付文件）、`git diff --check`、`make build` 通过；构建产物实际响应 `goseed --help`、`--version`、`gen module --help` 与 `gen resource --help`，资源参数显示 `--spec`、`--dry-run` 和 `--migration`，与 README 示例一致。README 的项目/模块/资源示例与生成器/生成项目文档核对通过；模板容器 README 明确迁移与策略前置步骤。race 按用户决定暂缓。
-
-- 2026-10-14 17:03 D6-R10 验证：48 种 SQL×协议×Redis×Casbin 资源项目实际经 `PrepareResource`/`Write` 生成并通过 readonly 测试编译；16 种无数据库拒绝及现有 64 项目组合回归通过。真实 MySQL 8.4.11/PostgreSQL 18.6 的 `make template-db`、TLS 密码 Redis 的 `make template-redis`、非 root/只读文件系统等组合的 `make template-container` 全部通过，Docker 测试容器/卷已清理。`make protocol-check`、`make check`（集成包 2195.054 秒、vet、lint 0 issues）、`make build` 通过；工具超时边界增加至 15 秒，定向测试通过。`make race` 按用户要求中断，`tests/integration` 报告 `signal: interrupt`，运行 919.608 秒，不计为通过。中断后仅发现并清理本轮遗留的 `.tmp/d2/render-16425610`；Docker 测试标签无残留容器。

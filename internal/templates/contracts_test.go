@@ -210,7 +210,7 @@ func checkDeliveredOptions(t *testing.T, options Options) {
 		t.Fatal(err)
 	}
 	var lock struct {
-		Go            string            `json:"go"`
+		Go            string            `json:"go_minimum"`
 		Runtime       map[string]string `json:"runtime"`
 		Observability map[string]string `json:"observability"`
 		Builder       string            `json:"service_builder_image"`
