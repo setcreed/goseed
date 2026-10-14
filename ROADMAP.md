@@ -29,11 +29,11 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 
 ## 下一步施工顺序
 
-基础 GitHub Actions CI 已落地，[首轮检查](https://github.com/setcreed/goseed/actions/runs/38609806274) 全部通过；[v0.1.1](https://github.com/setcreed/goseed/releases/tag/v0.1.1) 已正式发布，固定版本和 Latest 安装及缓存回归通过。范围见 [CI 与补丁发布清单](docs/implementation.md#基础-ci-与-v011-补丁发布)。已有项目需按 [旧项目处理说明](docs/templates.md#构建缓存与旧项目处理) 手动更新 Makefile，不自动清理用户缓存或改写已发布标签。
+基础 GitHub Actions CI 已落地，[首轮检查](https://github.com/setcreed/goseed/actions/runs/38609806274) 全部通过；[v0.1.2](https://github.com/setcreed/goseed/releases/tag/v0.1.2) 已正式发布为 Latest，修复资源 `int64` 精度测试与常见 Biz 范围校验冲突。[发布提交的 CI](https://github.com/setcreed/goseed/actions/runs/38614318633)、四平台资产、固定版本和 Latest 安装均已验收。v0.1.1 的缓存修复与旧项目处理范围见 [CI 与补丁发布清单](docs/implementation.md#基础-ci-与-v011-补丁发布) 和[旧项目处理说明](docs/templates.md#构建缓存与旧项目处理)。已有项目仍需手动更新 Makefile，不自动清理用户缓存或改写已发布标签。
 
 安装与 CLI 使用收口及真实远端安装已验收，范围见 [施工清单](docs/implementation.md#安装与-cli-使用收口施工清单)。四平台发行包及 SHA-256 可下载；当前没有已排定的新功能，后续按实际使用反馈维护。发布流程见 [首次版本发布清单](docs/implementation.md#首次版本发布清单)。
 
-D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.1 发布后商品管理试用未发现资源生成、手工扩展、增量登记及基础安全流程的功能阻断；试用中发现的 `MinInt64` 精度测试与常见非负业务约束冲突，当前源码已将该精度断言移至 Store 层。此修正尚未随新版本发布。此前发现的 Makefile 工具链切换问题已在 v0.1.1 修复。
+D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 发布后商品管理试用未发现资源生成、手工扩展、增量登记及基础安全流程的功能阻断；试用中发现的 `MinInt64` 精度测试与常见非负业务约束冲突，已在 v0.1.2 将精度断言移至 Store 层。此前发现的 Makefile 工具链切换问题已在 v0.1.1 修复。
 
 1. **Go 版本策略已落地**。各模块 `go.mod` 声明最低 Go 1.26.4；Makefile 和项目内验证使用 `GOTOOLCHAIN=local`，本机版本满足最低要求即可。可复现发行归档仍固定 Go 1.26.4；CI 从 `go.mod` 选择工具链。
 2. **后续按证据维护生成能力**。仅修复实际试用中复现的阻断或正确性问题；没有具体问题时不新增功能。
@@ -54,6 +54,8 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.1 �
 - D9 已完成本地安装、可复现归档、许可证与 SHA-256 核验、v1 增量兼容及人工维护说明。macOS arm64、Rosetta 下 macOS amd64、Linux arm64 的包运行和生成检查通过；Linux amd64 已在 Apple Silicon Docker 的 amd64 模拟容器中运行发行包，并验证默认项目健康及认证创建/列表，原生 amd64 硬件未验证；Windows 原生不在支持范围。D10 完成指标/追踪模板及本地 OTLP protobuf 接收器验收；D11 已完成真实 systemd/Nginx 服务级验收；D12 至 D17 均暂缓且未实施。
 
 ## 最近完成
+
+- 2026-10-15 02:27 v0.1.2 补丁版发布：资源 Store 精度测试改在存储层直接验证，发布提交 `5af2d2b`；GitHub Actions run `38614318633` 通过。Go 1.26.4 构建 macOS/Linux amd64/arm64 四个平台包及 SHA-256，远端 8 个资产摘要核对一致；固定版本与 `@latest` 安装均为 v0.1.2，Release 已公开为 Latest，资产保留在 `dist/v0.1.2/`。
 
 - 2026-10-15 02:14 资源 Store 精度测试与 Biz 规则解耦：生成的 `int64` 精度边界用例直接调用 Store，避免新增常见的非负业务规则后必须改动通用测试。修正仅影响当前模板源码，v0.1.1 发行内容未改变。
 
@@ -91,10 +93,9 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.1 �
 
 - 2026-10-14 19:30 D9-P03 兼容与维护完成：将 metadata、template、resource spec 版本提升为独立常量；增量 CLI 继续兼容 v1 旧式字符串模块登记与新版映射，并对未知 metadata/template 版本报告受支持值且在计划阶段零文件变更。补充依赖单项升级审查/回归流程和既有项目人工升级步骤。P04 转为当前任务。
 
-- 2026-10-14 19:27 D9-P02 安装与本地打包完成：新增固定 Go 1.26.4 的显式 `make install`、版本/提交/模板/spec 信息及单平台可复现 tar.gz 归档；归档附 Go 构建依赖许可证、JSON 版本清单、二进制摘要与 SHA-256 sidecar，并提供 `make verify-package`。安装和 macOS arm64 归档生成/复现通过；改包校验失败、脏工作区与非法版本均被拒绝。仅制作本地 QA 材料，未发布。
-
-
 ## 最近验证
+
+- 2026-10-15 02:27 v0.1.2 发布验收：CI 运行 `38614318633` 全部通过；四个发行包均验证 manifest 的源码提交、版本、Go 1.26.4、平台和二进制/许可证摘要，macOS arm64 本机版本/帮助通过。GitHub Release 的 8 个资产名与 SHA-256 匹配本地；隔离 GOBIN 的 `go install @v0.1.2` 与 `@latest` 均显示 v0.1.2。用已安装版本生成商品项目、加入手写非负 price/stock Biz 校验，Store/Biz 测试和 vet 通过；草稿公开后复核 Latest 状态。未运行 race、Docker 或外部数据库；发行临时目录随后清理。
 
 - 2026-10-15 02:14 Store 精度回归验证：`make test GO_PACKAGES='./internal/templates'`、对应 vet、格式检查与 diff 检查通过；当前源码生成 SQLite 商品项目后手写 Biz 非负 price/stock 校验，Store/Biz 定向测试以及生成项目 `go test -mod=readonly -timeout=5m ./...` 和 `go vet -mod=readonly ./...` 均通过。未运行 race、Docker 或外部数据库；任务临时项目已清理。
 
@@ -132,5 +133,3 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.1 �
 - 2026-10-14 19:38 D9-P04 清洁提交最终验收：提交 `a5ab852` 上 `make install VERSION=v0.0.0-d9` 安装到隔离目录并显示正确提交/模板/spec；`make package` 从 clean source 生成 macOS/Linux amd64/arm64 四个包，manifest 均记录相同完整提交及 `source_dirty=false`，`make verify-package` 全部通过，macOS arm64 归档重建摘要一致。该 clean commit 的 macOS arm64 本机、macOS amd64 Rosetta、Linux arm64 固定断网容器包均运行 `--version` 并生成 52 个文件。Linux amd64 仍未运行：本机锁定镜像只有 arm64 内容层，强制 amd64 时 Docker 报缺失 layer；保留未验证。Windows 原生未测试。
 
 - 2026-10-14 19:30 D9-P03 回归：`make test GO_PACKAGES='./internal/generator ./internal/cli'`、`make build`、CLI `--version`、`make fmt-check`、`make contract-check`（94 个本地链接、374 个交付文件）和 `git diff --check` 通过。旧 v1 字符串登记夹具实际执行 `PrepareModule`/`Write`/`LoadProject`；metadata/template v2 两个失败夹具明确提示只支持 v1，并以整棵项目文件快照证明无改动。归档复核显示版本字段与当前源码常量一致；测试归档已清理。
-
-- 2026-10-14 19:27 D9-P02 检查：`make test GO_PACKAGES='./cmd/goseed ./internal/generator'`、`make fmt-check`、`make contract-check`（92 个本地链接、374 个交付文件）、`git diff --check` 通过。用户级写入未执行；`make install` 安装到隔离目录后版本输出正确。macOS arm64 归档两次生成 SHA-256 一致，`make verify-package` 验证二进制与全部许可证摘要通过；追加字节并保留原摘要后明确报 archive SHA-256 mismatch，脏工作区/非法版本均拒绝。临时安装、归档、篡改样本与 Python 缓存已清理。
