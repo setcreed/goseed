@@ -33,6 +33,12 @@
     "github.com/go-sql-driver/mysql": "v1.10.0",
     "github.com/jackc/pgx/v5": "v5.10.0"
   },
+  "observability": {
+    "go.opentelemetry.io/otel": "v1.47.0",
+    "go.opentelemetry.io/otel/sdk": "v1.47.0",
+    "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp": "v1.47.0",
+    "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp": "v1.47.0"
+  },
   "protoc": {
     "version": "36.2",
     "release": "https://github.com/protocolbuffers/protobuf/releases/tag/v36.2",

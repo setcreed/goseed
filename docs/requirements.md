@@ -121,7 +121,7 @@ HTTP 默认使用 JSON；gRPC 提供 Proto、注册、拦截器、标准健康�
 
 ### 可观测性与部署
 
-服务指标覆盖请求量、延迟、错误及依赖状态；标签使用已登记的路由/方法，避免用户、Token、原始路径或业务 ID 造成泄露和高基数。追踪沿 HTTP/RPC/Gateway 与后续消息/任务传播受控上下文，不传播认证凭据。观测出口故障不阻断正常业务，关闭有预算。
+服务指标覆盖请求量、延迟、错误及依赖状态；标签使用已登记的路由/FullMethod 和有限状态值，避免用户、Token、原始路径或业务 ID 造成泄露和高基数。D10 选择 OpenTelemetry Go v1.47.0 与 OTLP/HTTP protobuf 主动推送；指标和追踪由独立 `--metrics`、`--tracing` 开关选择，默认关闭并按选项裁剪。不开入站指标端点；远端出口必须 HTTPS，明文 HTTP 仅允许 loopback。出口使用 `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`/`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 与各自的 `*_HEADERS`，不回退到共享 endpoint/headers，也不进入示例配置或日志。追踪采用 parent-based TraceID ratio，默认采样率 0.1，只传播 W3C TraceContext，不传播 baggage、认证凭据或正文。导出超时为 3s、关闭预算为 5s；队列有界，出口故障不阻断正常业务，关闭不超过预算。后续 D13/D14 再增加消息和任务链路。
 
 单机部署先验证非 root、最小写目录、反向代理信任、TLS 与信号关闭；备份恢复只在隔离数据上演练，说明 SQLite/WAL 与外部 SQL 的不同边界。Kubernetes 在多实例状态约束完成后推进；SQLite 不作为共享多副本写存储，迁移不在每个副本启动时自动执行。
 

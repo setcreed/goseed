@@ -402,7 +402,7 @@ D6 完成的必要条件是：公共资源命令及三种数据库/四协议路�
 
 | 任务 | 依赖 | 交付与修改范围 | 验收及关键失败路径 |
 |---|---|---|---|
-| D10-P01 观测契约与选型 | D8 | 指标/追踪独立开关、端点保护、标签、采样、出口超时和 SDK 版本核验 | 未选择时裁剪依赖/配置；禁用仍连接后端或泄露标签视为失败 |
+| D10-P01 观测契约与选型 | D8 | 指标/追踪独立开关、OTLP/HTTP 出口、端点保护、标签、采样、超时及 SDK 固定版本核验 | 未选择时裁剪依赖/配置；禁用仍连接后端或泄露标签视为失败。决策已定：`--metrics` 与 `--tracing` 独立且默认关闭；仅使用 OTLP/HTTP protobuf 主动推送，不开入站指标端点；使用 `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`/`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 与各自 `*_HEADERS`，不回退到共享 endpoint/headers；远端仅通过 HTTPS，明文 HTTP 只允许 loopback；不传播 baggage；采样为 parent-based TraceID ratio，默认 0.1；导出超时 3s、关闭预算 5s；不记录出口凭据并脱敏错误。OpenTelemetry Go SDK/exporter 固定 v1.47.0，官方标签 go.mod 要求 Go 1.26.0。 |
 | D10-P02 指标模板 | P01 | 请求、错误、延迟和依赖状态指标，按已登记路由/FullMethod 聚合 | HTTP/gRPC/dual/Gateway 与无数据库代表用例有确定计数；随机 ID 不造成标签增长 |
 | D10-P03 追踪模板 | P01 | HTTP/RPC/Gateway 上下文传播、有界导出与关闭 | 本地接收端核对父子关系；不采集 Token/正文；出口断连不拖垮业务或阻塞退出 |
 | D10-P04 组合验收 | P02、P03 | 开关组合、实际接收端、敏感信息扫描及开销基线 | readonly 构建与定向 race 通过；记录开销实测，不预设性能提升 |

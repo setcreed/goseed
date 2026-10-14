@@ -2,6 +2,8 @@
 
 运行库维护核验日期：2026-10-10；YAML parser 补充核验日期：2026-10-11。版本清单以 [dependencies.lock.json](../dependencies.lock.json) 为准；原始官方仓库响应快照见 [dependency-audit.json](dependency-audit.json) 。固定直接依赖、间接依赖与校验和保存在主模块、兼容性模块及独立业务模板的依赖清单中。
 
+D10 观测依赖于 2026-10-14 通过 OpenTelemetry 官方 Go 文档、GitHub 发布页、固定标签模块清单及仓库 issue 核验，固定 `go.opentelemetry.io/otel` API/SDK 与 OTLP metric HTTP、trace HTTP exporter 为 v1.47.0。上游 v1.47.0 于 2026-10-02 发布，许可证 Apache-2.0；固定模块 go.mod 要求 Go 1.26.0，与项目 Go 1.26.4 一致。Go 官方文档将 Go 指标与追踪列为 Stable，并说明 OTLP/HTTP exporter 使用 protobuf 负载；证据见 [v1.47.0 release](https://github.com/open-telemetry/opentelemetry-go/releases/tag/v1.47.0)、[固定 API go.mod](https://github.com/open-telemetry/opentelemetry-go/blob/v1.47.0/go.mod)、[trace HTTP exporter go.mod](https://raw.githubusercontent.com/open-telemetry/opentelemetry-go/v1.47.0/exporters/otlp/otlptrace/otlptracehttp/go.mod)、[metric HTTP exporter go.mod](https://raw.githubusercontent.com/open-telemetry/opentelemetry-go/v1.47.0/exporters/otlp/otlpmetric/otlpmetrichttp/go.mod)、[官方 Go 状态](https://opentelemetry.io/docs/languages/go/) 与 [exporter 文档](https://opentelemetry.io/docs/languages/go/exporters/)。官方 issue 样本显示 HTTP exporter 当前仍带有 gRPC 模块依赖（[#2579](https://github.com/open-telemetry/opentelemetry-go/issues/2579)）；接受其对已启用观测项目的依赖体积影响，观测未启用时整个依赖组不进入生成项目。该选择只用于可选指标/追踪，不引入日志遥测或自动 exporter 环境发现。
+
 依赖维护证据来自 D1 及下列正式接入补充核验，模板运行验证记录以 ROADMAP 为准。主模块只引入 Cobra，默认业务模板只包含 HTTP、SQLite、JWT 与实际需要的配置/日志/DI/ORM/迁移依赖；独立兼容性模块核验的其他能力不自动进入默认项目。
 
 ## 核验方法
