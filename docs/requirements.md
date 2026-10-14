@@ -92,9 +92,9 @@ HTTP 默认使用 JSON；gRPC 提供 Proto、注册、拦截器、标准健康�
 
 提供 HTTP/gRPC TLS 配置能力，证书必须正确校验；pprof、Reflection 等调试入口生产默认关闭。CORS 使用显式允许来源，缓存头按接口需要设置。
 
-部署默认围绕单实例应用：SQLite 持久化目录；MySQL、PostgreSQL、Redis 按能力生成开发 Compose 服务。Kubernetes、systemd、Nginx 作为后续独立部署模板，不默认注入主项目。
+部署默认围绕单实例应用：SQLite 持久化目录；MySQL、PostgreSQL、Redis 按能力生成开发 Compose 服务。systemd/Nginx 作为显式选择的单机部署文件模板，不默认注入主项目；Kubernetes 暂缓，只有出现明确部署需求时才重新评估。
 
-指标、链路追踪、任务系统及消息队列属于后续扩展，不纳入本版运行链。
+指标和链路追踪作为默认关闭的可选能力交付；任务系统和消息队列暂缓，不纳入当前运行链。
 
 ## 首版后的完整需求范围
 
@@ -118,7 +118,7 @@ D0 至 D11 的已有交付保持不变；下表仅保留配套能力的需求归
 
 服务指标覆盖请求量、延迟、错误及依赖状态；标签使用已登记的路由/FullMethod 和有限状态值，避免用户、Token、原始路径或业务 ID 造成泄露和高基数。D10 选择 OpenTelemetry Go v1.47.0 与 OTLP/HTTP protobuf 主动推送；指标和追踪由独立 `--metrics`、`--tracing` 开关选择，默认关闭并按选项裁剪。不开入站指标端点；远端出口必须 HTTPS，明文 HTTP 仅允许 loopback。出口使用 `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`/`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 与各自的 `*_HEADERS`，不回退到共享 endpoint/headers，也不进入示例配置或日志。追踪采用 parent-based TraceID ratio，默认采样率 0.1，只传播 W3C TraceContext，不传播 baggage、认证凭据或正文。导出超时为 3s、关闭预算为 5s；队列有界，出口故障不阻断正常业务，关闭不超过预算。消息与任务链路不在当前开发范围。
 
-单机部署由创建参数显式加入 systemd/Nginx 文件，默认不生成。模板覆盖四种协议与 SQLite/MySQL/PostgreSQL/无数据库组合；运行单实例、监听 loopback、独立服务账号、Nginx 公网 TLS 和最小写目录。部署模板不安装软件、不写主机配置、不管理证书或执行迁移。SQLite/WAL、MySQL、PostgreSQL 必须分别在隔离数据上完成备份恢复演练；升级回退不将 schema 回退等同于二进制回退。完整路径与信任边界见 [单机部署契约](deployment.md)。Kubernetes 在多实例状态约束完成后推进；SQLite 不作为共享多副本写存储，迁移不在每个副本启动时自动执行。
+单机部署由创建参数显式加入 systemd/Nginx 文件，默认不生成。模板覆盖四种协议与 SQLite/MySQL/PostgreSQL/无数据库组合；运行单实例、监听 loopback、独立服务账号、Nginx 公网 TLS 和最小写目录。部署模板不安装软件、不写主机配置、不管理证书或执行迁移。SQLite/WAL、MySQL、PostgreSQL 必须分别在隔离数据上完成备份恢复演练；升级回退不将 schema 回退等同于二进制回退。完整路径与信任边界见 [单机部署契约](deployment.md)。Kubernetes 暂缓，SQLite 不作为共享多副本写存储，迁移不在每个副本启动时自动执行；重新评估须有明确部署需求及对应多实例验证条件。
 
 ### 当前开发重点
 

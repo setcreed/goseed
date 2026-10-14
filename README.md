@@ -145,9 +145,7 @@ make template-container
 | [施工清单](docs/implementation.md) | 从零建设的阶段、依赖、失败路径和交付门槛 |
 | [开发指南](docs/development.md) | 新电脑恢复、实现入口、验证与公开准备 |
 | [资源接入](docs/resource-generation.md) | 业务生成的计划、协议、权限与兼容设计 |
-| [HTTP](docs/template-http.md) | 默认服务运行与输入契约 |
-| [可选能力](docs/template-options.md) | SQL、无数据库、Redis 与 Casbin |
-| [gRPC](docs/template-grpc.md)、[dual](docs/template-dual.md)、[Gateway](docs/template-gateway.md) | 协议、安全链和排空约定 |
+| [模板指南](docs/templates.md) | HTTP、数据库与可选能力、gRPC、dual、Gateway 的运行和验收契约 |
 
 ## 许可证
 

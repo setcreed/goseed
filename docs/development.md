@@ -55,9 +55,10 @@ Makefile 使用 `GOTOOLCHAIN=local`、`GOWORK=off`，模块最低 Go 版本为 1
 2. [产品需求](requirements.md)：用户场景、首版范围、默认行为与验收标准。
 3. [技术架构](architecture.md)：目录、分层、组装、配置、日志与生命周期。
 4. [命令契约](cli.md)：项目生成、业务模块和资源字段规范。
-5. [施工清单](implementation.md)：从零建设的依赖顺序、修改范围和失败路径。
-6. [资源接入方案](resource-generation.md)：当前业务生成阶段的接口、文件归属和兼容决策。
-7. [依赖核验](dependencies.md)：固定版本、历史核验证据与已知上游限制。
+5. [模板指南](templates.md)：HTTP、数据库与可选能力、多协议运行和验收契约。
+6. [施工清单](implementation.md)：从零建设的依赖顺序、修改范围和失败路径。
+7. [资源接入方案](resource-generation.md)：当前业务生成阶段的接口、文件归属和兼容决策。
+8. [依赖核验](dependencies.md)：固定版本、历史核验证据与已知上游限制。
 
 依赖证据的日期是核验时间，不能解释为持续更新的维护保证。升级依赖时重新核验并同步锁文件、模板 manifests、工具脚本及对应测试。
 

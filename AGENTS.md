@@ -19,11 +19,7 @@ goseed 是面向中小型 Go 后端业务的项目与业务代码生成器。生
 - `docs/implementation.md`：按依赖顺序执行的开发与验证计划；D6 资源生成施工清单定义任务编号、前置条件、修改范围、失败路径和验收门槛，当前任务状态只维护在 ROADMAP。
 - `docs/resource-generation.md`：D6 资源接入的计划接口、权限目录、迁移/schema、Redis、协议复现和兼容决策；实施状态以 ROADMAP 为准。
 - `docs/dependencies.md`：维护与许可证证据、依赖决策、协议工具和验证边界；固定版本见 `dependencies.lock.json`。
-- `docs/template-http.md`：默认 HTTP 模板的配置、服务命令、认证、示例业务与验收契约。
-- `docs/template-options.md`：可选模板的配置、裁剪、数据库与失败路径验收契约。
-- `docs/template-grpc.md`：纯 gRPC 的 Proto、安全链、健康服务与验收契约。
-- `docs/template-dual.md`：双协议的共享依赖、监听配置、并发排空与验收契约。
-- `docs/template-gateway.md`：HTTP 转 RPC 的映射、安全链、协议/文档复现与顺序排空契约。
+- `docs/templates.md`：生成项目的 HTTP、数据库与可选能力、gRPC、dual、Gateway 契约及验收边界。
 - `docs/deployment.md`：D11 systemd/Nginx 单机部署、权限、备份恢复与升级回退契约。
 
 项目规则只维护在本文件；若增加 `CLAUDE.md`，它仅作为指向本文件的兼容入口。详细约定维护在对应文档，避免复制成多个独立来源。

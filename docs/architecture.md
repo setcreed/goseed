@@ -125,7 +125,7 @@ shop/
 
 `goseed.yaml` 由 D5 项目生成器创建，记录模板版本、能力与初始业务模块；D6 扩展其中的模块清单。`internal/apiserver/bootstrap/modules_gen.go` 是清单的确定性生成投影，负责把模块构造接入启动组装，并提供协议登记描述：HTTP 路由回调、gRPC Service 注册回调及 Gateway 的路径、query/body 规则和映射回调。各协议使用自己的描述类型；缺少的协议类型和依赖随模板裁剪。登记回调由当前 Handlers 的方法适配，不通过 AST 改写手工 Bootstrap、路由或 Proto 文件。`specs/` 保存资源字段声明，由生成器读取并校验。部署目录按交付需求创建，当前文件交付范围以 README 与实际模板为准，检查点状态以 ROADMAP 为准。
 
-`pkg/api` 只承载供 Go 客户端导入的生成协议类型，不作为公共工具杂物目录。`api/proto/<module>/v1` 保存业务模块的 Proto，Gateway 在相同目录维护 `http.yaml` 映射，`pkg/api/<module>/v1` 保存对应生成代码；`v1` 表达协议版本，Biz 不默认按版本分目录。gRPC 的服务与拦截器位于 `internal/pkg/rpc/`，dual 的监听与关闭协调位于 `internal/pkg/dual/`，Gateway 的转发与顺序关闭位于 `internal/pkg/gateway/`；协议运行约束见 [纯 gRPC 模板](template-grpc.md) 、[双协议模板](template-dual.md) 与 [Gateway 模板](template-gateway.md) 。
+`pkg/api` 只承载供 Go 客户端导入的生成协议类型，不作为公共工具杂物目录。`api/proto/<module>/v1` 保存业务模块的 Proto，Gateway 在相同目录维护 `http.yaml` 映射，`pkg/api/<module>/v1` 保存对应生成代码；`v1` 表达协议版本，Biz 不默认按版本分目录。gRPC 的服务与拦截器位于 `internal/pkg/rpc/`，dual 的监听与关闭协调位于 `internal/pkg/dual/`，Gateway 的转发与顺序关闭位于 `internal/pkg/gateway/`；协议运行约束见[模板指南](templates.md#纯-grpc-模板)。
 
 `goseed.yaml` 是版本化生成元数据，包含元数据版本、模板版本、项目名、模块路径、能力选择和模块登记；资源登记记录 spec 路径与字段规范版本。它不是服务运行配置，也不能作为容器中的必需文件；后续业务生成器读取它并拒绝不兼容的模板版本或能力。模块清单是登记权威来源；`modules_gen.go` 带生成标记、模块清单摘要及 OpenAPI 汇总摘要，每次生成前必须验证摘要及其内容与清单一致。`api/openapi/<module>.yaml` 是各模块的 OpenAPI 源文件，`api/openapi/swagger.json` 是按确定顺序合并的生成索引。HTTP、dual 与 Gateway 初始项目同时生成内置 `example.yaml` 源文件和规范化 JSON，并把 JSON 最终字节的 SHA-256 写入登记索引；纯 gRPC 项目裁剪这类文件。三个索引/元数据文件只允许生成器按既定规则更新；手工业务代码只调用生成的注册入口，不手工添加登记项。
 
@@ -216,7 +216,7 @@ SQLite 数据放入明确持久化目录；数据库、WAL、SHM 文件不入 Gi
 
 Biz 定义事务需求；Store 提供绑定到同一事务的仓储，跨仓储写入整体提交或回滚。事务回调中不混用原始连接，不将 GORM 事务对象暴露到 Biz。首版避免隐式嵌套事务抽象。
 
-迁移按数据库方言生成，显式执行。业务与 Casbin 表都纳入同一迁移机制，不让策略适配器暗中 AutoMigrate。策略存储复用现有 GORM 连接，通过显式 Context 接口读取与事务替换，避免官方适配器同时引入额外驱动；正式实现与 D1 验证原型分开，输入约束、离线更新和快照边界见 [可选模板](template-options.md#casbin-可选能力) 。
+迁移按数据库方言生成，显式执行。业务与 Casbin 表都纳入同一迁移机制，不让策略适配器暗中 AutoMigrate。策略存储复用现有 GORM 连接，通过显式 Context 接口读取与事务替换，避免官方适配器同时引入额外驱动；正式实现与 D1 验证原型分开，输入约束、离线更新和快照边界见 [Casbin 可选能力](templates.md#casbin-可选能力)。
 
 通用业务操作保持一致，但不保证任意 SQL、隔离级别或特有类型跨数据库完全等价。数据库切换与数据搬迁需独立评估。
 

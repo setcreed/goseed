@@ -168,18 +168,18 @@ fields:
 
 本文命令示例与参数表对应当前已实现契约。当前路线是按 [证据驱动的生成质量维护](implementation.md#证据驱动的生成质量维护) 处理实际问题；原 D12 至 D17 均暂缓，不增加对应参数或空壳命令。未来扩展须有具体业务需求，先明确默认值、冲突、文件归属和兼容版本，再按授权实施；未实现的选择仍按未知参数或不支持的声明拒绝。
 
-生成项目提供 `make build`、`make test`、`make lint`、`make check`；各命令只执行其明确职责。默认 HTTP 模板的服务命令、开发初始化、迁移和 Token 规则见 [默认 HTTP 模板](template-http.md) 。
+生成项目提供 `make build`、`make test`、`make lint`、`make check`；各命令只执行其明确职责。默认 HTTP 模板的服务命令、开发初始化、迁移和 Token 规则见 [默认 HTTP 模板](templates.md#默认-http-模板) 。
 
 生成器的 `--transport`、`--db` 等选择生成哪些源码；业务服务的 `serve --address`、`--grpc-address` 覆盖当前模板的监听配置。后者在业务项目中执行，不是 `goseed` 根命令参数。
 
 | 已实现模板 | 业务服务监听参数 | 默认监听地址 | 详细契约 |
 |---|---|---|---|
-| HTTP | `serve --address` 覆盖 HTTP | `127.0.0.1:8080` | [HTTP](template-http.md) |
-| gRPC | `serve --address` 覆盖 gRPC | `127.0.0.1:9090` | [gRPC](template-grpc.md) |
-| dual | `serve --address` 覆盖 HTTP，`--grpc-address` 覆盖 gRPC | HTTP 8080、gRPC 9090，均为回环地址 | [双协议](template-dual.md) |
-| gateway | `serve --address` 覆盖 Gateway HTTP，`--grpc-address` 覆盖 gRPC | HTTP 8080、gRPC 9090，均为回环地址 | [Gateway](template-gateway.md) |
+| HTTP | `serve --address` 覆盖 HTTP | `127.0.0.1:8080` | [HTTP](templates.md#默认-http-模板) |
+| gRPC | `serve --address` 覆盖 gRPC | `127.0.0.1:9090` | [gRPC](templates.md#纯-grpc-模板) |
+| dual | `serve --address` 覆盖 HTTP，`--grpc-address` 覆盖 gRPC | HTTP 8080、gRPC 9090，均为回环地址 | [dual](templates.md#dual-模板) |
+| gateway | `serve --address` 覆盖 Gateway HTTP，`--grpc-address` 覆盖 gRPC | HTTP 8080、gRPC 9090，均为回环地址 | [Gateway](templates.md#gateway-模板) |
 
-监听覆盖只适用于 `serve`；开发、迁移及策略命令拒绝这些参数。生产 gRPC 必须配置 TLS，dual／Gateway 两侧分别遵循各自协议配置；dual 并发排空，Gateway 先排空 HTTP 再关闭 RPC；数据库、Redis、Casbin 的使用契约见 [可选模板](template-options.md) 。
+监听覆盖只适用于 `serve`；开发、迁移及策略命令拒绝这些参数。生产 gRPC 必须配置 TLS，dual／Gateway 两侧分别遵循各自协议配置；dual 并发排空，Gateway 先排空 HTTP 再关闭 RPC；数据库、Redis、Casbin 的使用契约见 [数据库与可选能力](templates.md#数据库与可选能力) 。
 
 开发初始化可创建不入 Git 的本地配置、随机开发密钥和测试 Token；不得覆盖已有密钥或在生产环境开放开发签发入口。生成命令本身不创建真实环境密钥。
 
