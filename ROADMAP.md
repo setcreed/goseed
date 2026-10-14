@@ -4,7 +4,7 @@
 
 goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com/setcreed/goseed`，Go 固定 1.26.4，默认分支 main，许可证 MIT。源码已公开至 https://github.com/setcreed/goseed ，origin 使用 HTTPS，main 跟踪 origin/main；公开源码不代表首版功能已完成。
 
-代码基线为 `2704b39`：初始项目生成与 gen module 可用，支持四协议、四存储及可选 Redis/Casbin，共 64 种初始项目组合。资源阶段已经交付字段解析、只读计划、权限目录、迁移/schema、CRUD 核心与 HTTP 源渲染；公共 gen resource、完整 RPC/Gateway 资源适配与安全写入尚未交付。
+代码基线为 `2704b39`：初始项目生成与 gen module 可用，支持四协议、四存储及可选 Redis/Casbin，共 64 种初始项目组合。资源阶段已交付字段解析、只读计划、权限目录、迁移/schema、CRUD 核心及 HTTP 源渲染；R01 至 R06 已验收。公共 gen resource、完整 RPC/Gateway 资源适配与安全写入尚未交付。
 
 需求、架构及从零建设的工作顺序见 [施工清单](docs/implementation.md)，新电脑恢复、实现入口与验证方法见 [开发指南](docs/development.md)。本文件是状态唯一来源；从现有进度继续，保留已交付代码与 Git 历史。
 
@@ -18,25 +18,22 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 | D3 可选能力 | 已交付 | MySQL/PostgreSQL/无数据库/Redis/Casbin；真实服务验证记录见 Git 历史 |
 | D4 多协议 | 已交付 | 既有示例的 gRPC/dual/Gateway、安全链、协议复现与生命周期 |
 | D5 项目生成 | 已交付 | 根命令、参数、元数据、dry-run、冲突与恢复保护 |
-| D6 模块与资源 | 进行中 | gen module 已交付；资源 R01 至 R05 已验收，R06 适配器已提交但完整验收待补 |
+| D6 模块与资源 | 进行中 | gen module 已交付；资源 R01 至 R06 已验收，R07 至 R10 待推进 |
 | D7 首版收口 | 待开始 | 全部需求覆盖、文档/部署边界、交付验证 |
 
 ## 下一步施工顺序
 
-1. **补齐 R06**：修正资源 Swagger 路径和可执行 curl 示例，使用真实 Casbin Manager/策略验收权限与依赖顺序，核对响应 schema。已提交 HTTP 渲染不等于完整安全/文档验收。
-2. **R07**：资源 Proto、RPC Handler、精确 FullMethod 权限、完整 dual 工厂及共享 Biz；协议脚本发现多个模块并逐字节复现。
-3. **R08**：Gateway 资源映射、ProtoJSON 输入、转发安全链、多模块 Swagger 聚合与复现。
-4. **R09**：完整 Prepare/Write、元数据与登记更新、过期/冲突拒绝、回滚、旧项目兼容及公共 gen resource CLI。
-5. **R10**：48 种合法资源组合、16 种无数据库拒绝、原有 64 项目组合；三数据库、真 Redis/Casbin、协议/容器及文件保护完整回归。
-6. **D7**：首版范围核验与使用说明收口。源码公开可以先于首版功能完成，README 按当前真实能力表述。
+1. **R07**：资源 Proto、RPC Handler、精确 FullMethod 权限、完整 dual 工厂及共享 Biz；协议脚本发现多个模块并逐字节复现。
+2. **R08**：Gateway 资源映射、ProtoJSON 输入、转发安全链、多模块 Swagger 聚合与复现。
+3. **R09**：完整 Prepare/Write、元数据与登记更新、过期/冲突拒绝、回滚、旧项目兼容及公共 gen resource CLI。
+4. **R10**：48 种合法资源组合、16 种无数据库拒绝、原有 64 项目组合；三数据库、真 Redis/Casbin、协议/容器及文件保护完整回归。
+5. **D7**：首版范围核验与使用说明收口。源码公开可以先于首版功能完成，README 按当前真实能力表述。
 
 详细修改范围、依赖与失败门槛统一见 [D6 清单](docs/implementation.md#d6-资源生成施工清单)。
 
 ## 已知缺口与验证边界
 
-- R06 Swagger 当前生成 `/<name>`，基础源 basePath 是 `/`，真实 Handler 为 `/v1/<name>`；合并成功没有验证最终路径一致性。入口：`internal/templates/resource_core.go` 的 resourceOpenAPI。
-- 资源模块说明用单引号包裹含 `$TOKEN` 的 Authorization，Shell 不展开变量；字符串示例固定为 `value`，可能超过字段 max_length。入口：同文件的 resourceHTTPGuide。
-- R06 的 Casbin HTTP 夹具使用允许所有请求的 Authorizer，Redis 使用 Check 替身；不能据此声明实际策略允许/拒绝、缓存或依赖故障已验收。入口：`resource/http_integration_test.go.tmpl`。
+- R06 已验收：Swagger `/v1/<name>` 路径与 Handler 一致，请求/响应 schema 与 DTO 对齐；curl 示例展开 `$TOKEN`、接受临时 `API_URL` 并在生成项目集成测试中实际执行。SQLite Casbin 使用真实 Manager/策略存储验证默认拒绝、允许、权限不足及授权先于 Redis Check。源码与验收入口：`internal/templates/resource_core.go`、`internal/templates/resource/http_integration_test.go.tmpl`。
 - HTTPFiles 为 dual 返回的工厂目前只有 HTTP 成员；完整 dual 资源工厂与 RPC 共享 Biz 属于 R07，不能把该文件直接当完整 dual 交付物。
 - SchemaStore 是只读 schema 原型；CoreFiles 提供完整 Store，不得混用输出路径。当前 ResourcePlan 没有 Write/公共 CLI。
 - 模块组装版本 2 只表示纯权限/单次组装，不能代替 Context/schema 和多模块协议兼容检查。R09 必须完整核验旧项目。
@@ -47,6 +44,8 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 
 ## 最近完成
 
+- 2026-10-14 13:38 D6-R06 HTTP 资源验收完成：修正 Swagger 路径、严格请求与完整响应 schema，curl 示例支持 Token/临时服务地址并由集成测试执行；真实 SQLite Casbin 策略覆盖默认拒绝、允许、权限不足及 Redis 检查顺序。R07 成为下一开发项。
+
 - 2026-10-12 16:40 使用 gh 创建公开仓库 setcreed/goseed，推送 main 并建立 origin/main 跟踪；保留全部本地 Git 历史。README 与开发指南补齐真实克隆地址，可在新电脑恢复开发。
 
 - 2026-10-12 16:19 公开源码与换机文档准备：重写公开 README 和当前进度快照，按从零建设整理 D0 至 D7 及详细 D6 施工单，新增源码导航/环境恢复指南与 MIT LICENSE。去除特定外部项目名称检查规则、个人账号示例和旧会话依赖；保留现有代码、版权与 Git 历史。核对 R06 时发现文档/权限验收缺口，已回到待补齐状态。尚未创建远端或推送。
@@ -56,6 +55,10 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 - 2026-10-12 13:03 R04 提交 `a123019`：迁移版本/应用集合核验、SQL 草稿、资源只读 schema 与启动 Context；生成器不执行数据库操作。
 
 ## 最近验证
+
+- 2026-10-14 13:38 R06：`make test GO_PACKAGES='./internal/templates ./tests/integration -run TestResource -count=1 -v'` 与 `make test GO_PACKAGES='./tests/integration -run TestResourceCoreProjects -count=1 -v'` 通过。五个 SQLite 资源组合生成项目完成 readonly race 测试、HTTP Handler 测试、bootstrap 编译、实际执行模块 curl、vet、固定 linter 与 build；Casbin+Redis 用例通过真实策略及检查顺序断言。根仓库定向 vet、`make lint`（0 issues）、`make contract-check`（78 个本地链接、361 个交付文件）、`make fmt-check` 与 `git diff --check` 通过。测试临时项目由套件清理；`.tmp` 共享缓存保留。
+
+- 2026-10-14 13:28 R06 补齐 Swagger `/v1` 路径、请求/响应 schema、可执行 curl 示例与 SQLite Casbin Manager 验收夹具；`make contract-check`（78 个本地链接、361 个交付文件）和 `make fmt-check` 通过。两组 Go 测试未启动：固定 Go 1.26.4 工具链需从 `goproxy.cn` 下载，但当前 DNS 无法解析；本机 Go 1.27.2 不符合项目固定版本，未用于测试。R06 仍待用 Go 1.26.4 执行模板与资源集成测试。
 
 - 2026-10-12 16:40 远端发布：gh 查询确认仓库为 PUBLIC、默认分支 main；GitHub API 返回的 main 提交与首次推送的本地 HEAD e895372 一致。认证有效；未新增构建产物或任务缓存。
 

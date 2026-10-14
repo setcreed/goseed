@@ -276,14 +276,15 @@ func resourceHTTPGuide(data struct {
 		}
 		fmt.Fprintf(&body, "| `%s` | `%s` | %s | %s |\n", field.Name, field.Type, required, constraint)
 	}
-	body.WriteString("\n示例：\n\n```sh\ncurl -X POST http://127.0.0.1:8080/v1/" + data.Name + " \\\n  -H 'Authorization: Bearer $TOKEN' -H 'Content-Type: application/json' \\\n  -d '{")
+	body.WriteString("\n示例：\n\n```sh\n: \"${TOKEN:?set TOKEN first}\"\n: \"${API_URL:=http://127.0.0.1:8080}\"\ncurl --fail --silent --show-error -X POST \"${API_URL}/v1/" + data.Name + "\" \\\n  -H \"Authorization: Bearer ${TOKEN}\" -H 'Content-Type: application/json' \\\n  -d '{")
 	for i, field := range data.Fields {
 		if i > 0 {
 			body.WriteString(",")
 		}
 		switch field.Type {
 		case "string":
-			fmt.Fprintf(&body, `"%s":"value"`, field.Name)
+			value := strings.Repeat("x", min(field.MaxLength, 8))
+			fmt.Fprintf(&body, `"%s":"%s"`, field.Name, value)
 		case "bool":
 			fmt.Fprintf(&body, `"%s":true`, field.Name)
 		default:
@@ -301,11 +302,11 @@ func resourceOpenAPI(data struct {
 	Fields       []resourceCoreField
 }) File {
 	var body strings.Builder
-	fmt.Fprintf(&body, "swagger: \"2.0\"\npaths:\n  /%s:\n", data.Name)
+	fmt.Fprintf(&body, "swagger: \"2.0\"\npaths:\n  /v1/%s:\n", data.Name)
 	fmt.Fprintf(&body, "    post:\n      operationId: %sCreate\n      security:\n        - Bearer: []\n      parameters:\n        - {name: body, in: body, required: true, schema: {$ref: '#/definitions/Create%sRequest'}}\n      responses:\n        '201': {description: Created, schema: {$ref: '#/definitions/%sItem'}}\n        '400': {description: Invalid input}\n        '401': {description: Unauthorized}\n", data.Name, data.GoName, data.GoName)
 	body.WriteString("    get:\n      operationId: " + data.Name + "List\n      security:\n        - Bearer: []\n      parameters:\n        - {name: page, in: query, type: integer, default: 1, minimum: 1, maximum: 100000}\n        - {name: page_size, in: query, type: integer, default: 20, minimum: 1, maximum: 100}\n")
 	fmt.Fprintf(&body, "      responses:\n        '200': {description: Page, schema: {$ref: '#/definitions/%sPage'}}\n        '400': {description: Invalid pagination}\n", data.GoName)
-	fmt.Fprintf(&body, "  /%s/{id}:\n", data.Name)
+	fmt.Fprintf(&body, "  /v1/%s/{id}:\n", data.Name)
 	fmt.Fprintf(&body, "    parameters:\n      - {name: id, in: path, required: true, type: integer, format: int64, minimum: 1, maximum: 9223372036854775807}\n    get:\n      operationId: %sGet\n      security:\n        - Bearer: []\n      responses:\n        '200': {description: Resource, schema: {$ref: '#/definitions/%sItem'}}\n        '404': {description: Not found}\n    patch:\n      operationId: %sUpdate\n      security:\n        - Bearer: []\n      parameters:\n        - {name: body, in: body, required: true, schema: {$ref: '#/definitions/Update%sRequest'}}\n      responses:\n        '200': {description: Updated, schema: {$ref: '#/definitions/%sItem'}}\n        '400': {description: Invalid input}\n        '404': {description: Not found}\n    delete:\n      operationId: %sDelete\n      security:\n        - Bearer: []\n      responses:\n        '204': {description: Deleted}\n        '404': {description: Not found}\ndefinitions:\n", data.Name, data.GoName, data.Name, data.GoName, data.GoName, data.Name)
 	for _, definition := range []struct {
 		name     string
@@ -315,6 +316,7 @@ func resourceOpenAPI(data struct {
 		if !definition.required {
 			body.WriteString("    minProperties: 1\n")
 		}
+		body.WriteString("    additionalProperties: false\n")
 		if definition.required {
 			var required []string
 			for _, field := range data.Fields {
@@ -342,7 +344,11 @@ func resourceOpenAPI(data struct {
 			}
 		}
 	}
-	fmt.Fprintf(&body, "  %sItem:\n    type: object\n    required: [id, created_at, updated_at]\n    properties:\n      id: {type: integer, format: int64}\n", data.GoName)
+	fmt.Fprintf(&body, "  %sItem:\n    type: object\n    required: [id", data.GoName)
+	for _, field := range data.Fields {
+		fmt.Fprintf(&body, ", %s", field.Name)
+	}
+	body.WriteString(", created_at, updated_at]\n    properties:\n      id: {type: integer, format: int64, minimum: 1, maximum: 9223372036854775807}\n")
 	for _, field := range data.Fields {
 		fmt.Fprintf(&body, "      %s: {type: %s", field.Name, openAPIType(field.Type))
 		if field.Type == "string" {
@@ -351,7 +357,7 @@ func resourceOpenAPI(data struct {
 		body.WriteString("}\n")
 	}
 	body.WriteString("      created_at: {type: string, format: date-time}\n      updated_at: {type: string, format: date-time}\n")
-	fmt.Fprintf(&body, "  %sPage:\n    type: object\n    properties:\n      items:\n        type: array\n        items: {$ref: '#/definitions/%sItem'}\n      total: {type: integer, format: int64}\n      page: {type: integer}\n      page_size: {type: integer}\n", data.GoName, data.GoName)
+	fmt.Fprintf(&body, "  %sPage:\n    type: object\n    required: [items, total, page, page_size]\n    properties:\n      items:\n        type: array\n        items: {$ref: '#/definitions/%sItem'}\n      total: {type: integer, format: int64, minimum: 0}\n      page: {type: integer, minimum: 1, maximum: 100000}\n      page_size: {type: integer, minimum: 1, maximum: 100}\n", data.GoName, data.GoName)
 	return File{Path: "api/openapi/" + data.Name + ".yaml", Content: []byte(body.String())}
 }
 

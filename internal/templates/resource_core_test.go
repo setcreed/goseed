@@ -65,11 +65,23 @@ func TestResourceHTTPRendering(t *testing.T) {
 				t.Fatalf("factory missing %q", part)
 			}
 		}
+		openAPI := string(byPath["api/openapi/orders.yaml"])
+		for _, part := range []string{"/v1/orders:", "/v1/orders/{id}:", "additionalProperties: false", "required: [id, display_name, enabled, created_at, updated_at]", "required: [items, total, page, page_size]"} {
+			if !strings.Contains(openAPI, part) {
+				t.Fatalf("OpenAPI missing %q", part)
+			}
+		}
+		guide := string(byPath["docs/orders.md"])
+		for _, part := range []string{`${TOKEN:?set TOKEN first}`, `${API_URL:=http://127.0.0.1:8080}`, `curl --fail --silent --show-error`, `"Authorization: Bearer ${TOKEN}"`, `"display_name":"xxxxxxxx"`} {
+			if !strings.Contains(guide, part) {
+				t.Fatalf("resource guide missing %q", part)
+			}
+		}
 		merged, err := openapi.Merge([]openapi.Source{{Name: "example", YAML: []byte("swagger: \"2.0\"\npaths:\n  /examples:\n    get:\n      operationId: exampleGet\n")}, {Name: "orders", YAML: byPath["api/openapi/orders.yaml"]}})
 		if err != nil || len(merged.JSON) == 0 {
 			t.Fatalf("merge source: %v", err)
 		}
-		if _, err := openapi.Merge([]openapi.Source{{Name: "example", YAML: []byte("swagger: \"2.0\"\npaths:\n  /orders:\n    get:\n      operationId: old\n")}, {Name: "orders", YAML: byPath["api/openapi/orders.yaml"]}}); err == nil {
+		if _, err := openapi.Merge([]openapi.Source{{Name: "example", YAML: []byte("swagger: \"2.0\"\npaths:\n  /v1/orders:\n    get:\n      operationId: old\n")}, {Name: "orders", YAML: byPath["api/openapi/orders.yaml"]}}); err == nil {
 			t.Fatal("path collision accepted")
 		}
 	}
