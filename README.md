@@ -64,7 +64,7 @@ make verify-package ARCHIVE=.tmp/dist/v0.1.0/goseed_v0.1.0_darwin_arm64.tar.gz
 | macOS arm64 | 通过 | 本机运行通过 |
 | macOS amd64 | 通过 | Apple Silicon 上经 Rosetta 2 运行通过；未在 Intel Mac 实机验证 |
 | Linux arm64 | 通过 | 固定 Alpine 构建容器内运行与项目生成通过 |
-| Linux amd64 | 通过 | 运行未验证；本机 Docker 未提供 amd64 镜像层 |
+| Linux amd64 | 通过 | Debian amd64 容器模拟运行、默认项目生成及 HTTP 健康/认证创建与列表检查通过；未在原生 amd64 硬件验证 |
 
 Windows 原生运行不在当前支持范围。交叉构建成功本身不代表目标平台已验证；后续实际平台证据以路线图为准。
 
