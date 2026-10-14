@@ -29,7 +29,7 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 
 ## 下一步施工顺序
 
-安装与 CLI 使用收口及真实远端安装已验收，范围见 [施工清单](docs/implementation.md#安装与-cli-使用收口施工清单)。CLI 功能已推送，`@main` 与 `@latest` 均可安装并完成生成项目的实际运行验证。尚未发布版本标签和 Release；下一步可准备 `v0.1.0`，发布后补充固定版本安装核验。推送新提交、打标签和 Release 仍需对应授权。
+安装与 CLI 使用收口及真实远端安装已验收，范围见 [施工清单](docs/implementation.md#安装与-cli-使用收口施工清单)。CLI 功能已推送，`@main` 与 `@latest` 均可安装并完成生成项目的实际运行验证。当前按用户授权推进 [v0.1.0 首次发布](docs/implementation.md#首次版本发布清单)：准备干净源码、四平台发行包、版本标签与草稿 Release；安装和资产核验通过后公开。
 
 D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型业务试用已完成，未发现资源生成、手工扩展、增量登记及基础安全流程的功能阻断。试用暴露的首要开发体验问题是 Makefile 强制切换 Go 工具链：本机 Go 1.27.2 在 `GOTOOLCHAIN=local` 下能构建并通过生成项目验证，固定工具链下载则受网络限制失败。
 
@@ -99,6 +99,8 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 
 ## 最近验证
 
+- 2026-10-15 01:12 v0.1.0 发布准备检查：gh 只读核对远端无已有标签或 Release；`make test GO_PACKAGES='./cmd/goseed ./internal/cli ./internal/generator'`、`make fmt-check`、`make contract-check`（73 个本地链接、392 个交付文件）和 `git diff --check` 通过。发行包、版本标签、固定版本安装及 Release 尚在进行中。
+
 - 2026-10-15 01:08 GitHub 安装链路验证：本机 Go 1.27.2、隔离 GOBIN 和初始为空的任务 GOMODCACHE、复用共享构建缓存，执行 `go install github.com/setcreed/goseed/cmd/goseed@main` 与 `@latest` 均成功，版本指向 `1a8c8b3`。两者均通过帮助、init、dry-run 无写入、重复生成拒绝、模块和资源生成、readonly 构建、开发配置初始化、SQLite 显式迁移、随机回环端口就绪检查、未认证 401 及认证创建/列表。`make contract-check`（72 个本地链接、392 个交付文件）与 `git diff --check` 通过。服务与本次安装/模块缓存/项目/日志目录已清理，未覆盖全局安装；未运行 Docker 或 race。
 
 - 2026-10-15 00:49 双安装与 CLI 验收：当前源码构造本地文件模块代理，以隔离 GOBIN 执行 `go install ...@v0.0.0-installcheck` 与 `@latest`，安装版正确显示模块版本。安装版和源码构建版均在仓库外完成帮助、init、dry-run、重复生成拒绝、模块与资源生成及生成项目 readonly 构建。命令/CLI/生成器定向测试与 vet、格式、文档契约和 diff 检查通过；本机 Go 1.27.2 的 lint 因现有 Go 1.26.4 构建的 linter 无法解析新标准库而失败，改用仓库已有 Go 1.26.4 工具链后全仓 lint 为 0 issues。未验证 GitHub 远端安装，未发布、运行 Docker 或 race；任务临时目录已清理，共享缓存保留。
@@ -135,5 +137,3 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 - 2026-10-14 18:39 后续全局规划检查：`make contract-check`（93 个本地链接、372 个交付文件）与 `git diff --check` 通过；只读脚本核对 10 项需求、10 个阶段、40 个任务、文档标题锚点及最近记录数量上限。工作区仅含 6 份相关文档修改；未执行业务/服务测试，未新增临时项目、缓存或 Docker 资源。
 
 - 2026-10-14 18:31 D8 规划文档检查：`make contract-check`（82 个本地链接、372 个交付文件）与 `git diff --check` 通过；核对阶段依赖、当前状态及开发指南入口一致。仅修改规划与文档，未执行 D8 运行验收或重跑长时间测试，未创建验证项目或 Docker 资源。
-
-- 2026-10-14 17:59 D7 最终验证：`PATH=/Applications/Docker.app/Contents/Resources/bin:$PATH make race` 全仓通过，集成包 `ok .../tests/integration 2289.398s`；此前 `make check`（集成包 2195.054 秒、vet、lint 0 issues）、`make build`、`make template-db`（真实 MySQL 8.4.11/PostgreSQL 18.6）、`make template-redis`（TLS Redis）、`make template-container`、`make compatibility`、`make compatibility-cross`、`make protocol-check`、`make fmt-check`、`make vet`、`make contract-check` 与 `git diff --check` 均通过。兼容原型中 MySQL/PostgreSQL 子用例按设计跳过，真实服务验证由 template-db 覆盖。本轮 race 项目和交叉编译输出由套件/任务清理；Docker 测试标签无残留容器，共享缓存保留。`.tmp/d2/render-3779792103` 时间戳早于本轮测试，作为既有目录保留。
