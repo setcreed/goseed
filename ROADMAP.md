@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com/setcreed/goseed`，Go 固定 1.26.4，默认分支 main，许可证 MIT。源码仓库已公开至 https://github.com/setcreed/goseed ，origin 使用 HTTPS，main 跟踪 origin/main；首版功能验收状态见阶段快照和最近验证。
+goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com/setcreed/goseed`，最低 Go 版本为 1.26.4，日常使用本机兼容工具链，发行归档固定版本，默认分支 main，许可证 MIT。源码仓库已公开至 https://github.com/setcreed/goseed ，origin 使用 HTTPS，main 跟踪 origin/main；首版功能验收状态见阶段快照和最近验证。
 
 初始项目生成与 gen module 可用，支持四协议、四存储及可选 Redis/Casbin，共 64 种初始项目组合。资源阶段 R01 至 R10 已交付，包含公共 `gen resource`、四协议生成、安全写入与失败回滚，以及完整资源组合和真实服务回归。
 
@@ -23,23 +23,19 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 | D8 基础使用快速验收 | 已交付 | 干净源码构建＋默认 HTTP/SQLite/JWT 流程＋一个真实 MySQL/纯 gRPC 代表项目 |
 | D9 版本与分发 | 已交付 | 版本信息、本地安装/归档/校验、旧项目兼容与人工维护；Linux amd64 运行仍未验证 |
 | D10 可观测性 | 已交付 | P01 契约、P02 指标、P03 追踪与 P04 组合验收完成；默认关闭并按协议和选项裁剪 |
-| D11 单机部署 | 进行中 | P01 契约完成；P02 模板与生成矩阵已完成，锁定版 Nginx 配置/错误证书容器验证通过，systemd 服务生命周期验证待完成；P03 备份恢复已验收；P04 回退指引与隔离符号链接演练完成，真实服务升级演练待 P02 |
-| D12 独立账号模板 | 已规划，未实施 | 注册/登录/重置/刷新/撤销，SQL 与四协议安全链 |
-| D13 消息基础 | 已规划，未实施 | 单后端发布消费、重试/重放、失败隔离及事务发布 |
-| D14 任务系统 | 已规划，未实施 | Worker、异步/延迟/定时、取消与运行诊断 |
-| D15 多实例安全 | 已规划，未实施 | 权限/会话收敛、共享限流与故障契约 |
-| D16 Kubernetes | 已规划，未实施 | 独立清单、真实隔离集群、滚动更新与排空 |
-| D17 资源声明增强 | 已规划，未实施 | 新 spec 版本、枚举/默认值/索引/唯一约束及兼容保护 |
+| D11 单机部署 | 已交付 | P01 部署契约、P02 四协议 systemd/Nginx 模板及真实服务验收、P03 SQLite/MySQL/PostgreSQL 备份恢复、P04 release 回退指引与隔离演练全部完成 |
+| D12 至 D16 业务与运行扩展 | 暂缓 | 账号、消息、任务、多实例、Kubernetes 均退出连续排期；有具体业务需求再独立评估 |
+| D17 资源声明增强 | 暂缓 | 仅在试用发现常见 CRUD 阻碍后评估最小增强范围 |
 
 ## 下一步施工顺序
 
-首版后全部已知方向已规划；D8 基础使用快速验收、D9 版本/分发与 D10 可观测性已完成，当前执行 D11 单机部署。首版后产品范围见 [需求清单](docs/requirements.md#首版后的完整需求范围)。
+D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型业务试用已完成，未发现资源生成、手工扩展、增量登记及基础安全流程的功能阻断。试用暴露的首要开发体验问题是 Makefile 强制切换 Go 工具链：本机 Go 1.27.2 在 `GOTOOLCHAIN=local` 下能构建并通过生成项目验证，固定工具链下载则受网络限制失败。
 
-1. 推荐排期：**D8 → D9 → D10 → D11 → D12 → D13 → D14 → D15 → D16 → D17**；技术前置见施工清单，阶段内部按任务依赖验收。
-2. 当前实施入口为 **D11-P02 Linux systemd 服务生命周期验收**；模板生成和四协议 readonly 编译、锁定 Nginx 容器 `nginx -t`（含错误证书失败路径）已通过，但 Debian 测试镜像的软件源索引下载过慢，实际 systemd 启动/排空/重启和 Nginx 转发尚未运行。P03 已完成真实 SQLite WAL、MySQL TLS 与 PostgreSQL TLS 备份恢复；P04 的原子 release 符号链接回退和 schema 不回滚边界已做隔离演练，仍需依赖 P02 进行服务级演练。
-3. 技术/产品定稿项 Q01 至 Q09 按 [待决登记](docs/implementation.md#待决登记与规划完成条件) 关闭；除范围变化或新证据推翻假设，不再每完成一阶段重做整体路线。
+1. **Go 版本策略已落地**。各模块 `go.mod` 声明最低 Go 1.26.4；Makefile 和项目内验证使用 `GOTOOLCHAIN=local`，本机版本满足最低要求即可。可复现发行归档仍固定 Go 1.26.4；仓库当前没有 CI 工作流。
+2. **后续按证据维护生成能力**。仅修复实际试用中复现的阻断或正确性问题；没有具体问题时不新增功能。
+3. **候选方向不自动恢复**。账号、消息、任务、多实例、Kubernetes 和资源声明增强均需具体需求及独立实施指令。
 
-完整范围、任务、失败路径及验收见 [施工清单](docs/implementation.md#阶段依赖与交付物)。流式 RPC、通用分布式锁、高级资源 DSL、多消息后端、工作流 UI、多租户/SSO、原生 Windows 与自动升级等已明确 [暂不实施及重新纳入条件](docs/requirements.md#已盘点但暂不实施的方向)。后续验证按改动风险定向执行，不默认重复 D7 全量长测。推送、正式发版、外部通知和生产部署不属于本次规划授权。
+业务试用步骤与验收见 [施工清单](docs/implementation.md#下一步业务试用与生成质量收口)，候选方向见 [需求清单](docs/requirements.md#已盘点但暂不实施的方向)。后续仅按改动风险定向验证，不默认重复 D7 全量长测。
 
 ## 已知缺口与验证边界
 
@@ -51,11 +47,16 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 - D7 全仓 `make race` 已通过，`tests/integration` 用时 2289.398 秒；D6 的完整 `make check`、真实服务矩阵、生成产物集成和 D7 的兼容性/交叉构建检查均通过。
 - go-redis 取消、pgx 人工延迟 Write 竞争边界仍按 [依赖记录](docs/dependencies.md) 保留；固定版本不意味着上游问题消失。
 - 仓库采用 MIT；第三方依赖及生成代码仍保留适用许可。源码仓库已经公开；本地 D8 验收完成不表示最新提交已推送或正式版本已发布。D8 仅覆盖指定干净源码构建、默认 HTTP 使用流程和一个真实 MySQL/纯 gRPC 代表项目，不等同于无缓存、独立机器或跨平台恢复验收。
-- D9 已完成本地安装、可复现归档、许可证与 SHA-256 核验、v1 增量兼容及人工维护说明。macOS arm64、Rosetta 下 macOS amd64、Linux arm64 的包运行和生成检查通过；Linux amd64 仅构建与包校验通过，运行未验证；Windows 原生不在支持范围。D10 完成指标/追踪模板及本地 OTLP protobuf 接收器验收；D11 的真实 systemd/Nginx 服务级验收尚未完成，D12 至 D17 尚未实施。
+- D9 已完成本地安装、可复现归档、许可证与 SHA-256 核验、v1 增量兼容及人工维护说明。macOS arm64、Rosetta 下 macOS amd64、Linux arm64 的包运行和生成检查通过；Linux amd64 仅构建与包校验通过，运行未验证；Windows 原生不在支持范围。D10 完成指标/追踪模板及本地 OTLP protobuf 接收器验收；D11 已完成真实 systemd/Nginx 服务级验收；D12 至 D17 均暂缓且未实施。
 
 ## 最近完成
 
-- 2026-10-14 21:48 D11-P03 备份恢复工具与 P04 回退指引完成：SQLite 生成 WAL 在线 `.backup` 与完整性检查，并拒绝损坏源和覆盖已有目标；MySQL 使用 TLS 校验和独立凭据文件的 `mysqldump --single-transaction`，PostgreSQL 使用 `verify-full` 与 custom dump。真实 SQLite WAL、MySQL 8.4.11、PostgreSQL 18.6 隔离恢复演练均核对回备份前数据且保留原备份；专用数据库卷/网络已清理。P04 增加 Debian 原子符号链接切换/回退步骤和隔离模拟；应用二进制回退不回滚 schema。P02 的真实 systemd/Nginx 运行验证仍待完成。
+- 2026-10-14 23:14 路线聚焦完成：D0 至 D11 既有交付保持不变，D12 至 D17 转为暂缓候选；后续只围绕项目生成、模块骨架和简单 CRUD 的实际试用问题维护，不自动扩展账号、消息、任务、多实例、Kubernetes 或资源 DSL。恢复候选方向须有具体业务问题、最小范围、验收方式和对应实施指令。
+
+- 2026-10-14 23:04 默认业务试用完成：Go 1.27.2 下生成 HTTP/SQLite/JWT 项目，生成 item CRUD 与 SQLite 迁移，再增量添加 checkout/returns 模块；生成项目构建、`go test ./...`、`go vet ./...` 通过。实际请求验证未认证拒绝、认证 CRUD、零值 PATCH、主体隔离及手写 checkout 操作；新增模块后手写 Biz/Handler 字节保持不变。没有发现生成流程的功能阻断。试用发现 Makefile 曾强制下载 Go 1.26.4；本机 Go 1.27.2 验证通过，因此将版本策略复核列为下一项。
+
+- 2026-10-14 22:47 D11 单机部署完成：`make template-deployment` 全部通过，锁定 Debian 13 镜像实际运行 systemd 与 Nginx；专用账号/服务硬化、HTTP/gRPC TLS 代理、SIGTERM 停止与重启健康检查、错误证书拒绝路径通过。修正测试镜像缺少 CA bundle 导致 apt HTTPS 校验失败的问题，改用项目已锁定 Go 镜像的 CA bundle 并显式配置 CAInfo；修正 Debian 镜像启动时预启用 Nginx 导致生成配置未加载，以及 `systemctl is-active` 停止状态的测试断言。结合已通过的四协议 Nginx 语法、SQLite WAL/MySQL/PostgreSQL TLS 恢复和 release 回退演练，D11 全部检查点完成；仅测试容器，未触碰宿主或生产服务。
+- 2026-10-14 21:48 D11-P03 备份恢复工具与 P04 回退指引完成：SQLite 生成 WAL 在线 `.backup` 与完整性检查，并拒绝损坏源和覆盖已有目标；MySQL 使用 TLS 校验和独立凭据文件的 `mysqldump --single-transaction`，PostgreSQL 使用 `verify-full` 与 custom dump。真实 SQLite WAL、MySQL 8.4.11、PostgreSQL 18.6 隔离恢复演练均核对回备份前数据且保留原备份；专用数据库卷/网络已清理。P04 增加 Debian 原子符号链接切换/回退步骤和隔离模拟；应用二进制回退不回滚 schema。P02 真实 systemd/Nginx 验收随后通过。
 
 - 2026-10-14 21:04 D11-P01 部署契约完成：确定 `--deployment=single-host` 默认关闭、systemd/Nginx 仅作为 `deploy/` 文件副本；支持 HTTP/gRPC/dual/Gateway 及 SQLite/MySQL/PostgreSQL/无数据库，应用单实例绑定 loopback、双协议分离域名、Nginx TLS 终止/验证 gRPC 上游 TLS、不信任任意 forwarded headers。定稿专用服务账号、`/opt` releases+current、`/etc` 私有配置、`/var/lib` 状态和 `/var/backups` 备份目录；固定 SQLite 在线 `.backup`、MySQL InnoDB `mysqldump --single-transaction`、PostgreSQL custom `pg_dump` 及 schema 不自动回退边界。Docker 29.8.2 Linux/arm64 API 只读核验成功；D11-P02 进入实施。
 
@@ -73,11 +74,8 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 
 - 2026-10-14 19:12 D8 基础使用快速验收完成：干净导出的已提交源码使用 Go 1.26.4 通过构建及 CLI 帮助/版本检查；默认 HTTP/SQLite 项目通过构建、初始化、迁移和健康检查，并实际完成认证 CRUD；MySQL 8.4.11＋纯 gRPC 项目通过生成构建、独立应用账号迁移、健康状态、未认证拒绝及认证 CRUD。D9 转为下一阶段；未推送或发布。
 
-- 2026-10-14 19:04 按用户要求增加 D8 的 MySQL/gRPC 验证规划：在 P01/P02 基础上新增 P03，一个 MySQL＋纯 gRPC 项目覆盖真实数据库、显式迁移、RPC CRUD、健康及未认证拒绝；只启动专用 MySQL 容器，复用 Go 缓存与已生成 Proto，不扩展为组合矩阵。同步需求、施工清单和开发导航，后续计划共 39 个任务；未启动运行验证。
-
 - 2026-10-14 19:02 按用户决定简化 D8 规划：仅保留 P01 干净源码构建与 P02 默认 HTTP/SQLite/JWT 使用流程，允许复用 Go 缓存；复杂组合、增量与失败路径仅按实际问题补测，版本/分发和开发工具恢复入口核对归 D9。同步需求、施工清单和开发导航，后续计划共 38 个任务；未启动运行验收。
 
-- 2026-10-14 18:39 首版后全局规划完成：需求 F01 至 F10 对应 D8 至 D17，明确推荐顺序、技术依赖、各阶段任务、失败/验收门槛与 Q01 至 Q09 定稿项；流式 RPC、通用锁等单列暂不实施及重启条件。同步需求、架构、CLI 规划边界和开发导航，仅文档规划，未启动开发或长测。
 
 - 2026-10-14 18:31 D8 规划完成：承接原 D7 交付核验与开发指南的恢复路径，定义 P01 至 P04 的依赖、范围、失败路径、验收和清理要求；下一实施入口为 P01，未启动运行验证。同步移除开发指南中 D7 进行中及 race 暂缓的失效描述，后续扩展方向仅列规划门槛。
 
@@ -93,22 +91,15 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 
 - 2026-10-14 14:13 D6-R08 Gateway 资源验收完成：Gateway 资源复用 RPC Handler/Biz，生成路由映射、OpenAPI 配置和协议差异文档；协议脚本发现全部模块，固定工具在临时目录生成，并通过项目内严格 OpenAPI 合并器更新模块源、汇总和登记摘要。R09 转为下一开发项。
 
-- 2026-10-14 14:00 D6-R07 gRPC/dual 资源验收完成：新增资源 Proto、RPC Handler 与精确 FullMethod 权限；dual 工厂只创建一次 Store/Biz 并供 HTTP/RPC 共用。Proto 脚本已支持多模块排序复现；公共资源写入、登记更新仍由 R09 实施。
-
-- 2026-10-14 13:38 D6-R06 HTTP 资源验收完成：修正 Swagger 路径、严格请求与完整响应 schema，curl 示例支持 Token/临时服务地址并由集成测试执行；真实 SQLite Casbin 策略覆盖默认拒绝、允许、权限不足及 Redis 检查顺序。R07 成为下一开发项。
-
-- 2026-10-12 16:40 使用 gh 创建公开仓库 setcreed/goseed，推送 main 并建立 origin/main 跟踪；保留全部本地 Git 历史。README 与开发指南补齐真实克隆地址，可在新电脑恢复开发。
-
-- 2026-10-12 16:19 公开源码与换机文档准备：重写公开 README 和当前进度快照，按从零建设整理 D0 至 D7 及详细 D6 施工单，新增源码导航/环境恢复指南与 MIT LICENSE。去除特定外部项目名称检查规则、个人账号示例和旧会话依赖；保留现有代码、版权与 Git 历史。核对 R06 时发现文档/权限验收缺口，已回到待补齐状态。尚未创建远端或推送。
-
-- 2026-10-12 15:57 R06 HTTP 源渲染提交 `2704b39`：提供 Handler、schema 核验工厂、Swagger/模块说明与 HTTPFiles 副本；只读准备检查多源合并。完整验收状态按上面的缺口执行，本条不认定全部 R06 门槛通过。
-- 2026-10-12 15:23 R05 CRUD 核心提交 `de13630`：主体隔离 Model/Biz/Store、字段出现性、零值更新、分页、UTC DTO 与更新事务回滚；没有增加运行依赖。
-- 2026-10-12 13:03 R04 提交 `a123019`：迁移版本/应用集合核验、SQL 草稿、资源只读 schema 与启动 Context；生成器不执行数据库操作。
-
 ## 最近验证
 
-- 2026-10-14 21:53 D11 定向验证补充：`make template-deployment-nginx` 在锁定的 Nginx 1.29.4 容器中通过 dual HTTP/gRPC 配置语法检查，并确认缺失证书路径使 `nginx -t` 失败；无服务启动。systemd 运行验收仍未通过，Debian apt 索引下载曾超过可接受时长。
-- 2026-10-14 21:48 D11-P02/P03/P04 定向验证：`make test GO_PACKAGES='./internal/templates ./internal/cli ./internal/generator'`、四协议及 PostgreSQL+dual+Redis+Casbin 单机部署项目 readonly 编译、SQLite WAL 备份/损坏拒绝/缺失数据库拒绝/不覆盖恢复、release 符号链接故障回退通过；`make template-deployment-db` 使用锁定的 MySQL 8.4.11 与 PostgreSQL 18.6 TLS 容器执行生成备份脚本并恢复原数据，容器/卷/网络已自动清理。`make lint`（0 issues）、相关包 `go vet`、`make contract-check`（98 个本地链接、397 个交付文件）、`make fmt-check` 与 `git diff --check` 通过。systemd 容器测试未运行；`TestSingleHostDeploymentContainer` 按未设置的 Docker 集成开关跳过，Debian apt 索引下载曾超过可接受时长，不能将其视为通过。
+- 2026-10-14 23:14 路线聚焦文档检查：`make contract-check`（96 个本地链接、397 个交付文件）与 `git diff --check` 通过；核对 ROADMAP、施工清单、需求、架构、CLI、开发指南和项目规范指向一致，最近完成/验证记录按时间倒序且不超过 20 条。未运行代码、数据库、Docker 或 race 测试。
+
+- 2026-10-14 23:12 Go 版本策略验证：本机 Go 1.27.2 下 `make build`、`make test GO_PACKAGES='./cmd/goseed ./internal/cli ./internal/generator'`、对应 `make vet`、`make contract-check`（96 个本地链接、397 个交付文件）与 `git diff --check` 均通过；确认仅发行包脚本仍请求固定 Go 1.26.4，未运行打包流程、外部数据库/Redis 或 race。
+
+- 2026-10-14 23:04 默认业务试用验证：本机 Go `1.27.2`、`GOTOOLCHAIN=local`；生成项目 `go test -mod=readonly -timeout=5m ./...`、`go vet -mod=readonly ./...` 通过，SQLite 显式迁移到 schema version 2。回环请求经批准的隔离本机端口运行通过，覆盖 health、未认证拒绝、认证创建/列表/零值更新、跨主体 404 和手写 checkout 成功/非法输入；未使用 Docker 或 race。
+
+- 2026-10-14 22:47 D11-P02 完整运行验收：`make template-deployment` 通过；重新构建锁定 Debian/systemd/Nginx 测试镜像后，隔离 dual 项目服务硬化检查、HTTP TLS 与 gRPC 上游 TLS 健康请求、SIGTERM 停止状态、重启后健康恢复及错误证书失败路径全部通过。`make template-deployment-nginx` 四协议配置/错误证书用例通过；测试专用 Docker 容器自动清理。
 
 - 2026-10-14 19:38 D9-P04 清洁提交最终验收：提交 `a5ab852` 上 `make install VERSION=v0.0.0-d9` 安装到隔离目录并显示正确提交/模板/spec；`make package` 从 clean source 生成 macOS/Linux amd64/arm64 四个包，manifest 均记录相同完整提交及 `source_dirty=false`，`make verify-package` 全部通过，macOS arm64 归档重建摘要一致。该 clean commit 的 macOS arm64 本机、macOS amd64 Rosetta、Linux arm64 固定断网容器包均运行 `--version` 并生成 52 个文件。Linux amd64 仍未运行：本机锁定镜像只有 arm64 内容层，强制 amd64 时 Docker 报缺失 layer；保留未验证。Windows 原生未测试。
 
@@ -141,17 +132,3 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 - 2026-10-14 14:26 R09：`go test ./internal/generator ./internal/cli ./internal/templates` 通过；`make contract-check`（79 个本地链接、371 个交付文件）、`make fmt-check`、`make lint`（0 issues）及 `git diff --check` 通过。覆盖四协议公共 CLI、四协议资源写入、SQLite/MySQL/PostgreSQL × 四协议共 12 种生成写入组合（Redis + Casbin）、无数据库拒绝、冲突/过期输入及注入失败后的字节级恢复。R10 接手真实项目组合与外部服务验收。
 
 - 2026-10-14 14:13 R08：`go test ./internal/templates ./internal/generator`、`go test ./tests/integration -run 'TestResourceGRPCProjects/gateway' -count=1 -v`、`make contract-check`（78 个本地链接、369 个交付文件）、`make fmt-check`、`make lint`（0 issues）与 `git diff --check` 通过。真实 TLS Gateway 项目含内置模块与两个资源，复现后 Proto/Gateway/各模块 Swagger/汇总/摘要逐字节一致；测试 HTTP→RPC 请求 ID、JWT、主体隔离、非法 query、ProtoJSON int64 字符串与跨协议 CRUD。外部真实 SQL/Redis 与容器留 R10；测试临时项目由套件清理。
-
-- 2026-10-14 14:00 R07：锁定 protoc 36.2 与插件安装后，双资源 gRPC/dual 集成项目通过 Proto 多模块二次逐字节复现、独立客户端导入、readonly 测试、vet、lint 与 build。真实 TLS RPC 覆盖两个资源、alice/bob 隔离、显式零值、必填/未知字段及 ID/分页/deadline 错误；dual 验证 RPC 创建 → HTTP 读取/更新 → RPC 读回。`make test GO_PACKAGES='./internal/templates ./internal/generator'`、`make protocol-check`、`make fmt-check`、`make lint`、`make contract-check`（78 个本地链接、365 个交付文件）与 `git diff --check` 通过。运行本地监听验收需沙箱外执行；测试临时项目已清理。
-
-- 2026-10-14 13:38 R06：`make test GO_PACKAGES='./internal/templates ./tests/integration -run TestResource -count=1 -v'` 与 `make test GO_PACKAGES='./tests/integration -run TestResourceCoreProjects -count=1 -v'` 通过。五个 SQLite 资源组合生成项目完成 readonly race 测试、HTTP Handler 测试、bootstrap 编译、实际执行模块 curl、vet、固定 linter 与 build；Casbin+Redis 用例通过真实策略及检查顺序断言。根仓库定向 vet、`make lint`（0 issues）、`make contract-check`（78 个本地链接、361 个交付文件）、`make fmt-check` 与 `git diff --check` 通过。测试临时项目由套件清理；`.tmp` 共享缓存保留。
-
-- 2026-10-14 13:28 R06 补齐 Swagger `/v1` 路径、请求/响应 schema、可执行 curl 示例与 SQLite Casbin Manager 验收夹具；`make contract-check`（78 个本地链接、361 个交付文件）和 `make fmt-check` 通过。两组 Go 测试未启动：固定 Go 1.26.4 工具链需从 `goproxy.cn` 下载，但当前 DNS 无法解析；本机 Go 1.27.2 不符合项目固定版本，未用于测试。R06 仍待用 Go 1.26.4 执行模板与资源集成测试。
-
-- 2026-10-12 16:40 远端发布：gh 查询确认仓库为 PUBLIC、默认分支 main；GitHub API 返回的 main 提交与首次推送的本地 HEAD e895372 一致。认证有效；未新增构建产物或任务缓存。
-
-- 2026-10-12 16:19 文档与公开准备：make contract-check（78 个本地链接、361 个交付文件）、git diff --check 通过；Make dry-run 核对构建、工具安装和核心测试入口。当前交付文件名称/个人路径扫描无候选；Git 历史 826 个可达 blob 的私钥/GitHub Token/AWS 访问键特征扫描无候选，不代表完整凭据审计。未重跑业务/数据库/容器测试，未在新电脑验证；未创建任务临时项目或缓存，既有本地产物未删除。
-
-- 2026-10-12 15:57 R06：核心包测试及五类 SQLite 生成项目 readonly race/vet/lint/build 通过；基础与接口替身组合通过回环 HTTP Server。真实 Casbin 策略和 Swagger 最终路径未被该轮验收覆盖。文档契约、格式、vet、lint（0 issues）和 diff 检查通过，任务目录已清理。
-- 2026-10-12 15:23 R05：五个 SQLite 核心项目、真实 MySQL/PostgreSQL 四个资源组合通过主体 CRUD、零值/int64、取消、并发、事务回滚与独立应用账号验收；template-db 七组共 18 个组合无跳过通过。未执行完整 64 项目矩阵或新增真实 Redis 验收。
-- 2026-10-12 13:03 R04：SQLite 与真实 MySQL/PostgreSQL 迁移/schema、异常历史、宽表、Unicode/排序与取消验收通过；确认 MySQL 部分 DDL 保留边界。任务项目及本次容器/卷/网络已清理。

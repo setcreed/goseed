@@ -7,7 +7,7 @@
 | 工具 | 用途 | 要求 |
 |---|---|---|
 | Git | 克隆、版本管理 | 保留完整提交历史 |
-| Go | 构建生成器与生成项目 | 固定 1.26.4，与 go.mod 和锁文件一致 |
+| Go | 构建生成器与生成项目 | 至少 1.26.4；日常使用本机兼容版本 |
 | Make | 仓库检查入口 | 使用现有 Makefile |
 | Python | 契约检查、协议工具与服务验收脚本 | 3.9 或以上 |
 | curl | 下载固定协议工具 | 协议工具安装时需要 |
@@ -116,7 +116,7 @@ make test GO_PACKAGES='./tests/integration -run TestResourceCoreProjects -count=
 
 ## 从当前代码继续开发
 
-以 ROADMAP 的状态为准，不在本文另行维护阶段进度或临时测试决定。首版后的全部方向、阶段依赖与待决事项见 [完整施工计划](implementation.md#阶段依赖与交付物)，共同实施门槛见 [后续执行规则](implementation.md#后续阶段的共同执行门槛)。D8 基础使用快速验收已完成；下一实施入口为 [D9 版本、分发与维护基线](implementation.md#检查点-d9版本分发与维护基线)。D8 验收覆盖干净源码构建、默认 HTTP/SQLite/JWT 使用流程和一个真实 MySQL＋纯 gRPC 代表项目，不代表独立机器、无缓存或跨平台恢复验证。新增 RPC 必须登记精确 FullMethod；普通构建继续使用已生成 Proto。
+以 ROADMAP 的状态为准，不在本文另行维护阶段进度或临时测试决定。下一步为 [业务试用与生成质量收口](implementation.md#下一步业务试用与生成质量收口)：验证实际业务扩展和增量生成，只处理已复现的问题；原 D12 至 D17 全部暂缓。相关改动遵循 [执行门槛](implementation.md#后续阶段的共同执行门槛)，不默认重跑 D7 全量长测。新增 RPC 必须登记精确 FullMethod；普通构建继续使用已生成 Proto。
 
 资源计划通过 `CoreFiles()`、`HTTPFiles()`、`RPCFiles()`、`SchemaStore()` 和 `MigrationDraft()` 暴露可审阅副本；`PrepareResource` 负责协议工具检查和完整渲染，公共 `gen resource` 负责预览或执行受保护写入，并同步登记与 OpenAPI 汇总。SchemaStore 是只读 schema 原型，不得与 CoreFiles 的完整 Store 写入同一路径。迁移草稿只生成待审阅 SQL，不自动应用；新资源运行前仍须显式执行迁移。
 
