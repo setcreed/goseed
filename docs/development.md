@@ -98,6 +98,9 @@ Makefile 固定 GOTOOLCHAIN=go1.26.4、GOWORK=off；Go 模块与构建缓存使�
 | `make compatibility`、`make compatibility-cross` | 依赖原型及跨平台构建 | 不等于业务模板生产部署验证 |
 | `make protocol-check` | 已提交协议产物复现 | 需固定协议工具 |
 | `make template-db` | 真 MySQL/PostgreSQL、TLS、策略、迁移及资源核心 | Docker/Compose/OpenSSL；显式目标不允许跳过外部用例 |
+| `make template-deployment-db` | 生成 MySQL/PostgreSQL 备份脚本的真实 TLS 备份恢复 | 随机 Compose 项目与专用数据卷，结束清理 |
+| `make template-deployment-nginx` | 锁定 Nginx 容器校验四协议反代语法与错误证书路径 | `nginx -t` 实际运行，不启动服务 |
+| `make template-deployment` | systemd/Nginx 服务、TLS、健康与重启运行 | 构建 Debian 13 测试镜像并启动隔离容器；系统服务未通过时不得声明部署验收完成 |
 | `make template-redis` | 真 Redis/TLS、故障恢复与授权顺序 | 隔离服务、随机回环端口 |
 | `make template-container` | 部署镜像、非 root、只读文件系统、TLS/生命周期 | 显式启动 Docker，普通检查不启动它 |
 

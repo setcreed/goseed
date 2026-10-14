@@ -1,0 +1,40 @@
+[Unit]
+Description=[[.Name]] API server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=[[.Name]]
+Group=[[.Name]]
+WorkingDirectory=/opt/[[.Name]]/current
+EnvironmentFile=/etc/[[.Name]]/app.env
+ExecStart=/opt/[[.Name]]/current/bin/apiserver serve --config /etc/[[.Name]]/app.yaml
+Restart=on-failure
+RestartSec=3s
+StartLimitIntervalSec=60s
+StartLimitBurst=5
+KillSignal=SIGTERM
+TimeoutStopSec=20s
+UMask=0027
+[[if eq .Database "sqlite"]]
+StateDirectory=[[.Name]]
+StateDirectoryMode=0750
+[[end]]
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

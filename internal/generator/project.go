@@ -34,6 +34,7 @@ type ProjectMetadata struct {
 	Transport       string           `yaml:"transport"`
 	Metrics         bool             `yaml:"metrics,omitempty"`
 	Tracing         bool             `yaml:"tracing,omitempty"`
+	Deployment      string           `yaml:"deployment,omitempty"`
 	Modules         []ModuleMetadata `yaml:"-"`
 }
 
@@ -172,13 +173,14 @@ func parseProjectMetadata(data []byte) (ProjectMetadata, error) {
 		Transport       string    `yaml:"transport"`
 		Metrics         bool      `yaml:"metrics"`
 		Tracing         bool      `yaml:"tracing"`
+		Deployment      string    `yaml:"deployment"`
 		Modules         yaml.Node `yaml:"modules"`
 	}
 	strict.KnownFields(true)
 	if err := strict.Decode(&raw); err != nil {
 		return ProjectMetadata{}, fmt.Errorf("decode goseed.yaml: %w", err)
 	}
-	metadata = ProjectMetadata{Version: raw.Version, TemplateVersion: raw.TemplateVersion, Name: raw.Name, Module: raw.Module, Database: raw.Database, Authentication: raw.Authentication, Authorization: raw.Authorization, Redis: raw.Redis, Transport: raw.Transport, Metrics: raw.Metrics, Tracing: raw.Tracing}
+	metadata = ProjectMetadata{Version: raw.Version, TemplateVersion: raw.TemplateVersion, Name: raw.Name, Module: raw.Module, Database: raw.Database, Authentication: raw.Authentication, Authorization: raw.Authorization, Redis: raw.Redis, Transport: raw.Transport, Metrics: raw.Metrics, Tracing: raw.Tracing, Deployment: raw.Deployment}
 	if raw.Modules.Kind != 0 {
 		list := &raw.Modules
 		if list.Kind != yaml.SequenceNode {
@@ -225,6 +227,9 @@ func parseProjectMetadata(data []byte) (ProjectMetadata, error) {
 	}
 	if metadata.Transport != "http" && metadata.Transport != "grpc" && metadata.Transport != "dual" && metadata.Transport != "gateway" {
 		return ProjectMetadata{}, fmt.Errorf("unsupported transport %q in goseed.yaml", metadata.Transport)
+	}
+	if metadata.Deployment != "" && metadata.Deployment != "none" && metadata.Deployment != "single-host" {
+		return ProjectMetadata{}, fmt.Errorf("unsupported deployment %q in goseed.yaml", metadata.Deployment)
 	}
 	if len(metadata.Modules) == 0 {
 		return ProjectMetadata{}, fmt.Errorf("goseed.yaml must register at least one module")

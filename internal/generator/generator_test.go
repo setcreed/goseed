@@ -160,9 +160,9 @@ func TestProjectMetadataSupportsTypedModulesAndLegacyEntries(t *testing.T) {
 	if err != nil || len(metadata.Modules) != 1 || metadata.Modules[0] != (ModuleMetadata{Name: "example", Type: "module"}) {
 		t.Fatalf("legacy module entry was not normalized: %+v, %v", metadata.Modules, err)
 	}
-	typed := []byte("version: 1\ntemplate_version: 1\nname: shop\nmodule: example.com/shop\ndatabase: mysql\nauthentication: jwt\nauthorization: none\nredis: false\ntransport: http\nmodules:\n  - name: example\n    type: module\n  - name: product\n    type: resource\n    spec: specs/product.yaml\n    field_version: 1\n")
+	typed := []byte("version: 1\ntemplate_version: 1\nname: shop\nmodule: example.com/shop\ndatabase: mysql\nauthentication: jwt\nauthorization: none\nredis: false\ntransport: http\ndeployment: single-host\nmodules:\n  - name: example\n    type: module\n  - name: product\n    type: resource\n    spec: specs/product.yaml\n    field_version: 1\n")
 	metadata, err = parseProjectMetadata(typed)
-	if err != nil || len(metadata.Modules) != 2 || metadata.Modules[1].Type != "resource" {
+	if err != nil || len(metadata.Modules) != 2 || metadata.Modules[1].Type != "resource" || metadata.Deployment != "single-host" {
 		t.Fatalf("typed module entries were not parsed: %+v, %v", metadata.Modules, err)
 	}
 }

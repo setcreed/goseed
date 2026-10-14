@@ -23,7 +23,7 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 | D8 基础使用快速验收 | 已交付 | 干净源码构建＋默认 HTTP/SQLite/JWT 流程＋一个真实 MySQL/纯 gRPC 代表项目 |
 | D9 版本与分发 | 已交付 | 版本信息、本地安装/归档/校验、旧项目兼容与人工维护；Linux amd64 运行仍未验证 |
 | D10 可观测性 | 已交付 | P01 契约、P02 指标、P03 追踪与 P04 组合验收完成；默认关闭并按协议和选项裁剪 |
-| D11 单机部署 | 进行中 | P01 契约完成；P02 模板、P03 备份恢复演练、P04 升级故障验收待完成 |
+| D11 单机部署 | 进行中 | P01 契约完成；P02 模板与生成矩阵已完成，锁定版 Nginx 配置/错误证书容器验证通过，systemd 服务生命周期验证待完成；P03 备份恢复已验收；P04 回退指引与隔离符号链接演练完成，真实服务升级演练待 P02 |
 | D12 独立账号模板 | 已规划，未实施 | 注册/登录/重置/刷新/撤销，SQL 与四协议安全链 |
 | D13 消息基础 | 已规划，未实施 | 单后端发布消费、重试/重放、失败隔离及事务发布 |
 | D14 任务系统 | 已规划，未实施 | Worker、异步/延迟/定时、取消与运行诊断 |
@@ -36,7 +36,7 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 首版后全部已知方向已规划；D8 基础使用快速验收、D9 版本/分发与 D10 可观测性已完成，当前执行 D11 单机部署。首版后产品范围见 [需求清单](docs/requirements.md#首版后的完整需求范围)。
 
 1. 推荐排期：**D8 → D9 → D10 → D11 → D12 → D13 → D14 → D15 → D16 → D17**；技术前置见施工清单，阶段内部按任务依赖验收。
-2. 当前实施入口为 **D11-P02 systemd/Nginx 模板**；P01 已确定 `--deployment=single-host`、四协议/四存储支持、隔离主机路径、TLS/代理信任及恢复回退边界。其他阶段按施工清单中的前置关系执行。
+2. 当前实施入口为 **D11-P02 Linux systemd 服务生命周期验收**；模板生成和四协议 readonly 编译、锁定 Nginx 容器 `nginx -t`（含错误证书失败路径）已通过，但 Debian 测试镜像的软件源索引下载过慢，实际 systemd 启动/排空/重启和 Nginx 转发尚未运行。P03 已完成真实 SQLite WAL、MySQL TLS 与 PostgreSQL TLS 备份恢复；P04 的原子 release 符号链接回退和 schema 不回滚边界已做隔离演练，仍需依赖 P02 进行服务级演练。
 3. 技术/产品定稿项 Q01 至 Q09 按 [待决登记](docs/implementation.md#待决登记与规划完成条件) 关闭；除范围变化或新证据推翻假设，不再每完成一阶段重做整体路线。
 
 完整范围、任务、失败路径及验收见 [施工清单](docs/implementation.md#阶段依赖与交付物)。流式 RPC、通用分布式锁、高级资源 DSL、多消息后端、工作流 UI、多租户/SSO、原生 Windows 与自动升级等已明确 [暂不实施及重新纳入条件](docs/requirements.md#已盘点但暂不实施的方向)。后续验证按改动风险定向执行，不默认重复 D7 全量长测。推送、正式发版、外部通知和生产部署不属于本次规划授权。
@@ -51,9 +51,11 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 - D7 全仓 `make race` 已通过，`tests/integration` 用时 2289.398 秒；D6 的完整 `make check`、真实服务矩阵、生成产物集成和 D7 的兼容性/交叉构建检查均通过。
 - go-redis 取消、pgx 人工延迟 Write 竞争边界仍按 [依赖记录](docs/dependencies.md) 保留；固定版本不意味着上游问题消失。
 - 仓库采用 MIT；第三方依赖及生成代码仍保留适用许可。源码仓库已经公开；本地 D8 验收完成不表示最新提交已推送或正式版本已发布。D8 仅覆盖指定干净源码构建、默认 HTTP 使用流程和一个真实 MySQL/纯 gRPC 代表项目，不等同于无缓存、独立机器或跨平台恢复验收。
-- D9 已完成本地安装、可复现归档、许可证与 SHA-256 核验、v1 增量兼容及人工维护说明。macOS arm64、Rosetta 下 macOS amd64、Linux arm64 的包运行和生成检查通过；Linux amd64 仅构建与包校验通过，运行未验证；Windows 原生不在支持范围。D10 完成指标/追踪模板及本地 OTLP protobuf 接收器验收；D11 实施中，D12 至 D17 尚未实施。
+- D9 已完成本地安装、可复现归档、许可证与 SHA-256 核验、v1 增量兼容及人工维护说明。macOS arm64、Rosetta 下 macOS amd64、Linux arm64 的包运行和生成检查通过；Linux amd64 仅构建与包校验通过，运行未验证；Windows 原生不在支持范围。D10 完成指标/追踪模板及本地 OTLP protobuf 接收器验收；D11 的真实 systemd/Nginx 服务级验收尚未完成，D12 至 D17 尚未实施。
 
 ## 最近完成
+
+- 2026-10-14 21:48 D11-P03 备份恢复工具与 P04 回退指引完成：SQLite 生成 WAL 在线 `.backup` 与完整性检查，并拒绝损坏源和覆盖已有目标；MySQL 使用 TLS 校验和独立凭据文件的 `mysqldump --single-transaction`，PostgreSQL 使用 `verify-full` 与 custom dump。真实 SQLite WAL、MySQL 8.4.11、PostgreSQL 18.6 隔离恢复演练均核对回备份前数据且保留原备份；专用数据库卷/网络已清理。P04 增加 Debian 原子符号链接切换/回退步骤和隔离模拟；应用二进制回退不回滚 schema。P02 的真实 systemd/Nginx 运行验证仍待完成。
 
 - 2026-10-14 21:04 D11-P01 部署契约完成：确定 `--deployment=single-host` 默认关闭、systemd/Nginx 仅作为 `deploy/` 文件副本；支持 HTTP/gRPC/dual/Gateway 及 SQLite/MySQL/PostgreSQL/无数据库，应用单实例绑定 loopback、双协议分离域名、Nginx TLS 终止/验证 gRPC 上游 TLS、不信任任意 forwarded headers。定稿专用服务账号、`/opt` releases+current、`/etc` 私有配置、`/var/lib` 状态和 `/var/backups` 备份目录；固定 SQLite 在线 `.backup`、MySQL InnoDB `mysqldump --single-transaction`、PostgreSQL custom `pg_dump` 及 schema 不自动回退边界。Docker 29.8.2 Linux/arm64 API 只读核验成功；D11-P02 进入实施。
 
@@ -104,6 +106,9 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 - 2026-10-12 13:03 R04 提交 `a123019`：迁移版本/应用集合核验、SQL 草稿、资源只读 schema 与启动 Context；生成器不执行数据库操作。
 
 ## 最近验证
+
+- 2026-10-14 21:53 D11 定向验证补充：`make template-deployment-nginx` 在锁定的 Nginx 1.29.4 容器中通过 dual HTTP/gRPC 配置语法检查，并确认缺失证书路径使 `nginx -t` 失败；无服务启动。systemd 运行验收仍未通过，Debian apt 索引下载曾超过可接受时长。
+- 2026-10-14 21:48 D11-P02/P03/P04 定向验证：`make test GO_PACKAGES='./internal/templates ./internal/cli ./internal/generator'`、四协议及 PostgreSQL+dual+Redis+Casbin 单机部署项目 readonly 编译、SQLite WAL 备份/损坏拒绝/缺失数据库拒绝/不覆盖恢复、release 符号链接故障回退通过；`make template-deployment-db` 使用锁定的 MySQL 8.4.11 与 PostgreSQL 18.6 TLS 容器执行生成备份脚本并恢复原数据，容器/卷/网络已自动清理。`make lint`（0 issues）、相关包 `go vet`、`make contract-check`（98 个本地链接、397 个交付文件）、`make fmt-check` 与 `git diff --check` 通过。systemd 容器测试未运行；`TestSingleHostDeploymentContainer` 按未设置的 Docker 集成开关跳过，Debian apt 索引下载曾超过可接受时长，不能将其视为通过。
 
 - 2026-10-14 19:38 D9-P04 清洁提交最终验收：提交 `a5ab852` 上 `make install VERSION=v0.0.0-d9` 安装到隔离目录并显示正确提交/模板/spec；`make package` 从 clean source 生成 macOS/Linux amd64/arm64 四个包，manifest 均记录相同完整提交及 `source_dirty=false`，`make verify-package` 全部通过，macOS arm64 归档重建摘要一致。该 clean commit 的 macOS arm64 本机、macOS amd64 Rosetta、Linux arm64 固定断网容器包均运行 `--version` 并生成 52 个文件。Linux amd64 仍未运行：本机锁定镜像只有 arm64 内容层，强制 amd64 时 Docker 报缺失 layer；保留未验证。Windows 原生未测试。
 

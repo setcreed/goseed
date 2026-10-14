@@ -2,6 +2,10 @@
 
 Go 1.26.4 独立 Gateway 项目。HTTP 请求经 grpc-gateway 转发到本进程 gRPC Handler，再进入 Biz；同时保留直接 gRPC 入口。[[if eq .Database "none"]]提供认证问候，Handler → Biz，无 ORM 或虚假持久化。[[else]]提供认证 CRUD，Handler → Biz → Store，使用 [[.Database]]，迁移显式执行。[[end]]
 
+[[if eq .Deployment "single-host"]]## 单机部署
+
+本项目包含可审阅的 systemd/Nginx 文件副本，按 [deploy/README.md](deploy/README.md) 手动部署；生成命令不会修改主机或执行迁移。[[end]]
+
 ```sh
 make build
 ./bin/apiserver dev init

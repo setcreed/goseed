@@ -43,12 +43,12 @@ func TestDryRunReportsPlanWithoutWriting(t *testing.T) {
 
 	var output bytes.Buffer
 	cmd := NewCommand("test")
-	cmd.SetArgs([]string{"--name", "shopapi", "--module", "github.com/acme/shop", "--db", "postgres", "--redis", "--authz", "casbin", "--transport", "dual", "--dry-run"})
+	cmd.SetArgs([]string{"--name", "shopapi", "--module", "github.com/acme/shop", "--db", "postgres", "--redis", "--authz", "casbin", "--transport", "dual", "--deployment", "single-host", "--dry-run"})
 	cmd.SetOut(&output)
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"Project: shopapi", "Module: github.com/acme/shop", "Database: postgres", "Authorization: casbin", "Redis: true", "Transport: dual", "goseed.yaml", "Dry run: no files written."} {
+	for _, expected := range []string{"Project: shopapi", "Module: github.com/acme/shop", "Database: postgres", "Authorization: casbin", "Redis: true", "Transport: dual", "Deployment: single-host", "goseed.yaml", "deploy/nginx/http.conf", "Dry run: no files written."} {
 		if !strings.Contains(output.String(), expected) {
 			t.Errorf("plan does not contain %q:\n%s", expected, output.String())
 		}
@@ -64,6 +64,25 @@ func TestDryRunReportsPlanWithoutWriting(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Fatalf("dry-run created %d entries", len(entries))
+	}
+}
+
+func TestSingleHostDeploymentGenerationIsExplicit(t *testing.T) {
+	dir := projectDir(t)
+	t.Chdir(dir)
+	cmd := NewCommand("test")
+	cmd.SetArgs([]string{"--deployment=single-host"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"deploy/systemd/apiserver.service", "deploy/nginx/http.conf", "deploy/app.env.example", "deploy/README.md"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Errorf("generated deployment file %s: %v", name, err)
+		}
+	}
+	metadata, err := os.ReadFile(filepath.Join(dir, "goseed.yaml"))
+	if err != nil || !strings.Contains(string(metadata), "deployment: single-host\n") {
+		t.Fatalf("deployment choice missing from metadata: %q, %v", metadata, err)
 	}
 }
 
@@ -247,6 +266,7 @@ func TestInvalidParametersAndExistingDirectoryDoNotWrite(t *testing.T) {
 		{name: "invalid database", args: []string{"--db", "oracle"}},
 		{name: "invalid authorization", args: []string{"--authz", "unknown"}},
 		{name: "invalid transport", args: []string{"--transport", "unknown"}},
+		{name: "invalid deployment", args: []string{"--deployment", "kubernetes"}},
 		{name: "invalid module", args: []string{"--module", "../outside"}},
 		{name: "positional argument", args: []string{"shop"}},
 		{name: "non-empty directory", args: []string{"--dry-run"}, file: true},

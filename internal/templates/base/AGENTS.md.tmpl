@@ -5,6 +5,7 @@
 本项目为独立的 Go 业务服务，模块为 `[[.Module]]`，工具链固定 Go 1.26.4。当前能力为 [[if eq .Transport "dual"]]HTTP／gRPC 双协议[[else if eq .Transport "grpc"]]纯 gRPC[[else if eq .Transport "gateway"]]gRPC + HTTP Gateway[[else]]Gin HTTP[[end]]、[[if eq .Database "sqlite"]]文件 SQLite[[else if eq .Database "mysql"]]MySQL[[else if eq .Database "postgres"]]PostgreSQL[[else]]无数据库[[end]]、JWT 和示例业务。无需依赖生成器运行。
 
 开始工作先读本文件及 ROADMAP；当前使用入口与配置说明见 README。项目规则仅在本文件维护。
+[[if eq .Deployment "single-host"]]部署资产和运维边界见 [单机部署说明](deploy/README.md)。[[end]]
 [[if eq .Authz "casbin"]]
 Casbin 规则、策略存储与受控维护见 [授权文档](docs/authz.md) ；所有业务路由在认证之后授权，Biz 继续检查资源归属。默认拒绝，不暴露策略管理 API；离线更新后重启实例。
 [[end]]

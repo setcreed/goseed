@@ -13,7 +13,7 @@ export GOWORK := off
 export GOTOOLCHAIN := go1.26.4
 
 .DEFAULT_GOAL := check
-.PHONY: build install package verify-package test race vet lint fmt fmt-check check contract-check tools compatibility compatibility-cross compatibility-db protocol-tools protocol-check template-container template-db template-redis
+.PHONY: build install package verify-package test race vet lint fmt fmt-check check contract-check tools compatibility compatibility-cross compatibility-db protocol-tools protocol-check template-container template-db template-redis template-deployment template-deployment-db template-deployment-nginx
 
 build:
 	$(GO) build -mod=readonly -trimpath -ldflags '-X main.version=$(VERSION) -X main.commit=$(COMMIT)' -o bin/goseed ./cmd/goseed
@@ -84,6 +84,16 @@ template-db:
 
 template-redis:
 	python3 scripts/template-redis.py
+
+template-deployment: template-deployment-nginx
+	docker build --platform linux/arm64 -f tests/integration/deployment.Dockerfile -t goseed-d11-systemd-test:local tests/integration
+	GOSEED_TEST_DOCKER=1 $(GO) test -mod=readonly -count=1 -timeout=10m -v ./tests/integration -run '^TestSingleHostDeploymentContainer$$'
+
+template-deployment-db:
+	GOSEED_DEPLOYMENT_BACKUP_ONLY=1 python3 scripts/template-db.py
+
+template-deployment-nginx:
+	GOSEED_TEST_DOCKER=1 $(GO) test -mod=readonly -count=1 -timeout=5m -v ./tests/integration -run '^TestSingleHostNginxContainer$$'
 
 # Explicit installation only; build/test/check never install global tools.
 tools:

@@ -1,0 +1,30 @@
+#!/bin/sh
+set -eu
+umask 077
+
+if [ "$#" -ne 2 ]; then
+    printf 'usage: %s BACKUP.sqlite NEW_DATABASE_PATH\n' "$0" >&2
+    exit 2
+fi
+backup=$1
+target=$2
+if [ ! -f "$backup" ] || [ -e "$target" ]; then
+    printf '%s\n' 'backup must exist and destination must be new' >&2
+    exit 1
+fi
+if [ "$(sqlite3 "$backup" 'PRAGMA integrity_check;')" != ok ]; then
+    printf '%s\n' 'backup integrity check failed' >&2
+    exit 1
+fi
+parent=$(dirname "$target")
+mkdir -p "$parent"
+temporary=$(mktemp "$parent/.[[.Name]]-restore.XXXXXX")
+cleanup() { rm -f "$temporary"; }
+trap cleanup EXIT HUP INT TERM
+sqlite3 "$backup" ".backup '$temporary'"
+test "$(sqlite3 "$temporary" 'PRAGMA integrity_check;')" = ok
+chmod 0600 "$temporary"
+ln "$temporary" "$target"
+rm "$temporary"
+trap - EXIT HUP INT TERM
+printf '%s\n' "$target"

@@ -2,6 +2,10 @@
 
 独立 Go 后端服务，模块 `[[.Module]]`，Go 1.26.4。包含 HTTP[[if eq .Transport "dual"]] 与 gRPC[[end]]、[[if eq .Database "sqlite"]]文件 SQLite[[else if eq .Database "mysql"]]MySQL[[else]]PostgreSQL[[end]]、JWT、示例 CRUD、配置与日志、显式迁移和优雅退出。项目规范见 [AGENTS.md](AGENTS.md) ，开发状态见 [ROADMAP.md](ROADMAP.md) 。
 
+[[if eq .Deployment "single-host"]]## 单机部署
+
+本项目包含可审阅的 systemd/Nginx 文件副本，按 [deploy/README.md](deploy/README.md) 手动部署；生成命令不会修改主机或执行迁移。[[end]]
+
 [[if eq .Transport "dual"]]双协议同时启动，共享业务与连接池；HTTP 默认 8080，gRPC 默认 9090。`--address` 只覆盖 HTTP，`--grpc-address` 覆盖 gRPC。生产启动与生产配置的迁移命令需提供 `APP_GRPC_TLS_CERT/KEY`；显式 Proto 生成及客户端入口见 [双协议说明](docs/dual.md) 与 [gRPC](docs/grpc.md) 。[[end]]
 
 ## 开发启动

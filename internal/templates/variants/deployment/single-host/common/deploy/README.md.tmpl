@@ -1,0 +1,70 @@
+# 单机部署：[[.Name]]
+
+本目录提供可审阅的 systemd/Nginx 配置副本。生成命令不会安装软件、创建用户、写入 `/etc` 或 `/opt`、启动服务、签发证书、连接数据库或执行迁移。
+
+## 首次部署
+
+目标环境为 Linux + systemd，Nginx 需为 1.25.1 或更新版本；gRPC 入口要求编译启用 HTTP/2 模块。以 root 执行主机准备步骤前，请先审阅下列路径和服务账号：
+
+1. 创建无登录服务账号 `[[.Name]]`；创建 `/opt/[[.Name]]/releases/`、`/etc/[[.Name]]/tls/` 和 `/var/backups/[[.Name]]/`。应用 release 由 root 拥有且服务账号只读，`/etc/[[.Name]]` 只允许 root 和服务账号读取。
+2. 将构建并测试通过的二进制放入新的 `/opt/[[.Name]]/releases/<version>/bin/apiserver`，设置目录只读，然后原子创建/更新 `/opt/[[.Name]]/current` 符号链接。
+3. 将 `configs/app.example.yaml` 复制为 `/etc/[[.Name]]/app.yaml`，修改域名相关配置、数据库地址/TLS CA 和其他部署值。仅 SQLite 使用 `/var/lib/[[.Name]]/app.db`；服务启动时 systemd 创建 `/var/lib/[[.Name]]/` 并赋予服务账号写权限。
+4. 将 `deploy/app.env.example` 复制为 `/etc/[[.Name]]/app.env`，替换所有 `REPLACE_...` 值；使用密码学安全随机数生成至少 32 字节 JWT 密钥后 Base64 编码。该文件设为 `root:[[.Name]]`、`0640`，不得提交版本库或放入 shell 历史。
+5. 安装有效的公网证书到 Nginx 配置引用路径。纯 gRPC/dual 还要把签发 gRPC 服务证书的 CA 放到上游信任路径，证书 SAN 必须匹配 `grpc.internal`；将服务证书/私钥设置为应用账号可读、其他用户不可读。
+6. 将 `deploy/systemd/apiserver.service` 安装为 `/etc/systemd/system/[[.Name]].service`；将 `deploy/nginx/` 中适用配置安装到 Nginx include 目录。替换 `.invalid` 示例域名和证书路径。dual 分别配置 `api.example.invalid` 与 `grpc.example.invalid`；DNS/证书分别覆盖两者。
+7. 先运行 `nginx -t`，再 reload Nginx；执行 `systemctl daemon-reload`、`systemctl enable --now [[.Name]]`。仅公网开放 Nginx 80/443，应用上游地址维持 loopback。
+
+[[if ne .Database "none"]]生产服务不会自动迁移。首次启动前单独审阅仓库中的 SQL，并从已批准的管理环境执行 `./bin/apiserver migrate up --config /etc/[[.Name]]/app.yaml`；数据库应用账号不需要建库权限。[[else]]本项目不使用数据库，不生成迁移或数据库备份步骤。[[end]]
+
+[[if eq .Database "sqlite"]]## SQLite 备份与恢复
+
+安装受信任发行版提供的 `sqlite3`。备份账号需能读取 `/var/lib/[[.Name]]/app.db` 并写入 `/var/backups/[[.Name]]/`；执行 `sh deploy/backup.sh` 会生成带 UTC 时间戳的在线 `.backup` 快照，并先通过 `PRAGMA integrity_check`。WAL 场景不要复制单个数据库文件。
+
+恢复时先停止服务，将备份恢复到新的空路径，例如：
+
+```sh
+systemctl stop [[.Name]]
+install -d -o [[.Name]] -g [[.Name]] -m 0750 /var/lib/[[.Name]]/restore-check
+sh deploy/restore.sh /var/backups/[[.Name]]/<backup>.sqlite /var/lib/[[.Name]]/restore-check/app.db
+chown [[.Name]]:[[.Name]] /var/lib/[[.Name]]/restore-check/app.db
+sqlite3 /var/lib/[[.Name]]/restore-check/app.db 'PRAGMA integrity_check;'
+```
+
+在隔离路径完成应用只读核验后，由操作者决定如何切换数据路径并重新启动。脚本拒绝覆盖已存在的目标。[[else if eq .Database "mysql"]]## MySQL 备份与恢复
+
+安装与 MySQL 8.4 服务器兼容的客户端工具。将 `deploy/backup-mysql.cnf.example` 安装为 `/etc/[[.Name]]/backup-mysql.cnf`，设为 `root:[[.Name]]`、`0640`；替换凭据并授予备份账号读取数据库的最小权限。执行 `sh deploy/backup.sh` 生成 SQL dump，密码不会进入命令行。`--single-transaction` 只保证事务表的一致快照；备份期间禁止并行 DDL，非事务表不保证一致性。
+
+恢复必须由有临时建库权限的隔离测试账号创建随机空库，例如 `[[.Name]]_restore_<random>`，再运行 `mysql --defaults-extra-file=/path/to/isolated-test.cnf <random_database> < /var/backups/[[.Name]]/<backup>.sql`。确认 schema 版本与代表性数据后，删除该随机测试库；不得把生产账号用于创建或删除库，也不要向当前生产库导入。
+[[else if eq .Database "postgres"]]## PostgreSQL 备份与恢复
+
+安装与 PostgreSQL 18 服务器兼容的客户端工具。将 `deploy/pgpass.example` 安装为 `/etc/[[.Name]]/pgpass`，替换凭据并设为 `root:[[.Name]]`、`0600`；配置 `PGHOST`、`PGPORT`、`PGUSER`，并通过 libpq `PGSSLROOTCERT` 提供 CA。脚本固定 `PGSSLMODE=verify-full`，执行 `sh deploy/backup.sh` 生成 custom format dump。
+
+恢复必须由有临时建库权限的隔离测试账号创建随机空库，例如 `[[.Name]]_restore_<random>`，再执行 `PGPASSFILE=/path/to/isolated-test.pgpass pg_restore --exit-on-error --no-owner --dbname=<random_database> /var/backups/[[.Name]]/<backup>.dump`。确认 schema 版本与代表性数据后，删除该随机测试库；不得把生产账号用于创建或删除库，也不要恢复到当前生产库。[[end]]
+
+## TLS 与代理边界
+
+Nginx 为公网 HTTP API 终止 TLS，HTTP upstream 使用 `127.0.0.1:8080`。[[if or (eq .Transport "grpc") (eq .Transport "dual")]]gRPC 使用独立域名，Nginx 以 TLS 连接 `127.0.0.1:9090`，校验 CA 和 `grpc.internal` 名称；服务证书不得自签后关闭校验。[[end]]应用不信任 `X-Forwarded-*`，也不会将其用于认证、授权或客户端身份；Nginx 覆写这些头，避免接续客户端伪造的转发链。Gateway 的内部 gRPC CA 与 server name 另在应用配置中校验。
+
+systemd 服务以 `[[.Name]]` 非 root 账号运行；配置由该账号只读、SQLite 状态目录单独可写，系统目录只读。日志写入 journald。数据库/TLS/JWT/OTLP 秘钥不可写入 unit 文件、Nginx 文件或命令行。
+
+## 升级与回退
+
+新版本部署到独立 release 目录，先执行 readonly build/test 和配置核验。[[if eq .Database "sqlite"]]执行在线 SQLite 备份并检查完整性。[[else if or (eq .Database "mysql") (eq .Database "postgres")]]按团队的外部 SQL 备份流程完成隔离恢复验收。[[end]]审阅迁移 SQL，显式运行迁移命令。下面的原子符号链接替换使用 Debian/GNU `mv -T`：
+
+```sh
+ln -s /opt/[[.Name]]/releases/<version> /opt/[[.Name]]/current.next
+mv -Tf /opt/[[.Name]]/current.next /opt/[[.Name]]/current
+systemctl restart [[.Name]]
+systemctl is-active --quiet [[.Name]]
+```
+
+检查 readiness、协议健康和关键业务行为后才保留新版本为当前版本。若启动或健康检查失败，且 schema 仍兼容旧版本，可执行：
+
+```sh
+ln -s /opt/[[.Name]]/releases/<previous-version> /opt/[[.Name]]/current.rollback
+mv -Tf /opt/[[.Name]]/current.rollback /opt/[[.Name]]/current
+systemctl restart [[.Name]]
+systemctl is-active --quiet [[.Name]]
+```
+
+应用二进制回退不会回滚 schema。schema 不兼容时停止二进制回退，执行已批准的前向修复或把备份恢复到隔离新目标，核验后再显式切换数据路径。模板不会删除旧 release、覆盖生产数据或自动应用迁移。

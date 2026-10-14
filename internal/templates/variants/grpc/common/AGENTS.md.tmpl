@@ -1,6 +1,6 @@
 # [[.Name]] 项目规范
 
-独立 Go 1.26.4 gRPC 业务项目。运行时不依赖生成器。目录先看 [README](README.md) 与 [ROADMAP](ROADMAP.md) ，协议见 [说明](docs/grpc.md) ，配置见 [示例](configs/app.example.yaml) 。[[if eq .Authz "casbin"]]授权见 [策略说明](docs/authz.md) 。[[end]][[if .Redis]]缓存见 [Redis 说明](docs/redis.md) 。[[end]]
+独立 Go 1.26.4 gRPC 业务项目。运行时不依赖生成器。目录先看 [README](README.md) 与 [ROADMAP](ROADMAP.md) ，协议见 [说明](docs/grpc.md) ，配置见 [示例](configs/app.example.yaml) 。[[if eq .Deployment "single-host"]]部署资产和运维边界见 [单机部署说明](deploy/README.md) 。[[end]][[if eq .Authz "casbin"]]授权见 [策略说明](docs/authz.md) 。[[end]][[if .Redis]]缓存见 [Redis 说明](docs/redis.md) 。[[end]]
 
 - api/proto/ 保存契约，pkg/api/ 为可供其他 Go 服务导入的生成代码；修改契约后显式生成，勿手工改生成代码。
 - handler/grpc/ 仅做协议转换，biz/ 校验业务及归属，[[if ne .Database "none"]]store/ 持有数据库，[[end]]bootstrap/ 组装依赖，DI 只在此使用。

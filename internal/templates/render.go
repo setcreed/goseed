@@ -38,6 +38,7 @@ type Options struct {
 	Metrics       bool
 	Tracing       bool
 	Observability bool
+	Deployment    string
 }
 
 // ModuleEntry is the manifest projection used to render protocol registries.
@@ -131,12 +132,21 @@ func RenderWithModules(project Project, options Options, modules []ModuleEntry) 
 		return nil, fmt.Errorf("built-in example module is required")
 	}
 	options.Observability = options.Metrics || options.Tracing
+	if options.Deployment == "" {
+		options.Deployment = "none"
+	}
+	if options.Deployment != "none" && options.Deployment != "single-host" {
+		return nil, fmt.Errorf("unsupported deployment")
+	}
+	if options.Deployment == "single-host" && len(project.Name) > 32 {
+		return nil, fmt.Errorf("single-host deployment requires a project name of at most 32 characters for the Linux service account")
+	}
 	data := templateData{Project: project, Options: options, Modules: modules}
 	base, err := renderTree(sources, "base", data)
 	if err != nil {
 		return nil, err
 	}
-	if options.Database == "sqlite" && !options.Redis && options.Authz == "none" && options.Transport == "http" && !options.Metrics && !options.Tracing {
+	if options.Database == "sqlite" && !options.Redis && options.Authz == "none" && options.Transport == "http" && !options.Metrics && !options.Tracing && options.Deployment == "none" {
 		return finalize(base)
 	}
 	// Variant directories intentionally replace matching base files, and add
@@ -198,6 +208,15 @@ func RenderWithModules(project Project, options Options, modules []ModuleEntry) 
 		}
 		if options.Tracing {
 			directories = append(directories, "variants/observability/tracing")
+		}
+	}
+	if options.Deployment == "single-host" {
+		directories = append(directories,
+			"variants/deployment/single-host/common",
+			"variants/deployment/single-host/transport/"+options.Transport,
+		)
+		if options.Database != "none" {
+			directories = append(directories, "variants/deployment/single-host/database/"+options.Database)
 		}
 	}
 	for _, directory := range directories {
@@ -274,10 +293,9 @@ func mergeObservabilityManifest(files []File, options Options) ([]File, error) {
 		return nil, fmt.Errorf("observability selected but go.mod has no require block")
 	}
 	indirectBlock := strings.LastIndex(modText, "require (")
-	modText = mergeRequirementBlock(modText, block, requirements, false)
+	modText = mergeRequirementBlock(modText, requirements, false)
 	if indirectBlock != block {
-		indirectBlock = strings.LastIndex(modText, "require (")
-		modText = mergeRequirementBlock(modText, indirectBlock, indirectRequirements, true)
+		modText = mergeRequirementBlock(modText, indirectRequirements, true)
 	}
 	manifest.Content = []byte(modText)
 
@@ -316,7 +334,7 @@ func filterRequirement(requirements []string, module string) []string {
 	return filtered
 }
 
-func mergeRequirementBlock(modText string, start int, additions []string, last bool) string {
+func mergeRequirementBlock(modText string, additions []string, last bool) string {
 	seen := make(map[string]bool, len(additions))
 	versions := make(map[string]string, len(additions))
 	comments := make(map[string]string, len(additions))
@@ -348,7 +366,7 @@ func mergeRequirementBlock(modText string, start int, additions []string, last b
 		seen[fields[0]] = true
 	}
 	modText = strings.Join(lines, "\n")
-	start = strings.Index(modText, "require (")
+	start := strings.Index(modText, "require (")
 	if last && strings.Count(modText, "require (") > 1 {
 		start = strings.LastIndex(modText, "require (")
 	}

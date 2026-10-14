@@ -4,7 +4,7 @@
 
 ## 生成与支持范围
 
-创建项目时显式选择 `--deployment=single-host`；默认 `none`，不改变已有默认输出。该选项生成 `deploy/systemd/<name>.service`、按协议生成 `deploy/nginx/` 配置，以及该项目专属的部署、备份恢复和升级操作说明。模板仅作为可审阅文件副本，不由运行服务读取，也不覆盖业务配置。
+创建项目时显式选择 `--deployment=single-host`；默认 `none`，不改变已有默认输出。该选项生成 `deploy/systemd/<name>.service`、按协议生成 `deploy/nginx/` 配置，以及该项目专属的部署、备份恢复和升级操作说明。项目名最多 32 个字符，以符合 Linux 服务账号长度限制。模板仅作为可审阅文件副本，不由运行服务读取，也不覆盖业务配置。
 
 单机模板适用于 Linux + systemd，应用单实例运行。HTTP、gRPC、dual 和 Gateway 均支持：HTTP 服务由 Nginx 终止公网 TLS 后代理到应用 loopback；纯 gRPC 使用独立 gRPC 域名和 Nginx TLS 前端，并以验证服务证书的 TLS 连接代理到 loopback gRPC；dual 使用不同的 HTTP 与 gRPC 域名；Gateway 只代理其 HTTP 入口，应用到内部 gRPC 的 TLS 校验仍由应用配置负责。生产应用的监听地址固定为 `127.0.0.1`，数据库/Redis 不暴露为公网入口。未选择数据库时仍可生成服务与代理模板，但没有数据库备份操作。HTTP/2 gRPC 前端要求 Nginx 1.25.1 或更新版本，以使用当前 `http2 on` 配置语法。
 
@@ -39,6 +39,6 @@ MySQL 使用固定工具版本的 `mysqldump --single-transaction`（仅对事�
 
 ## 验收边界
 
-D11 验收在专用隔离 Linux 环境中运行 systemd、Nginx 和随机测试数据，固定 Debian 13 基线与其中 systemd/Nginx 包版本，并记录实际镜像 digest。测试覆盖服务启动、SIGTERM 排空与重启、权限/只读边界、有效与错误证书、伪造转发头不被信任、HTTP/gRPC 路由、SQLite WAL 备份恢复、MySQL/PostgreSQL 隔离恢复以及新旧 release 回退。语法检查不代替真实 systemd/Nginx 运行；测试环境不可用时，相关运行验收必须明确保留未通过。
+D11 验收在专用隔离 Linux 环境中运行 systemd、Nginx 和随机测试数据，固定 Debian 13 基线与其中 systemd/Nginx 包版本，并记录实际镜像 digest。测试覆盖服务启动、SIGTERM 排空与重启、权限/只读边界、有效与错误证书、伪造转发头不被信任、HTTP/gRPC 路由、SQLite WAL 备份恢复、MySQL/PostgreSQL 隔离恢复以及新旧 release 回退。语法检查不代替真实 systemd/Nginx 运行；测试环境不可用时，相关运行验收必须明确保留未通过。当前 `make template-deployment-nginx` 已在锁定 Nginx 容器中通过配置语法和错误证书路径检查，`make template-deployment-db` 的 MySQL/PostgreSQL TLS 恢复已通过；systemd 服务和实际代理转发仍待运行验收。
 
 实现依据：[Nginx gRPC 模块](https://nginx.org/en/docs/http/ngx_http_grpc_module.html)、[Nginx HTTP/2 模块](https://nginx.org/en/docs/http/ngx_http_v2_module.html)、[Debian systemd.exec 手册](https://manpages.debian.org/trixie/systemd/systemd.exec.5.en.html)、[SQLite Online Backup API](https://www.sqlite.org/backup.html)、[MySQL 8.4 备份方法](https://dev.mysql.com/doc/refman/8.4/en/backup-methods.html)、[PostgreSQL 18 pg_dump](https://www.postgresql.org/docs/18/app-pgdump.html) 与 [pg_restore](https://www.postgresql.org/docs/18/app-pgrestore.html)。

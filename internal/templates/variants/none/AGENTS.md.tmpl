@@ -6,6 +6,7 @@
 ## 定位与入口
 
 本项目是独立 [[if eq .Transport "dual"]]HTTP／gRPC 双协议[[else]]HTTP[[end]]/JWT 业务服务，模块 `[[.Module]]`，Go 1.26.4。开始先读本文件与 ROADMAP，当前使用方式见 README；项目规则仅在本文件维护。
+[[if eq .Deployment "single-host"]]部署资产和运维边界见 [单机部署说明](deploy/README.md)。[[end]]
 
 ## 目录与工程边界
 

@@ -87,10 +87,12 @@ subjectAltName = IP:127.0.0.1
             image = run(["docker", "inspect", "--format", "{{.Image}}", container], True).stdout.strip()
             digest = run(["docker", "image", "inspect", "--format", "{{json .RepoDigests}}", image], True).stdout.strip()
             print(service + " tested image: " + digest, flush=True)
+            env["GOSEED_TEST_" + service.upper() + "_CONTAINER"] = container
         env["GOSEED_TEST_CA_FILE"] = str(directory / "ca.crt")
         # Verify the clean v1 baseline first, then explicitly upgrade the owned
         # application database to the Casbin v2 schema in a separate invocation.
-        for test in ("TestExternalSQLProjects", "TestExternalCasbinProjects", "TestExternalGRPCProjects", "TestExternalDualProjects", "TestExternalGatewayProjects", "TestExternalMigrationVersionProjects", "TestExternalResourceCoreProjects"):
+        tests = ("TestSingleHostExternalSQLBackupRestore",) if os.environ.get("GOSEED_DEPLOYMENT_BACKUP_ONLY") == "1" else ("TestExternalSQLProjects", "TestExternalCasbinProjects", "TestExternalGRPCProjects", "TestExternalDualProjects", "TestExternalGatewayProjects", "TestExternalMigrationVersionProjects", "TestExternalResourceCoreProjects", "TestSingleHostExternalSQLBackupRestore")
+        for test in tests:
             run(["go", "test", "-mod=readonly", "-count=1", "-v", "-timeout=15m", "./tests/integration", "-run", "^" + test + "$"], timeout=960)
     finally:
         if started:

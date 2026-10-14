@@ -28,6 +28,9 @@ func TestDeliveredContracts(t *testing.T) {
 	t.Run("observability-both", func(t *testing.T) {
 		checkDeliveredOptions(t, Options{Database: "sqlite", Metrics: true, Tracing: true})
 	})
+	t.Run("deployment-single-host", func(t *testing.T) {
+		checkDeliveredOptions(t, Options{Database: "sqlite", Deployment: "single-host"})
+	})
 }
 
 func TestGRPCContracts(t *testing.T) {
@@ -63,6 +66,127 @@ func TestDualContracts(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+func TestDeploymentContracts(t *testing.T) {
+	for _, transport := range []string{"http", "grpc", "dual", "gateway"} {
+		for _, database := range []string{"sqlite", "mysql", "postgres", "none"} {
+			t.Run(transport+"-"+database, func(t *testing.T) {
+				plan, err := Render(Project{Name: "demo", Module: "example.com/demo"}, Options{Transport: transport, Database: database, Deployment: "single-host"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				files := make(map[string]string, len(plan))
+				for _, file := range plan {
+					files[file.Path] = string(file.Content)
+				}
+				for _, path := range []string{"deploy/systemd/apiserver.service", "deploy/app.env.example", "deploy/README.md"} {
+					if files[path] == "" {
+						t.Errorf("missing deployment file %s", path)
+					}
+				}
+				wantHTTP := transport == "http" || transport == "dual" || transport == "gateway"
+				wantGRPC := transport == "grpc" || transport == "dual"
+				if got := files["deploy/nginx/http.conf"] != ""; got != wantHTTP {
+					t.Errorf("HTTP proxy presence = %t, want %t", got, wantHTTP)
+				}
+				if got := files["deploy/nginx/grpc.conf"] != ""; got != wantGRPC {
+					t.Errorf("gRPC proxy presence = %t, want %t", got, wantGRPC)
+				}
+				if database == "sqlite" && !strings.Contains(files["deploy/app.env.example"], "APP_DATABASE_PATH=/var/lib/demo/app.db") {
+					t.Fatal("SQLite deployment does not place data in its systemd state directory")
+				}
+				if database == "none" && strings.Contains(files["deploy/app.env.example"], "APP_DATABASE_") {
+					t.Fatal("no-database deployment generated database settings")
+				}
+				if database == "sqlite" {
+					for _, path := range []string{"deploy/backup.sh", "deploy/restore.sh"} {
+						if files[path] == "" {
+							t.Errorf("SQLite deployment missing %s", path)
+						}
+					}
+				}
+				if database == "mysql" || database == "postgres" {
+					if files["deploy/backup.sh"] == "" {
+						t.Errorf("%s deployment missing backup script", database)
+					}
+					if strings.Contains(files["deploy/backup.sh"], "password=") {
+						t.Errorf("%s backup script embeds a password", database)
+					}
+					credentialFile := map[string]string{"mysql": "deploy/backup-mysql.cnf.example", "postgres": "deploy/pgpass.example"}[database]
+					if files[credentialFile] == "" {
+						t.Errorf("%s deployment missing credential file example %s", database, credentialFile)
+					}
+				}
+				if database == "none" && files["deploy/backup.sh"] != "" {
+					t.Error("no-database deployment generated database backup instructions")
+				}
+				if got := strings.Contains(files["deploy/systemd/apiserver.service"], "StateDirectory=demo"); got != (database == "sqlite") {
+					t.Errorf("systemd state directory for %s = %t, want %t", database, got, database == "sqlite")
+				}
+				if files["deploy/nginx/http.conf"] != "" && strings.Contains(files["deploy/nginx/http.conf"], "$proxy_add_x_forwarded_for") {
+					t.Fatal("Nginx preserves a client-controlled forwarded chain")
+				}
+				if files["deploy/nginx/grpc.conf"] != "" {
+					for _, required := range []string{"http2 on;", "grpc_pass grpcs://127.0.0.1:9090;", "grpc_ssl_verify on;", "grpc_ssl_server_name on;"} {
+						if !strings.Contains(files["deploy/nginx/grpc.conf"], required) {
+							t.Errorf("gRPC proxy missing %q", required)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestDeploymentRedisTLSConfiguration(t *testing.T) {
+	plan, err := Render(Project{Name: "demo", Module: "example.com/demo"}, Options{Database: "none", Redis: true, Authz: "casbin", Transport: "dual", Deployment: "single-host"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range plan {
+		if file.Path != "deploy/app.env.example" {
+			continue
+		}
+		for _, value := range []string{"APP_REDIS_ADDRESS=127.0.0.1:6379", "APP_REDIS_TLS=true", "APP_REDIS_CA_FILE=/etc/demo/tls/redis-ca.pem"} {
+			if !strings.Contains(string(file.Content), value) {
+				t.Errorf("deployment Redis configuration missing %q", value)
+			}
+		}
+		return
+	}
+	t.Fatal("deployment environment example is missing")
+}
+
+func TestDefaultProjectOmitsDeploymentFiles(t *testing.T) {
+	plan, err := Render(Project{Name: "demo", Module: "example.com/demo"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range plan {
+		if strings.HasPrefix(file.Path, "deploy/") {
+			t.Fatalf("default project unexpectedly includes deployment file %s", file.Path)
+		}
+	}
+}
+
+func TestDeploymentRejectsInvalidNamesAndModes(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		project  Project
+		mode     string
+		contains string
+	}{
+		{name: "unknown mode", project: Project{Name: "demo", Module: "example.com/demo"}, mode: "kubernetes", contains: "unsupported deployment"},
+		{name: "long service account", project: Project{Name: strings.Repeat("a", 33), Module: "example.com/demo"}, mode: "single-host", contains: "at most 32 characters"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Render(test.project, Options{Deployment: test.mode})
+			if err == nil || !strings.Contains(err.Error(), test.contains) {
+				t.Fatalf("invalid deployment input result = %v, want %q", err, test.contains)
+			}
+		})
 	}
 }
 

@@ -78,7 +78,7 @@ func Prepare(root string, project templates.Project, options templates.Options) 
 
 // Report writes a stable, reviewable summary without changing the target.
 func (p Plan) Report(w io.Writer, dryRun bool) error {
-	if _, err := fmt.Fprintf(w, "Project: %s\nModule: %s\nDatabase: %s\nJWT: enabled\nAuthorization: %s\nRedis: %t\nTransport: %s\nFiles (%d):\n", p.Project.Name, p.Project.Module, optionOr(p.Options.Database, "sqlite"), optionOr(p.Options.Authz, "none"), p.Options.Redis, optionOr(p.Options.Transport, "http"), len(p.Files)); err != nil {
+	if _, err := fmt.Fprintf(w, "Project: %s\nModule: %s\nDatabase: %s\nJWT: enabled\nAuthorization: %s\nRedis: %t\nTransport: %s\nDeployment: %s\nFiles (%d):\n", p.Project.Name, p.Project.Module, optionOr(p.Options.Database, "sqlite"), optionOr(p.Options.Authz, "none"), p.Options.Redis, optionOr(p.Options.Transport, "http"), optionOr(p.Options.Deployment, "none"), len(p.Files)); err != nil {
 		return err
 	}
 	for _, file := range p.Files {
@@ -270,6 +270,9 @@ func renderMetadataModules(project templates.Project, options templates.Options,
 	}
 	if options.Tracing {
 		output.WriteString("tracing: true\n")
+	}
+	if options.Deployment != "" && options.Deployment != "none" {
+		fmt.Fprintf(&output, "deployment: %s\n", options.Deployment)
 	}
 	output.WriteString("modules:\n")
 	for _, module := range modules {

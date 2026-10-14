@@ -15,6 +15,7 @@
 | 授权 | 可选 Casbin RBAC、默认拒绝、SQL 或只读文件策略 |
 | 缓存 | 可选 Redis；示例缓存、TTL、可选回源与必需依赖检查 |
 | 可观测性 | 可选 OpenTelemetry 指标与追踪，OTLP/HTTP 主动推送；默认关闭 |
+| 单机部署 | 显式生成 systemd/Nginx 配置副本、权限/TLS 指引与所选数据库备份恢复脚本 |
 | 工程基础 | 强类型配置、Zap 日志、Context、业务错误、显式迁移、健康检查、TLS 与有限期关闭 |
 | 部署文件 | 独立 Go module、Makefile、非 root Dockerfile、所选能力的开发配置 |
 | 业务模块 | `gen module` 创建无业务操作的结构骨架，登记协议与文档 |
@@ -89,6 +90,8 @@ goseed --name shop --module github.com/acme/shop \
 上例假定已将构建的 goseed 加入 PATH。生成命令只生成文件，不执行 Git、依赖安装、数据库迁移、容器启动或部署。已有文件冲突会被拒绝；业务项目的运行步骤以它自身生成的 README 为准。
 
 `--metrics` 与 `--tracing` 可独立选择；它们默认关闭，启用时需在生成项目的运行环境设置独立 OTLP/HTTP 信号出口，见生成项目 README。
+
+`--deployment=single-host` 显式生成 systemd/Nginx 单机部署副本，默认不增加这些文件；SQLite、MySQL 和 PostgreSQL 项目会生成对应备份工具说明。样例不会安装系统服务、写主机目录或运行迁移。实际 systemd/Nginx 隔离运行验收状态见 [ROADMAP](ROADMAP.md)。
 
 ## 为已有项目增加模块
 

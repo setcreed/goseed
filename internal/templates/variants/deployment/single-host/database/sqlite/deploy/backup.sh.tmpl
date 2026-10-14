@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+umask 077
+
+database=/var/lib/[[.Name]]/app.db
+backup_dir=/var/backups/[[.Name]]
+if [ ! -f "$database" ]; then
+    printf 'database does not exist: %s\n' "$database" >&2
+    exit 1
+fi
+mkdir -p "$backup_dir"
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+temporary=$(mktemp "$backup_dir/[[.Name]]-$stamp.XXXXXX")
+backup=${temporary}.sqlite
+cleanup() { rm -f "$temporary"; }
+trap cleanup EXIT HUP INT TERM
+
+sqlite3 "$database" ".backup '$temporary'"
+test "$(sqlite3 "$temporary" 'PRAGMA integrity_check;')" = ok
+mv "$temporary" "$backup"
+trap - EXIT HUP INT TERM
+printf '%s\n' "$backup"

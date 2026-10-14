@@ -12,7 +12,7 @@ import (
 
 // NewCommand creates a command tree without global flag or output state.
 func NewCommand(version string) *cobra.Command {
-	var name, module, database, authorization, transport string
+	var name, module, database, authorization, transport, deployment string
 	var redis, metrics, tracing, dryRun bool
 	command := &cobra.Command{
 		Use:           "goseed",
@@ -35,7 +35,7 @@ func NewCommand(version string) *cobra.Command {
 			if modulePath == "" {
 				modulePath = "example.com/" + projectName
 			}
-			options := templates.Options{Database: database, Redis: redis, Authz: authorization, Transport: transport, Metrics: metrics, Tracing: tracing}
+			options := templates.Options{Database: database, Redis: redis, Authz: authorization, Transport: transport, Metrics: metrics, Tracing: tracing, Deployment: deployment}
 			plan, err := generator.Prepare(root, templates.Project{Name: projectName, Module: modulePath}, options)
 			if err != nil {
 				return err
@@ -66,6 +66,7 @@ func NewCommand(version string) *cobra.Command {
 	flags.StringVar(&transport, "transport", "http", "transport: http, grpc, dual, or gateway")
 	flags.BoolVar(&metrics, "metrics", false, "include request and dependency metrics exported through OTLP/HTTP")
 	flags.BoolVar(&tracing, "tracing", false, "include request tracing exported through OTLP/HTTP")
+	flags.StringVar(&deployment, "deployment", "none", "deployment template: none or single-host")
 	flags.BoolVar(&dryRun, "dry-run", false, "validate and display the generation plan without writing files")
 	return command
 }
