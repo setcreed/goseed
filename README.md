@@ -28,7 +28,13 @@ export PATH="$(go env GOPATH)/bin:$PATH"
 goseed --version
 ```
 
-更新时重新执行安装命令；需要固定已发布版本时，将 `@latest` 替换为对应的 `@vX.Y.Z`。
+更新时重新执行安装命令。需要固定当前发布版本时使用：
+
+```sh
+go install github.com/setcreed/goseed/cmd/goseed@v0.1.0
+```
+
+macOS/Linux 预编译包和 SHA-256 文件见 [GitHub Releases](https://github.com/setcreed/goseed/releases/tag/v0.1.0)。
 
 ### 拉取源码编译
 
