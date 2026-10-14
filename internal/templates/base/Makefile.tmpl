@@ -1,9 +1,5 @@
 GO ?= go
 VERSION ?= dev
-GOCACHE ?= $(CURDIR)/.tmp/go-cache
-GOMODCACHE ?= $(CURDIR)/.tmp/mod-cache
-GOLANGCI_LINT_CACHE ?= $(CURDIR)/.tmp/lint-cache
-export GOCACHE GOMODCACHE GOLANGCI_LINT_CACHE
 export GOTOOLCHAIN := local
 export GOWORK := off
 

@@ -65,7 +65,7 @@ make build
 docker build -f build/docker/Dockerfile -t [[.Name]]:local .
 ```
 
-`go.mod/go.sum` 包含完整依赖，构建与测试使用 readonly；linter 固定 2.14.0，显式安装到 `.tools/bin/`，缓存放 `.tmp/`。生成项目无需生成器运行。
+`go.mod/go.sum` 包含完整依赖，构建与测试使用 readonly；linter 固定 2.14.0，显式安装到 `.tools/bin/`。构建、依赖和 linter 缓存使用各工具默认位置，保留用户的环境变量或 Go 配置；可用 `go env GOCACHE GOMODCACHE` 查看 Go 缓存路径。普通构建与测试不会为缓存创建项目内 `.tmp/`。生成项目无需生成器运行。
 
 容器以 UID/GID 10001 运行，使用固定摘要 Go 1.26.4 构建镜像及 scratch 运行镜像。安全注入 `APP_JWT_SECRET` 后直接启动，默认监听 `0.0.0.0:8080`，不需要数据库或数据卷。示例及开发 Token 不代替真实账号体系、业务要求和环境上线验收。
 [[if .Redis]]

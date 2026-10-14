@@ -4,11 +4,26 @@
 
 ## 导航
 
+- [构建缓存与旧项目处理](#构建缓存与旧项目处理)
 - [默认 HTTP 模板](#默认-http-模板)
 - [数据库与可选能力](#数据库与可选能力)
 - [纯 gRPC 模板](#纯-grpc-模板)
 - [dual 模板](#dual-模板)
 - [Gateway 模板](#gateway-模板)
+
+## 构建缓存与旧项目处理
+
+当前源码生成的 Makefile 使用 Go 和 linter 的默认缓存位置，保留环境变量及 `go env -w` 的缓存配置。普通构建与测试不再为缓存创建项目内的 `.tmp`；显式协议生成等工具仍可使用 `.tmp` 保存临时产物。可通过 `go env GOCACHE GOMODCACHE` 查看 Go 缓存位置。
+
+v0.1.0 生成的 Makefile 将 `GOCACHE`、`GOMODCACHE`、`GOLANGCI_LINT_CACHE` 指向项目 `.tmp/`。已有项目需要手动删除这三项赋值及相应的 `export GOCACHE GOMODCACHE GOLANGCI_LINT_CACHE` 行；升级 CLI 不会改写已有项目。
+
+Go 依赖缓存中的目录默认只读，普通递归删除可能失败；这是 [Go 模块缓存的既定行为](https://go.dev/ref/mod#module-cache)。确认旧项目根目录下 `.tmp/mod-cache` 仅为依赖缓存且没有任务使用后，可在该项目根目录执行以下命令，无需 sudo：
+
+```sh
+GOMODCACHE="$PWD/.tmp/mod-cache" GOTOOLCHAIN=local go clean -modcache
+```
+
+这里必须显式指定旧缓存目录；省略 `GOMODCACHE` 会清理 Go 当前使用的共享模块缓存。其他 `.tmp` 内容应确认用途后另行处理，不提供自动清空整个目录的命令。
 
 ## 默认 HTTP 模板
 

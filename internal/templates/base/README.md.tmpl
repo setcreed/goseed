@@ -96,7 +96,7 @@ make build
 docker build -f build/docker/Dockerfile -t [[.Name]]:local .
 ```
 
-依赖清单已包含完整间接依赖和校验和，常规构建/测试使用 `-mod=readonly`。linter 固定版本 2.14.0，仅显式安装到项目 `.tools/bin/`。缓存位于 `.tmp/`。
+依赖清单已包含完整间接依赖和校验和，常规构建/测试使用 `-mod=readonly`。linter 固定版本 2.14.0，仅显式安装到项目 `.tools/bin/`。构建、依赖和 linter 缓存使用各工具的默认位置，并保留用户的环境变量或 Go 配置；可用 `go env GOCACHE GOMODCACHE` 查看 Go 缓存路径。普通构建与测试不会为缓存创建项目内 `.tmp/`。
 
 容器以 UID/GID 10001 运行，构建使用固定摘要的官方 Go 1.26.4 镜像，运行镜像为 scratch。[[if eq .Database "sqlite"]]挂载持久化目录至 `/app/data` 并安全注入 `APP_JWT_SECRET`[[else]]提供可访问的数据库、安全注入数据库密码及 `APP_JWT_SECRET`，私有 CA 需挂载并配置路径[[end]]；部署前先用相同配置运行镜像的 `migrate up` 命令，再启动服务。默认容器监听 `0.0.0.0:8080`；SIGTERM 开始关闭时停止就绪，等待请求排空，超过关闭预算后强制取消。
 [[if ne .Database "sqlite"]]
