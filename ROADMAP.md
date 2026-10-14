@@ -95,7 +95,7 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 
 ## 最近验证
 
-- 2026-10-15 00:01 文档导航整合验证：`make contract-check` 通过（99 个本地链接、398 个交付文件），Markdown 本地链接核对与 `git diff --check` 通过；旧模板文件名和已知过期部署/路线表述检索无命中。未运行代码、数据库、Docker 或 race 测试。
+- 2026-10-15 00:06 文档导航整合验证：`make contract-check` 通过（99 个本地链接、393 个实际交付文件），Markdown 本地链接核对与 `git diff --check` 通过；旧模板文件名和已知过期部署/路线表述检索无命中。未运行代码、数据库、Docker 或 race 测试。
 
 - 2026-10-14 23:41 Linux amd64 发行包验收：`make verify-package ARCHIVE=.tmp/dist/goseed_v0.0.0-d9.1_linux_amd64.tar.gz` 通过；发行包在 Debian `trixie-slim` 的 `linux/amd64` 模拟容器中运行 `--version`、`--help` 并生成 52 文件默认项目。生成项目以 Go 1.27.2、`GOOS=linux GOARCH=amd64 CGO_ENABLED=0` readonly 构建；容器中显式初始化 SQLite 迁移、启动服务，health/ready、未认证拒绝（401）和认证创建/列表通过。`make contract-check`（97 个本地链接、397 个交付文件）与 `git diff --check` 通过。测试运行于 Apple Silicon Docker amd64 模拟环境，不代表原生硬件；专用容器和本轮临时目录已清理。
 

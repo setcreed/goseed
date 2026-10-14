@@ -52,11 +52,9 @@ def main():
         ast.parse(path.read_text(), filename=str(path))
     # Includes untracked delivery files, unlike git diff --check alone.
     delivery = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard"], cwd=root, check=True, text=True, capture_output=True).stdout.splitlines()
+    delivery = [relative for relative in delivery if (root / relative).is_file()]
     for relative in delivery:
         path = root / relative
-        # A tracked file may be intentionally deleted during a consolidation.
-        if not path.is_file():
-            continue
         data = path.read_bytes()
         if data and not data.endswith(b"\n"):
             raise SystemExit("Missing final newline: " + relative)
