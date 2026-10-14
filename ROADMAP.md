@@ -4,7 +4,7 @@
 
 goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com/setcreed/goseed`，Go 固定 1.26.4，默认分支 main，许可证 MIT。源码已公开至 https://github.com/setcreed/goseed ，origin 使用 HTTPS，main 跟踪 origin/main；公开源码不代表首版功能已完成。
 
-代码基线为 `e6bf908`：初始项目生成与 gen module 可用，支持四协议、四存储及可选 Redis/Casbin，共 64 种初始项目组合。资源阶段 R01 至 R09 已交付，包含公共 `gen resource`、四协议生成、安全写入与失败回滚；R10 正在执行完整组合与运行回归。
+代码基线为 `184439c`：初始项目生成与 gen module 可用，支持四协议、四存储及可选 Redis/Casbin，共 64 种初始项目组合。资源阶段 R01 至 R09 已交付，包含公共 `gen resource`、四协议生成、安全写入与失败回滚；R10 正在执行完整组合与运行回归。
 
 需求、架构及从零建设的工作顺序见 [施工清单](docs/implementation.md)，新电脑恢复、实现入口与验证方法见 [开发指南](docs/development.md)。本文件是状态唯一来源；从现有进度继续，保留已交付代码与 Git 历史。
 
@@ -59,7 +59,7 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 
 ## 最近验证
 
-- 2026-10-14 15:41 R10 代码与生成项目矩阵：48 种 SQL×协议×Redis×Casbin resource 项目均经 `PrepareResource`/`Write` 生成并通过 `go test -mod=readonly -run '^$' ./...`；16 种无数据库拒绝由生成器测试覆盖。现有 gRPC/dual 32 种数据库/Redis/Casbin 项目组合通过；纯 gRPC、dual、Gateway 两资源生成、Proto 多模块逐字节复现及 RPC 运行用例通过。修复 gRPC Proto 源名导致的复现差异，并修正纯 gRPC 资源夹具不应读取 OpenAPI 的前提。`make protocol-check`、`make contract-check`（79 个本地链接、372 个交付文件）、`make fmt-check`、`make lint`（0 issues）、`make vet`、定向 generator/CLI/templates 测试、`make build` 与 `git diff --check` 通过。完整 `make check` 曾因上述两个已修正问题失败，修复后用定向矩阵验证；未重跑整套 28 分钟集成包。真实 MySQL/PostgreSQL、TLS Redis 与容器尚未验收：环境没有 Docker 命令，也没有 `GOSEED_TEST_*` 专用凭据。
+- 2026-10-14 15:42 R10 代码与生成项目矩阵：48 种 SQL×协议×Redis×Casbin resource 项目均经 `PrepareResource`/`Write` 生成并通过 `go test -mod=readonly -run '^$' ./...`；16 种无数据库拒绝由生成器测试覆盖。现有 gRPC/dual 32 种数据库/Redis/Casbin 项目组合通过；纯 gRPC、dual、Gateway 两资源生成、Proto 多模块逐字节复现及 RPC 运行用例通过。修复 gRPC Proto 源名导致的复现差异，并修正纯 gRPC 资源夹具不应读取 OpenAPI 的前提。`make protocol-check`、`make contract-check`（79 个本地链接、372 个交付文件）、`make fmt-check`、`make lint`（0 issues）、`make vet`、定向 generator/CLI/templates 测试、`make build` 与 `git diff --check` 通过。完整 `make check` 曾因上述两个已修正问题失败，修复后用定向矩阵验证；未重跑整套 28 分钟集成包。真实 MySQL/PostgreSQL、TLS Redis 与容器尚未验收：环境没有 Docker、Podman 或 nerdctl 命令。
 
 - 2026-10-14 14:26 R09：`go test ./internal/generator ./internal/cli ./internal/templates` 通过；`make contract-check`（79 个本地链接、371 个交付文件）、`make fmt-check`、`make lint`（0 issues）及 `git diff --check` 通过。覆盖四协议公共 CLI、四协议资源写入、SQLite/MySQL/PostgreSQL × 四协议共 12 种生成写入组合（Redis + Casbin）、无数据库拒绝、冲突/过期输入及注入失败后的字节级恢复。R10 接手真实项目组合与外部服务验收。
 
