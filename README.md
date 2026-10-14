@@ -55,6 +55,17 @@ make verify-package ARCHIVE=.tmp/dist/v0.1.0/goseed_v0.1.0_darwin_arm64.tar.gz
 
 `goseed --version` 同时显示生成器版本、源码提交、模板版本和资源 spec 版本；项目元数据与旧项目兼容边界、人工升级方式见 [开发指南](docs/development.md#版本兼容与人工升级)。
 
+本地二进制运行证据：
+
+| 目标 | 归档构建 | 运行与生成检查 |
+|---|---|---|
+| macOS arm64 | 通过 | 本机运行通过 |
+| macOS amd64 | 通过 | Apple Silicon 上经 Rosetta 2 运行通过；未在 Intel Mac 实机验证 |
+| Linux arm64 | 通过 | 固定 Alpine 构建容器内运行与项目生成通过 |
+| Linux amd64 | 通过 | 运行未验证；本机 Docker 未提供 amd64 镜像层 |
+
+Windows 原生运行不在当前支持范围。交叉构建成功本身不代表目标平台已验证；后续实际平台证据以路线图为准。
+
 使用刚构建的可执行文件生成独立项目：
 
 ```sh

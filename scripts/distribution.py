@@ -29,6 +29,7 @@ def environment():
     env["GOWORK"] = "off"
     env["GOCACHE"] = str(ROOT / ".tmp" / "go-cache")
     env["GOMODCACHE"] = str(ROOT / ".tmp" / "mod-cache")
+    env["CGO_ENABLED"] = "0"
     return env
 
 
@@ -81,6 +82,8 @@ def build(args):
         goarch = args.goarch or target[1]
     else:
         goos, goarch = args.goos, args.goarch
+    env["GOOS"] = goos
+    env["GOARCH"] = goarch
 
     actual_go = run(["go", "version"], env=env).stdout.strip()
     if not re.search(r"\bgo" + re.escape(GO_VERSION) + r"\b", actual_go):
@@ -107,6 +110,10 @@ def build(args):
             "-ldflags", "-X main.version=" + args.version + " -X main.commit=" + commit,
             "-o", str(binary), "./cmd/goseed",
         ], env=env)
+        build_info = run(["go", "version", "-m", str(binary)], env=env).stdout
+        settings = set(line.strip() for line in build_info.splitlines())
+        if "build\tGOOS=" + goos not in settings or "build\tGOARCH=" + goarch not in settings or "build\tCGO_ENABLED=0" not in settings:
+            raise RuntimeError("binary build metadata does not match requested target " + goos + "/" + goarch)
 
         licenses = module_licenses(env)
         license_records = []
@@ -124,6 +131,7 @@ def build(args):
             "source_commit": commit,
             "source_dirty": bool(status),
             "go_version": GO_VERSION,
+            "cgo_enabled": False,
             "goos": goos,
             "goarch": goarch,
             "template_version": int(source_constant(ROOT / "internal/generator/generator.go", "TemplateVersion", r"const TemplateVersion = ([0-9]+)")),
