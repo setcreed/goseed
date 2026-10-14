@@ -94,7 +94,7 @@ Makefile 固定 GOTOOLCHAIN=go1.26.4、GOWORK=off；Go 模块与构建缓存使�
 | `make contract-check`、`git diff --check` | 文档链接、固定版本、Python 语法、文件格式 | 文档修改的必需检查 |
 | `make test GO_PACKAGES='...'` | 指定核心包 | 不等于全组合验收 |
 | `make check` | 全仓测试、vet、lint 与契约 | 需项目工具和本机回环监听；完整测试最长 40 分钟 |
-| `make race` | 全仓竞争检查 | 完整运行可能耗时较长；本轮按用户决定暂缓，进度见 ROADMAP |
+| `make race` | 全仓竞争检查 | 完整运行可能耗时较长；历史结果与当前验证范围见 ROADMAP |
 | `make compatibility`、`make compatibility-cross` | 依赖原型及跨平台构建 | 不等于业务模板生产部署验证 |
 | `make protocol-check` | 已提交协议产物复现 | 需固定协议工具 |
 | `make template-db` | 真 MySQL/PostgreSQL、TLS、策略、迁移及资源核心 | Docker/Compose/OpenSSL；显式目标不允许跳过外部用例 |
@@ -113,7 +113,7 @@ make test GO_PACKAGES='./tests/integration -run TestResourceCoreProjects -count=
 
 ## 从当前代码继续开发
 
-以 ROADMAP 的状态为准，不重做已交付功能。D6 已完成，当前推进 D7 首版收口；全仓 race 暂按用户决定延后，其余首版覆盖、文档与构建检查继续推进。新增 RPC 必须登记精确 FullMethod；普通构建继续使用已生成 Proto。
+以 ROADMAP 的状态为准，不在本文另行维护阶段进度或临时测试决定。首版之后的独立环境恢复、默认使用流程、代表组合及本地交付核验按 [D8 施工清单](implementation.md#检查点-d8独立环境使用与交付准备) 依次验收；隔离源码目录的验证不等于独立机器或其他操作系统验证。新增 RPC 必须登记精确 FullMethod；普通构建继续使用已生成 Proto。
 
 资源计划通过 `CoreFiles()`、`HTTPFiles()`、`RPCFiles()`、`SchemaStore()` 和 `MigrationDraft()` 暴露可审阅副本；`PrepareResource` 负责协议工具检查和完整渲染，公共 `gen resource` 负责预览或执行受保护写入，并同步登记与 OpenAPI 汇总。SchemaStore 是只读 schema 原型，不得与 CoreFiles 的完整 Store 写入同一路径。迁移草稿只生成待审阅 SQL，不自动应用；新资源运行前仍须显式执行迁移。
 

@@ -20,12 +20,18 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 | D5 项目生成 | 已交付 | 根命令、参数、元数据、dry-run、冲突与恢复保护 |
 | D6 模块与资源 | 已交付 | gen module 与资源 R01 至 R10 已验收；48 种资源组合及真实 SQL/Redis/容器验证通过 |
 | D7 首版收口 | 已交付 | 首版范围、文档、生成集成、真实服务、race 与交叉构建验收完成 |
+| D8 独立环境使用与交付准备 | 已规划，未实施 | 独立源码恢复、默认完整流程、代表组合增量流程及本地交付核验 |
 
 ## 下一步施工顺序
 
-暂无已定义的后续阶段。新增首版后的能力时，先明确产品范围与验收边界，再更新施工清单。
+本次仅完成 D8 规划，未执行恢复或运行验证；下一实施入口为 D8-P01。
 
-详细修改范围、依赖与失败门槛统一见 [D6 清单](docs/implementation.md#d6-资源生成施工清单)。
+1. **D8-P01（待开始）**：从指定提交恢复独立源码与固定工具链，记录环境及提交，不复制原工作区工具、缓存或构建产物。
+2. **D8-P02（依赖 P01）**：按文档完成默认项目、JWT/SQLite CRUD、模块与资源增量生成、显式迁移和失败路径。
+3. **D8-P03（依赖 P02）**：恢复固定协议工具，用专用真实 PostgreSQL/Redis 验证 dual + Casbin 代表组合的资源生成与跨协议读写。
+4. **D8-P04（依赖 P01 至 P03）**：核对本地版本构建、开发工具恢复、文档与交付边界，汇总结果及发布待决项。
+
+详细范围、失败路径与验收门槛见 [D8 清单](docs/implementation.md#检查点-d8独立环境使用与交付准备)；已交付资源任务的设计依据保留在 [D6 清单](docs/implementation.md#d6-资源生成施工清单)。D8 不重复全矩阵长测；独立部署模板、可观测性、账号模板等后续方向尚未确定优先级，实施前另行定范围。推送、正式发版与部署不属于本次规划授权。
 
 ## 已知缺口与验证边界
 
@@ -36,9 +42,11 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 - R08 已交付 Gateway RPC 资源映射、ProtoJSON 说明及多模块协议/Swagger 复现；R09 已开放 `gen resource` 并完成完整写入回滚；R10 完成全矩阵和外部服务验收。
 - D7 全仓 `make race` 已通过，`tests/integration` 用时 2289.398 秒；D6 的完整 `make check`、真实服务矩阵、生成产物集成和 D7 的兼容性/交叉构建检查均通过。
 - go-redis 取消、pgx 人工延迟 Write 竞争边界仍按 [依赖记录](docs/dependencies.md) 保留；固定版本不意味着上游问题消失。
-- 仓库采用 MIT；第三方依赖及生成代码仍保留适用许可。源码仓库已经公开，首版交付仍按上述施工顺序推进。
+- 仓库采用 MIT；第三方依赖及生成代码仍保留适用许可。源码仓库已经公开；D7 功能验收完成不表示最新本地提交已推送或正式版本已发布。D8 的独立环境使用流程尚未验证。
 
 ## 最近完成
+
+- 2026-10-14 18:31 D8 规划完成：承接原 D7 交付核验与开发指南的恢复路径，定义 P01 至 P04 的依赖、范围、失败路径、验收和清理要求；下一实施入口为 P01，未启动运行验证。同步移除开发指南中 D7 进行中及 race 暂缓的失效描述，后续扩展方向仅列规划门槛。
 
 - 2026-10-14 17:59 D7 首版交付核验完成：需求覆盖、README/开发指南、生成项目集成、构建、静态检查、真实 MySQL/PostgreSQL、Redis、容器及全仓 race 验收通过；兼容性原型、Linux amd64/arm64 与 Windows amd64 交叉编译、协议产物复现也通过。后续阶段尚未定义。
 
@@ -65,6 +73,8 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 - 2026-10-12 13:03 R04 提交 `a123019`：迁移版本/应用集合核验、SQL 草稿、资源只读 schema 与启动 Context；生成器不执行数据库操作。
 
 ## 最近验证
+
+- 2026-10-14 18:31 D8 规划文档检查：`make contract-check`（82 个本地链接、372 个交付文件）与 `git diff --check` 通过；核对阶段依赖、当前状态及开发指南入口一致。仅修改规划与文档，未执行 D8 运行验收或重跑长时间测试，未创建验证项目或 Docker 资源。
 
 - 2026-10-14 17:59 D7 最终验证：`PATH=/Applications/Docker.app/Contents/Resources/bin:$PATH make race` 全仓通过，集成包 `ok .../tests/integration 2289.398s`；此前 `make check`（集成包 2195.054 秒、vet、lint 0 issues）、`make build`、`make template-db`（真实 MySQL 8.4.11/PostgreSQL 18.6）、`make template-redis`（TLS Redis）、`make template-container`、`make compatibility`、`make compatibility-cross`、`make protocol-check`、`make fmt-check`、`make vet`、`make contract-check` 与 `git diff --check` 均通过。兼容原型中 MySQL/PostgreSQL 子用例按设计跳过，真实服务验证由 template-db 覆盖。本轮 race 项目和交叉编译输出由套件/任务清理；Docker 测试标签无残留容器，共享缓存保留。`.tmp/d2/render-3779792103` 时间戳早于本轮测试，作为既有目录保留。
 
