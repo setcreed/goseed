@@ -82,7 +82,7 @@ func environment(t *testing.T) []string {
 			variables = append(variables, variable)
 		}
 	}
-	return append(variables, "GOTOOLCHAIN=go1.26.4", "GOWORK=off", "GOCACHE="+filepath.Join(root, ".tmp/go-cache"), "GOMODCACHE="+filepath.Join(root, ".tmp/mod-cache"), "GOLANGCI_LINT_CACHE="+filepath.Join(root, ".tmp/lint-cache"))
+	return append(variables, "GOTOOLCHAIN=local", "GOWORK=off", "GOCACHE="+filepath.Join(root, ".tmp/go-cache"), "GOMODCACHE="+filepath.Join(root, ".tmp/mod-cache"), "GOLANGCI_LINT_CACHE="+filepath.Join(root, ".tmp/lint-cache"))
 }
 
 func TestDefaultProject(t *testing.T) {

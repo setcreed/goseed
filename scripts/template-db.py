@@ -19,7 +19,7 @@ def main():
     env.update(
         GOSEED_TEST_PASSWORD=password,
         GOSEED_TEMPLATE_DB="1",
-        GOTOOLCHAIN="go1.26.4",
+        GOTOOLCHAIN="local",
         GOWORK="off",
         GOCACHE=str(root / ".tmp/go-cache"),
         GOMODCACHE=str(root / ".tmp/mod-cache"),

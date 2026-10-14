@@ -24,7 +24,7 @@ def main():
     password = secrets.token_hex(24)
     image = json.loads((root / "dependencies.lock.json").read_text())["redis_image"]
     env = {k: v for k, v in os.environ.items() if not k.startswith(("APP_", "GOSEED_TEST_", "GOSEED_TEMPLATE_"))}
-    env.update(GOTOOLCHAIN="go1.26.4", GOWORK="off", GOCACHE=str(root / ".tmp/go-cache"), GOMODCACHE=str(root / ".tmp/mod-cache"), GOLANGCI_LINT_CACHE=str(root / ".tmp/lint-cache"))
+    env.update(GOTOOLCHAIN="local", GOWORK="off", GOCACHE=str(root / ".tmp/go-cache"), GOMODCACHE=str(root / ".tmp/mod-cache"), GOLANGCI_LINT_CACHE=str(root / ".tmp/lint-cache"))
 
     def run(args, capture=False, timeout=300):
         return subprocess.run(args, cwd=root, env=env, check=True, text=True, capture_output=capture, timeout=timeout)

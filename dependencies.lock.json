@@ -1,5 +1,6 @@
 {
-  "go": "1.26.4",
+  "go_minimum": "1.26.4",
+  "package_go": "1.26.4",
   "module": "github.com/setcreed/goseed",
   "generator": {
     "github.com/spf13/cobra": "v1.10.2",

@@ -15,7 +15,7 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parent.parent
-GO_VERSION = "1.26.4"
+PACKAGE_GO_VERSION = "1.26.4"
 VERSION_PATTERN = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 
 
@@ -25,7 +25,7 @@ def run(args, *, cwd=ROOT, env=None):
 
 def environment():
     env = os.environ.copy()
-    env["GOTOOLCHAIN"] = "go" + GO_VERSION
+    env["GOTOOLCHAIN"] = "go" + PACKAGE_GO_VERSION
     env["GOWORK"] = "off"
     env["GOCACHE"] = str(ROOT / ".tmp" / "go-cache")
     env["GOMODCACHE"] = str(ROOT / ".tmp" / "mod-cache")
@@ -86,8 +86,8 @@ def build(args):
     env["GOARCH"] = goarch
 
     actual_go = run(["go", "version"], env=env).stdout.strip()
-    if not re.search(r"\bgo" + re.escape(GO_VERSION) + r"\b", actual_go):
-        raise RuntimeError("expected Go " + GO_VERSION + ", got " + actual_go)
+    if not re.search(r"\bgo" + re.escape(PACKAGE_GO_VERSION) + r"\b", actual_go):
+        raise RuntimeError("expected Go " + PACKAGE_GO_VERSION + ", got " + actual_go)
 
     status = run(["git", "status", "--porcelain", "--untracked-files=all"]).stdout.strip()
     if status and not args.allow_dirty:
@@ -130,7 +130,7 @@ def build(args):
             "generator_version": args.version,
             "source_commit": commit,
             "source_dirty": bool(status),
-            "go_version": GO_VERSION,
+            "go_version": PACKAGE_GO_VERSION,
             "cgo_enabled": False,
             "goos": goos,
             "goarch": goarch,

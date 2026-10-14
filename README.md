@@ -25,7 +25,7 @@
 
 ## 从源码构建
 
-Go 固定为 **1.26.4**；主模块为 `github.com/setcreed/goseed`。需要 Git、Make 和 Python 3.9+；首次构建需要下载固定 Go 工具链及依赖。
+最低要求为 Go **1.26.4**；日常构建使用本机已安装的兼容版本，低于最低版本时会报错，不自动下载工具链。主模块为 `github.com/setcreed/goseed`。需要 Git、Make 和 Python 3.9+；首次构建仍需下载项目依赖。
 
 ```sh
 git clone https://github.com/setcreed/goseed.git
@@ -53,7 +53,7 @@ make package VERSION=v0.1.0 GOOS=darwin GOARCH=arm64
 make verify-package ARCHIVE=.tmp/dist/v0.1.0/goseed_v0.1.0_darwin_arm64.tar.gz
 ```
 
-归档包含生成器、README、MIT 许可证、构建依赖许可证副本和版本清单；清单记录源提交、生成器/模板/spec 版本及二进制摘要。SHA-256 文件用于检测归档损坏，不是签名或来源证明。`make install` 需要显式指定 `GOBIN` 和版本，`make package` 拒绝未固定版本、非 Go 1.26.4 或有改动的工作区；本地归档保存在忽略目录 `.tmp/dist/`，当前不代表公开发行包。
+归档包含生成器、README、MIT 许可证、构建依赖许可证副本和版本清单；清单记录源提交、生成器/模板/spec 版本及二进制摘要。SHA-256 文件用于检测归档损坏，不是签名或来源证明。`make install` 需要显式指定 `GOBIN` 和版本；为保证归档可复现，`make package` 固定使用 Go 1.26.4，并拒绝未固定版本或有改动的工作区；本地归档保存在忽略目录 `.tmp/dist/`，当前不代表公开发行包。
 
 `goseed --version` 同时显示生成器版本、源码提交、模板版本和资源 spec 版本；项目元数据与旧项目兼容边界、人工升级方式见 [开发指南](docs/development.md#版本兼容与人工升级)。
 

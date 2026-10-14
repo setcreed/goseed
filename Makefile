@@ -10,7 +10,7 @@ export GOCACHE := $(CURDIR)/.tmp/go-cache
 export GOMODCACHE := $(CURDIR)/.tmp/mod-cache
 export GOLANGCI_LINT_CACHE := $(CURDIR)/.tmp/lint-cache
 export GOWORK := off
-export GOTOOLCHAIN := go1.26.4
+export GOTOOLCHAIN := local
 
 .DEFAULT_GOAL := check
 .PHONY: build install package verify-package test race vet lint fmt fmt-check check contract-check tools compatibility compatibility-cross compatibility-db protocol-tools protocol-check template-container template-db template-redis template-deployment template-deployment-db template-deployment-nginx

@@ -13,7 +13,7 @@ def main():
     password = secrets.token_hex(24)
     env.update(
         GOSEED_TEST_PASSWORD=password,
-        GOTOOLCHAIN="go1.26.4",
+        GOTOOLCHAIN="local",
         GOWORK="off",
         GOCACHE=str(root / ".tmp/go-cache"),
         GOMODCACHE=str(root / ".tmp/mod-cache"),

@@ -38,7 +38,7 @@ D10 观测依赖于 2026-10-14 通过 OpenTelemetry 官方 Go 文档、GitHub �
 
 ## 选型结论与工程约束
 
-- Go 固定为 1.26.4，主模块为 `github.com/setcreed/goseed`。工具链来自 [Go 官方下载档案](https://go.dev/dl/)；构建、检查与测试入口显式设置 `GOTOOLCHAIN=go1.26.4`，不让依赖自动提升版本。
+- Go 最低版本为 1.26.4，主模块为 `github.com/setcreed/goseed`。`go.mod` 声明最低兼容版本，日常构建入口设置 `GOTOOLCHAIN=local`，本机 Go 版本不低于最低要求即可；[Go 工具链选择规则](https://go.dev/doc/toolchain) 说明 `go` 指令是最低版本要求，`GOTOOLCHAIN` 控制是否切换或下载工具链。仅本地发行归档通过固定 `GOTOOLCHAIN=go1.26.4` 保持构建可复现。
 - Cobra 处理命令树、帮助和参数，标准库用于模板、文件和格式化；YAML parser 仅解析业务生成器输入，不进入生成项目运行依赖。主模块不引入业务运行依赖。Cobra 样本有近期人工代码维护，但所查两个 issue 没有维护者响应证据。
 - YAML parser 固定 `go.yaml.in/yaml/v3 v3.0.5`，只用于生成器读取 OpenAPI YAML 与后续资源 spec。原 `go-yaml/yaml` 仓库已归档，YAML 组织接管维护；官方说明 v3 保持稳定并接收安全修复，后续功能在 v4。当前 v4 仍是候选版，官方仓库在 2026-09 有 maintainer 发起的 [#429](https://github.com/yaml/go-yaml/pull/429) 与 [#430](https://github.com/yaml/go-yaml/pull/430)，这证明的是 v4 分支活动，不代表 v3 有常规功能维护。当前采用已发布 v3 以保持解析依赖稳定；v4 稳定后重新评估。
 - Gin、Zap、Goose、gRPC、Gateway、Protobuf Go 有近期人工源码维护；Zap、Goose、gRPC、protoc、golangci-lint 的样本存在 collaborator/member 回复。详细日期、作者及评论身份可在快照核对。

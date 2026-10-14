@@ -58,7 +58,7 @@ D2 的默认 HTTP 模板集中在 `internal/templates/base/`，文件使用 `.tm
 
 可选能力集中在 `internal/templates/variants/`：`sql/` 提供外部 SQL 共用实现，`mysql/`、`postgres/`、`none/` 提供存储差异，`redis/`、`casbin/`、`grpc/`、`dual/`、`gateway/` 提供能力叠加。Render 按所选能力合并文件计划，纯 gRPC 裁剪 HTTP 文件，dual 保留两种 Handler，Gateway 只保留 RPC Handler 并增加真实 HTTP 转发；完整依赖清单按组合固定，不在渲染时查询或生成依赖版本。
 
-Go 工具链固定为 `1.26.4`，主模块为 `github.com/setcreed/goseed`。兼容性测试使用独立 Go 模块，候选业务运行依赖不进入生成器主模块；验证原型不作为未来业务模板的运行依赖。
+Go 最低版本为 `1.26.4`，由各模块 `go.mod` 声明；日常开发与验证使用本机兼容工具链，发行归档单独固定版本。主模块为 `github.com/setcreed/goseed`。兼容性测试使用独立 Go 模块，候选业务运行依赖不进入生成器主模块；验证原型不作为未来业务模板的运行依赖。
 
 标准库 `embed` 嵌入模板，`text/template` 渲染，`go/format` 格式化。生成器以明确的登记文件集成模块，优先避免 AST 改写手工业务文件。模板按基础能力和特性组织，避免复制大量完整项目变体。
 

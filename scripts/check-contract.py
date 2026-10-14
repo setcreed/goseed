@@ -17,7 +17,7 @@ def main():
         expected_module = lock["module"] + ("/tests/compatibility" if section == "runtime" else "")
         if not re.search(r"^module " + re.escape(expected_module) + r"$", manifest, re.MULTILINE):
             raise SystemExit("Module path mismatch: " + relative)
-        if not re.search(r"^go " + re.escape(lock["go"]) + r"$", manifest, re.MULTILINE):
+        if not re.search(r"^go " + re.escape(lock["go_minimum"]) + r"$", manifest, re.MULTILINE):
             raise SystemExit("Go version mismatch: " + relative)
         for module, version in lock[section].items():
             if actual.get(module) != version:
@@ -28,8 +28,11 @@ def main():
         if not re.search(r"^\s*" + re.escape(module) + r"\s+" + re.escape(version) + r"(?:\s|$)", compatibility_manifest, re.MULTILINE):
             raise SystemExit("SQL connector differs from compatibility baseline: " + module)
     lint_version = lock["tools"]["github.com/golangci/golangci-lint/v2/cmd/golangci-lint"]
-    if "LINT_VERSION := " + lint_version not in makefile or "GOTOOLCHAIN := go" + lock["go"] not in makefile:
+    distribution = (root / "scripts/distribution.py").read_text()
+    if "LINT_VERSION := " + lint_version not in makefile or "GOTOOLCHAIN := local" not in makefile:
         raise SystemExit("Makefile tool version mismatch")
+    if 'PACKAGE_GO_VERSION = "' + lock["package_go"] + '"' not in distribution:
+        raise SystemExit("Distribution Go version mismatch")
     compose = (root / "tests/compatibility/compose.yaml").read_text()
     for image in lock["database_images"].values():
         if "image: " + image not in compose:

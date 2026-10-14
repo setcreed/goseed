@@ -1,4 +1,4 @@
-"""Explicitly install the pinned protocol toolchain inside this project."""
+"""Install pinned protocol tools inside this project using the local Go toolchain."""
 
 import hashlib
 import json
@@ -35,7 +35,7 @@ def main():
     binary_directory = root / ".tools/bin"
     binary_directory.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
-    env.update(GOTOOLCHAIN="go" + lock["go"], GOWORK="off", GOBIN=str(binary_directory), GOCACHE=str(root / ".tmp/go-cache"), GOMODCACHE=str(root / ".tmp/mod-cache"))
+    env.update(GOTOOLCHAIN="local", GOWORK="off", GOBIN=str(binary_directory), GOCACHE=str(root / ".tmp/go-cache"), GOMODCACHE=str(root / ".tmp/mod-cache"))
     for module, pinned in lock["tools"].items():
         if "/protoc-gen-" in module:
             subprocess.run(["go", "install", module + "@" + pinned], cwd=root, env=env, check=True)
