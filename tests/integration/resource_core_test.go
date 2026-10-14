@@ -405,11 +405,10 @@ func verifyResourceProtoReproduction(t *testing.T, directory string) {
 		"pkg/api/example/v1/example.pb.go", "pkg/api/example/v1/example_grpc.pb.go",
 		"pkg/api/orders/v1/orders.pb.go", "pkg/api/orders/v1/orders_grpc.pb.go",
 		"pkg/api/notes/v1/notes.pb.go", "pkg/api/notes/v1/notes_grpc.pb.go",
-		"api/openapi/example.yaml", "api/openapi/orders.yaml", "api/openapi/notes.yaml",
-		"api/openapi/swagger.json", "internal/apiserver/bootstrap/modules_gen.go",
 	}
 	if _, err := os.Stat(filepath.Join(directory, "pkg/api/example/v1/example.pb.gw.go")); err == nil {
 		paths = append(paths, "pkg/api/example/v1/example.pb.gw.go", "pkg/api/orders/v1/orders.pb.gw.go", "pkg/api/notes/v1/notes.pb.gw.go")
+		paths = append(paths, "api/openapi/example.yaml", "api/openapi/orders.yaml", "api/openapi/notes.yaml", "api/openapi/swagger.json", "internal/apiserver/bootstrap/modules_gen.go")
 	}
 	original := make(map[string][]byte, len(paths))
 	for _, path := range paths {

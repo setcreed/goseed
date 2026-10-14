@@ -96,7 +96,20 @@ func verifyGRPCProto(t *testing.T, directory, root string) {
 	for name, want := range original {
 		got, err := os.ReadFile(filepath.Join(directory, "pkg/api/example/v1", name))
 		if err != nil || string(got) != string(want) {
-			t.Fatalf("protocol regeneration differs %s", name)
+			if err != nil {
+				t.Fatalf("protocol regeneration could not read %s: %v", name, err)
+			}
+			before, after := strings.Split(string(want), "\n"), strings.Split(string(got), "\n")
+			limit := len(before)
+			if len(after) < limit {
+				limit = len(after)
+			}
+			for line := 0; line < limit; line++ {
+				if before[line] != after[line] {
+					t.Fatalf("protocol regeneration differs %s at line %d:\n  before: %s\n  after:  %s", name, line+1, before[line], after[line])
+				}
+			}
+			t.Fatalf("protocol regeneration differs %s: expected %d lines, got %d", name, len(before), len(after))
 		}
 	}
 	// An independent Go module must be able to import the delivered client types.

@@ -25,27 +25,26 @@ if not proto_files:
     raise SystemExit('No module Proto files found under api/proto/*/v1')
 
 with tempfile.TemporaryDirectory(dir=base) as temporary:
-    command = [
-        str(protoc),
-        '-I' + str(source),
-        '-I' + str(root / '.tools/protoc/include'),
-        '--go_out=paths=source_relative:' + temporary,
-        '--go-grpc_out=paths=source_relative:' + temporary,
-    ]
     for proto in proto_files:
-        relative = proto.relative_to(source).as_posix()
         module = proto.parent.parent.name
+        output = Path(temporary) / module
+        output.mkdir()
+        relative = proto.name
         go_package = f'[[.Module]]/pkg/api/{module}/v1;{module}v1'
-        command.extend(['--go_opt=M' + relative + '=' + go_package,
-                        '--go-grpc_opt=M' + relative + '=' + go_package])
-    command.extend(str(proto.relative_to(source)) for proto in proto_files)
-    subprocess.run(command, cwd=root, env=env, check=True)
-    for proto in proto_files:
-        relative = proto.relative_to(source)
-        module = relative.parts[0]
-        generated = Path(temporary) / relative.parent
+        command = [
+            str(protoc),
+            '-I' + str(proto.parent),
+            '-I' + str(source),
+            '-I' + str(root / '.tools/protoc/include'),
+            '--go_out=paths=source_relative:' + str(output),
+            '--go-grpc_out=paths=source_relative:' + str(output),
+            '--go_opt=M' + relative + '=' + go_package,
+            '--go-grpc_opt=M' + relative + '=' + go_package,
+            proto.name,
+        ]
+        subprocess.run(command, cwd=proto.parent, env=env, check=True)
         destination = root / 'pkg/api' / module / 'v1'
         destination.mkdir(parents=True, exist_ok=True)
         for name in (proto.stem + '.pb.go', proto.stem + '_grpc.pb.go'):
-            (destination / name).write_bytes((generated / name).read_bytes())
+            (destination / name).write_bytes((output / name).read_bytes())
 print(f'Regenerated protocol files for {len(proto_files)} module(s)')
