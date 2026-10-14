@@ -381,6 +381,7 @@ func TestSingleHostDeploymentContainer(t *testing.T) {
 	})
 	docker(true, "run", "-d", "--privileged", "--cgroupns=host", "--tmpfs", "/run", "--tmpfs", "/run/lock", "-v", "/sys/fs/cgroup:/sys/fs/cgroup:rw", "--name", name, "--label", "org.goseed.d11-test="+name, image)
 	waitSystemd(t, docker, name)
+	docker(true, "exec", name, "systemctl", "stop", "nginx.service")
 	docker(true, "exec", name, "sh", "-c", "useradd --system --user-group --no-create-home --shell /usr/sbin/nologin demo && mkdir -p /opt/demo/releases/v1/bin /etc/demo/tls /etc/nginx/conf.d && ln -s /opt/demo/releases/v1 /opt/demo/current")
 	for _, file := range []struct{ source, target string }{
 		{binary, name + ":/opt/demo/releases/v1/bin/apiserver"},
@@ -413,8 +414,8 @@ func TestSingleHostDeploymentContainer(t *testing.T) {
 		t.Fatalf("gRPC health request did not traverse verified Nginx TLS upstream: %s", body)
 	}
 	docker(true, "exec", name, "systemctl", "stop", "demo.service")
-	if status := string(docker(true, "exec", name, "systemctl", "is-active", "demo.service")); strings.TrimSpace(status) == "active" {
-		t.Fatal("systemd service remained active after SIGTERM stop")
+	if status := strings.TrimSpace(string(docker(false, "exec", name, "systemctl", "is-active", "demo.service"))); status != "inactive" {
+		t.Fatalf("systemd service state after SIGTERM stop = %q, want inactive", status)
 	}
 	docker(true, "exec", name, "systemctl", "start", "demo.service")
 	if body := ready(); !strings.Contains(body, "ok") {

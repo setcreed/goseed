@@ -39,6 +39,6 @@ MySQL 使用固定工具版本的 `mysqldump --single-transaction`（仅对事�
 
 ## 验收边界
 
-D11 验收在专用隔离 Linux 环境中运行 systemd、Nginx 和随机测试数据，固定 Debian 13 基线与其中 systemd/Nginx 包版本，并记录实际镜像 digest。测试覆盖服务启动、SIGTERM 排空与重启、权限/只读边界、有效与错误证书、伪造转发头不被信任、HTTP/gRPC 路由、SQLite WAL 备份恢复、MySQL/PostgreSQL 隔离恢复以及新旧 release 回退。语法检查不代替真实 systemd/Nginx 运行；测试环境不可用时，相关运行验收必须明确保留未通过。当前 `make template-deployment-nginx` 已在锁定 Nginx 容器中通过配置语法和错误证书路径检查，`make template-deployment-db` 的 MySQL/PostgreSQL TLS 恢复已通过；systemd 服务和实际代理转发仍待运行验收。
+D11 验收在专用隔离 Linux 环境中运行 systemd、Nginx 和随机测试数据，固定 Debian 13 基线与其中 systemd/Nginx 包版本，并记录实际镜像 digest。`make template-deployment` 已通过：systemd 以专用账号和硬化配置启动双协议服务；HTTP 与 gRPC 请求经 Nginx TLS 前端到达应用，gRPC 上游证书校验通过；SIGTERM 停止后服务进入 `inactive`，重启后健康请求恢复；错误证书路径使 `nginx -t` 失败。测试配置覆盖转发头覆写，运行请求携带伪造 `X-Forwarded-For`。`make template-deployment-nginx` 的四协议配置语法/错误证书检查、`make template-deployment-db` 的 SQLite WAL 与 MySQL/PostgreSQL TLS 隔离恢复，以及新旧 release 回退演练均通过。所有服务与数据库演练均限于隔离容器；未部署到宿主机或生产环境。
 
 实现依据：[Nginx gRPC 模块](https://nginx.org/en/docs/http/ngx_http_grpc_module.html)、[Nginx HTTP/2 模块](https://nginx.org/en/docs/http/ngx_http_v2_module.html)、[Debian systemd.exec 手册](https://manpages.debian.org/trixie/systemd/systemd.exec.5.en.html)、[SQLite Online Backup API](https://www.sqlite.org/backup.html)、[MySQL 8.4 备份方法](https://dev.mysql.com/doc/refman/8.4/en/backup-methods.html)、[PostgreSQL 18 pg_dump](https://www.postgresql.org/docs/18/app-pgdump.html) 与 [pg_restore](https://www.postgresql.org/docs/18/app-pgrestore.html)。
