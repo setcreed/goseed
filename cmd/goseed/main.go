@@ -39,5 +39,5 @@ func versionString() string {
 	if strings.TrimSpace(resolvedCommit) == "" {
 		resolvedCommit = "unknown"
 	}
-	return fmt.Sprintf("%s (commit %s; template %s; resource spec %d)", resolvedVersion, resolvedCommit, generator.TemplateVersion, generator.ResourceSpecVersion)
+	return fmt.Sprintf("%s (commit %s; template %d; resource spec %d)", resolvedVersion, resolvedCommit, generator.TemplateVersion, generator.ResourceSpecVersion)
 }

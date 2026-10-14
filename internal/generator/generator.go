@@ -13,7 +13,8 @@ import (
 	"github.com/setcreed/goseed/internal/templates"
 )
 
-const TemplateVersion = "1"
+// TemplateVersion is the compatibility version of generated project files.
+const TemplateVersion = 1
 
 // Plan contains a complete rendered project and the conflicts found at its target.
 type Plan struct {
@@ -263,7 +264,7 @@ func renderMetadata(project templates.Project, options templates.Options) ([]byt
 
 func renderMetadataModules(project templates.Project, options templates.Options, modules []ModuleMetadata) []byte {
 	var output strings.Builder
-	fmt.Fprintf(&output, "version: 1\ntemplate_version: %s\nname: %s\nmodule: %s\ndatabase: %s\nauthentication: jwt\nauthorization: %s\nredis: %t\ntransport: %s\nmodules:\n", TemplateVersion, project.Name, project.Module, optionOr(options.Database, "sqlite"), optionOr(options.Authz, "none"), options.Redis, optionOr(options.Transport, "http"))
+	fmt.Fprintf(&output, "version: %d\ntemplate_version: %d\nname: %s\nmodule: %s\ndatabase: %s\nauthentication: jwt\nauthorization: %s\nredis: %t\ntransport: %s\nmodules:\n", ProjectMetadataVersion, TemplateVersion, project.Name, project.Module, optionOr(options.Database, "sqlite"), optionOr(options.Authz, "none"), options.Redis, optionOr(options.Transport, "http"))
 	for _, module := range modules {
 		fmt.Fprintf(&output, "  - name: %s\n    type: %s\n", module.Name, module.Type)
 		if module.Type == "resource" {

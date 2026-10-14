@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -163,6 +164,73 @@ func TestProjectMetadataSupportsTypedModulesAndLegacyEntries(t *testing.T) {
 	metadata, err = parseProjectMetadata(typed)
 	if err != nil || len(metadata.Modules) != 2 || metadata.Modules[1].Type != "resource" {
 		t.Fatalf("typed module entries were not parsed: %+v, %v", metadata.Modules, err)
+	}
+}
+
+func TestLegacyProjectMetadataSupportsIncrementalGeneration(t *testing.T) {
+	root := generatedProject(t, templates.Options{})
+	path := filepath.Join(root, "goseed.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := bytes.Replace(data, []byte("  - name: example\n    type: module\n"), []byte("  - example\n"), 1)
+	if bytes.Equal(data, updated) {
+		t.Fatal("generated metadata fixture did not contain a typed example module")
+	}
+	if err := os.WriteFile(path, updated, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := PrepareModule(root, "orders")
+	if err != nil {
+		t.Fatalf("legacy project was rejected: %v", err)
+	}
+	if err := plan.Write(); err != nil {
+		t.Fatal(err)
+	}
+	state, err := LoadProject(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Metadata.Modules) != 2 || state.Metadata.Modules[0] != (ModuleMetadata{Name: "example", Type: "module"}) || state.Metadata.Modules[1].Name != "orders" {
+		t.Fatalf("legacy project did not accept incremental generation: %+v", state.Metadata.Modules)
+	}
+}
+
+func TestIncrementalGenerationRejectsUnknownMetadataVersionsWithoutWrites(t *testing.T) {
+	cases := []struct {
+		name string
+		from string
+		to   string
+		want string
+	}{
+		{name: "metadata", from: "version: 1\n", to: "version: 2\n", want: "unsupported goseed.yaml metadata version 2 (supported: 1)"},
+		{name: "template", from: "template_version: 1\n", to: "template_version: 2\n", want: "unsupported template version 2 (supported: 1)"},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			root := generatedProject(t, templates.Options{})
+			path := filepath.Join(root, "goseed.yaml")
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			updated := bytes.Replace(data, []byte(test.from), []byte(test.to), 1)
+			if bytes.Equal(data, updated) {
+				t.Fatal("metadata fixture did not contain expected version")
+			}
+			if err := os.WriteFile(path, updated, 0644); err != nil {
+				t.Fatal(err)
+			}
+			before := resourceTree(t, root)
+			if _, err := PrepareModule(root, "orders"); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("unsupported version error = %v, want %q", err, test.want)
+			}
+			if after := resourceTree(t, root); !reflect.DeepEqual(before, after) {
+				t.Fatal("rejected incompatible project changed files")
+			}
+		})
 	}
 }
 

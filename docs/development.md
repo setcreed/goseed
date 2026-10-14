@@ -119,6 +119,14 @@ make test GO_PACKAGES='./tests/integration -run TestResourceCoreProjects -count=
 
 每次任务先读规范与施工单，确认工作区和验证目标；实现后更新受影响文档、ROADMAP，必要验证通过后按功能本地提交。公开推送、发版与部署另有明确授权和目标。
 
+## 版本兼容与人工升级
+
+`goseed.yaml` 中的 metadata `version` 与 `template_version` 独立于二进制语义版本；资源的 spec `version` 和登记字段 `field_version` 也独立。当前支持 metadata/template/spec/field version 1，并兼容 v1 项目中旧式字符串模块登记和新版带类型映射。增量命令遇到未知 metadata 或 template 版本会在计划前拒绝；不要手工改版本号绕过检查。
+
+升级已有业务项目时，先为项目提交 Git 变更或制作备份，再比较目标模板的基础版本与当前文件。手动合并通用修复，保留一次性业务文件，审查 go.mod/go.sum、配置、登记文件和迁移；依次运行业务测试、readonly 构建及所用数据库的真实验收。生成器不会批量改写旧业务源码，也不会自动执行迁移。
+
+维护 goseed 依赖时一次只升级一个库、工具或镜像：从官方发布/标签核对版本、许可证、维护记录和相关 issue；同步 `go.mod`/`go.sum`、`dependencies.lock.json`、模板 manifest 与 [依赖记录](dependencies.md)；运行受影响包和生成组合的定向测试。数据库驱动、Redis、gRPC/Gateway、Proto 工具或基础镜像变化时，追加对应真实服务/协议/容器验证。普通构建禁止用自动 `tidy` 掩盖清单差异；更新证据、受影响范围和验证结果写入 ROADMAP。
+
 ## 公开仓库准备
 
 本仓库采用 [MIT](../LICENSE)，第三方依赖与生成代码保留原有版权及许可说明，依赖范围见 [许可证记录](dependencies.md#许可证范围)。模板的整体许可证不替换第三方依赖许可证。

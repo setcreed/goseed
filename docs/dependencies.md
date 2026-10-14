@@ -97,6 +97,10 @@ pgx 存在未解决的 [缓冲响应与取消竞争报告](https://github.com/ja
 
 ## 可复现验证入口
 
+## 依赖变更维护流程
+
+每次只升级一个库、工具或镜像。先查官方发布/tag、固定版本源码中的许可证和 Go 要求、近期维护以及相关 issue，再修改对应清单：主模块更新 `go.mod`/`go.sum`，生成模板同时更新 variant manifest，协议工具同步 lock 与下载脚本，容器镜像同步摘要和 Compose。更新 [本文件的依赖证据](#官方证据快照) 与锁文件后，执行受影响 Go 包、生成项目 readonly 构建和协议复现；改动 SQL/Redis/协议/基础镜像时再执行对应真实服务目标。没有受影响的真实服务矩阵不重复运行，但不得用 SQLite、接口替身或交叉编译声称真实兼容。记录验证日期、实际目标与跳过范围到 ROADMAP。
+
 - `make check`：生成器测试、vet、固定版本 lint 与全部项目 Go 文件的格式检查。
 - `make race build`：生成器竞争检测与构建。
 - `make compatibility`：独立模块的运行依赖、SQLite 和实际 gRPC/Gateway 回环验证；外部数据库缺失时明确跳过。

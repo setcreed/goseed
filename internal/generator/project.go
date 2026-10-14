@@ -18,6 +18,9 @@ import (
 
 var projectModuleName = regexp.MustCompile(`^[a-z][a-z0-9]*$`)
 
+// ProjectMetadataVersion is the current goseed.yaml metadata format.
+const ProjectMetadataVersion = 1
+
 // ProjectMetadata is the versioned generation manifest written into a project.
 type ProjectMetadata struct {
 	Version         int              `yaml:"version"`
@@ -201,8 +204,11 @@ func parseProjectMetadata(data []byte) (ProjectMetadata, error) {
 			metadata.Modules = append(metadata.Modules, module)
 		}
 	}
-	if metadata.Version != 1 || metadata.TemplateVersion != 1 {
-		return ProjectMetadata{}, fmt.Errorf("unsupported goseed.yaml or template version")
+	if metadata.Version != ProjectMetadataVersion {
+		return ProjectMetadata{}, fmt.Errorf("unsupported goseed.yaml metadata version %d (supported: %d)", metadata.Version, ProjectMetadataVersion)
+	}
+	if metadata.TemplateVersion != TemplateVersion {
+		return ProjectMetadata{}, fmt.Errorf("unsupported template version %d (supported: %d)", metadata.TemplateVersion, TemplateVersion)
 	}
 	if metadata.Name == "" || metadata.Module == "" || metadata.Authentication != "jwt" {
 		return ProjectMetadata{}, fmt.Errorf("goseed.yaml is missing required project metadata")
@@ -228,8 +234,8 @@ func parseProjectMetadata(data []byte) (ProjectMetadata, error) {
 		if module.Type != "module" && module.Type != "resource" {
 			return ProjectMetadata{}, fmt.Errorf("unsupported module type %q", module.Type)
 		}
-		if module.Type == "resource" && (!validResourceSpec(module.Spec) || module.FieldVersion != 1) {
-			return ProjectMetadata{}, fmt.Errorf("resource %q requires spec and field_version 1", module.Name)
+		if module.Type == "resource" && (!validResourceSpec(module.Spec) || module.FieldVersion != ResourceSpecVersion) {
+			return ProjectMetadata{}, fmt.Errorf("resource %q requires spec and field_version %d", module.Name, ResourceSpecVersion)
 		}
 		if module.Type == "module" && (module.Spec != "" || module.FieldVersion != 0) {
 			return ProjectMetadata{}, fmt.Errorf("module %q cannot declare resource fields", module.Name)

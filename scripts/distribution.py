@@ -126,7 +126,7 @@ def build(args):
             "go_version": GO_VERSION,
             "goos": goos,
             "goarch": goarch,
-            "template_version": int(source_constant(ROOT / "internal/generator/generator.go", "TemplateVersion", r'const TemplateVersion = "([0-9]+)"')),
+            "template_version": int(source_constant(ROOT / "internal/generator/generator.go", "TemplateVersion", r"const TemplateVersion = ([0-9]+)")),
             "resource_spec_version": int(source_constant(ROOT / "internal/generator/resource_spec.go", "ResourceSpecVersion", r"const ResourceSpecVersion = ([0-9]+)")),
             "binary": {"path": "goseed", "sha256": binary_digest},
             "third_party_licenses": license_records,
