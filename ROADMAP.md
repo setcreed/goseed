@@ -99,7 +99,7 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 
 ## 最近验证
 
-- 2026-10-14 19:37 D9-P04 平台和交付核验：固定 Go 1.26.4、CGO_ENABLED=0 构建 darwin/arm64、darwin/amd64、linux/arm64、linux/amd64 四个归档；比对二进制内嵌 GOOS/GOARCH，四个归档 checksum/manifest 验证通过。macOS arm64 本机及 macOS amd64 Rosetta 执行 `--version` 和默认项目生成均通过；linux/arm64 在固定 Alpine 镜像、断网 Docker 容器执行相同检查通过。Linux amd64 容器运行未完成：本机固定镜像缓存仅有 arm64，强制 amd64 时 Docker 内容存储缺少对应层并返回 exit 125；按契约保留未验证，不以交叉构建代替运行。Windows 原生未测试。
+- 2026-10-14 19:38 D9-P04 清洁提交最终验收：提交 `a5ab852` 上 `make install VERSION=v0.0.0-d9` 安装到隔离目录并显示正确提交/模板/spec；`make package` 从 clean source 生成 macOS/Linux amd64/arm64 四个包，manifest 均记录相同完整提交及 `source_dirty=false`，`make verify-package` 全部通过，macOS arm64 归档重建摘要一致。该 clean commit 的 macOS arm64 本机、macOS amd64 Rosetta、Linux arm64 固定断网容器包均运行 `--version` 并生成 52 个文件。Linux amd64 仍未运行：本机锁定镜像只有 arm64 内容层，强制 amd64 时 Docker 报缺失 layer；保留未验证。Windows 原生未测试。
 
 - 2026-10-14 19:30 D9-P03 回归：`make test GO_PACKAGES='./internal/generator ./internal/cli'`、`make build`、CLI `--version`、`make fmt-check`、`make contract-check`（94 个本地链接、374 个交付文件）和 `git diff --check` 通过。旧 v1 字符串登记夹具实际执行 `PrepareModule`/`Write`/`LoadProject`；metadata/template v2 两个失败夹具明确提示只支持 v1，并以整棵项目文件快照证明无改动。归档复核显示版本字段与当前源码常量一致；测试归档已清理。
 
