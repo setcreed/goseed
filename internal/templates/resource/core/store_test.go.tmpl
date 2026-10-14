@@ -48,7 +48,8 @@ func TestResourceCRUD(t *testing.T){
  changed[[.GoName]],err:=biz.Update(alice,first.ID,business.UpdateInput{[[.GoName]]:&nonzero[[.GoName]]});if err!=nil||changed[[.GoName]].[[.GoName]]!=nonzero[[.GoName]]{t.Fatal("partial update [[.Name]]",err)}
  zero[[.GoName]]:=[[if eq .Type "string"]]""[[else if eq .Type "bool"]]false[[else]]int64(0)[[end]]
  for range 2{zeroed,err:=biz.Update(alice,first.ID,business.UpdateInput{[[.GoName]]:&zero[[.GoName]]});if err!=nil||zeroed.[[.GoName]]!=zero[[.GoName]]{t.Fatal("zero/idempotent update [[.Name]]",err)}}
- [[if eq .Type "int64"]]minimum[[.GoName]]:=int64(math.MinInt64);value[[.GoName]],err:=biz.Update(alice,first.ID,business.UpdateInput{[[.GoName]]:&minimum[[.GoName]]});if err!=nil||value[[.GoName]].[[.GoName]]!=math.MinInt64{t.Fatal("int64 precision",err)}[[end]]
+ [[if eq .Type "int64"]]// Verify the storage boundary directly so business-level range rules do not constrain this precision case.
+ minimum[[.GoName]]:=int64(math.MinInt64);stored[[.GoName]],err:=repository.Update(ctx,"Alice",first.ID,model.[[$.GoName]]Changes{[[.GoName]]:&minimum[[.GoName]]});if err!=nil||stored[[.GoName]].[[.GoName]]!=math.MinInt64{t.Fatal("int64 precision",err)}[[end]]
  [[end]]
  // A read failure after UPDATE must roll back the field and timestamp writes.
  before,err:=biz.Get(alice,second.ID);if err!=nil{t.Fatal(err)}

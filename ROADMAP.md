@@ -33,7 +33,7 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 
 安装与 CLI 使用收口及真实远端安装已验收，范围见 [施工清单](docs/implementation.md#安装与-cli-使用收口施工清单)。四平台发行包及 SHA-256 可下载；当前没有已排定的新功能，后续按实际使用反馈维护。发布流程见 [首次版本发布清单](docs/implementation.md#首次版本发布清单)。
 
-D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型业务试用已完成，未发现资源生成、手工扩展、增量登记及基础安全流程的功能阻断。试用暴露的首要开发体验问题是 Makefile 强制切换 Go 工具链：本机 Go 1.27.2 在 `GOTOOLCHAIN=local` 下能构建并通过生成项目验证，固定工具链下载则受网络限制失败。
+D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.1 发布后商品管理试用未发现资源生成、手工扩展、增量登记及基础安全流程的功能阻断；试用中发现的 `MinInt64` 精度测试与常见非负业务约束冲突，当前源码已将该精度断言移至 Store 层。此修正尚未随新版本发布。此前发现的 Makefile 工具链切换问题已在 v0.1.1 修复。
 
 1. **Go 版本策略已落地**。各模块 `go.mod` 声明最低 Go 1.26.4；Makefile 和项目内验证使用 `GOTOOLCHAIN=local`，本机版本满足最低要求即可。可复现发行归档仍固定 Go 1.26.4；CI 从 `go.mod` 选择工具链。
 2. **后续按证据维护生成能力**。仅修复实际试用中复现的阻断或正确性问题；没有具体问题时不新增功能。
@@ -54,6 +54,10 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 - D9 已完成本地安装、可复现归档、许可证与 SHA-256 核验、v1 增量兼容及人工维护说明。macOS arm64、Rosetta 下 macOS amd64、Linux arm64 的包运行和生成检查通过；Linux amd64 已在 Apple Silicon Docker 的 amd64 模拟容器中运行发行包，并验证默认项目健康及认证创建/列表，原生 amd64 硬件未验证；Windows 原生不在支持范围。D10 完成指标/追踪模板及本地 OTLP protobuf 接收器验收；D11 已完成真实 systemd/Nginx 服务级验收；D12 至 D17 均暂缓且未实施。
 
 ## 最近完成
+
+- 2026-10-15 02:14 资源 Store 精度测试与 Biz 规则解耦：生成的 `int64` 精度边界用例直接调用 Store，避免新增常见的非负业务规则后必须改动通用测试。修正仅影响当前模板源码，v0.1.1 发行内容未改变。
+
+- 2026-10-15 02:06 v0.1.1 商品管理业务试用完成：使用正式 macOS arm64 发行归档生成 HTTP/SQLite 商品资源，加入手写价格/库存规则和 order 模块；认证 CRUD、零值 PATCH、跨主体隔离及增量生成保留手写文件均通过。按业务非负约束调整生成测试中的负数精度样本后，全量生成项目测试通过；未发现发布阻断。
 
 - 2026-10-15 01:54 基础 CI 与 v0.1.1 发布完成：新增 `.github/workflows/ci.yml`，在 main 推送、PR 和手动触发时运行轻量检查，锁定官方 Actions SHA、按 go.mod 选择 Go 并缓存仓库实际目录。生成项目缓存修复和冷缓存测试适配随 v0.1.1 发布，标签指向 CI 已通过的 `85c3199`；四平台归档与摘要已公开，README 安装入口更新，v0.1.0 标签及资产保持不变。
 
@@ -89,20 +93,12 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 
 - 2026-10-14 19:27 D9-P02 安装与本地打包完成：新增固定 Go 1.26.4 的显式 `make install`、版本/提交/模板/spec 信息及单平台可复现 tar.gz 归档；归档附 Go 构建依赖许可证、JSON 版本清单、二进制摘要与 SHA-256 sidecar，并提供 `make verify-package`。安装和 macOS arm64 归档生成/复现通过；改包校验失败、脏工作区与非法版本均被拒绝。仅制作本地 QA 材料，未发布。
 
-- 2026-10-14 19:21 D9-P01 版本、安装、平台与维护契约定稿：区分生成器语义版本、项目元数据格式、模板兼容版本和资源 spec 格式；本阶段仅生成本地安装/归档材料，明确 SHA-256 只用于损坏检测且不做 tag/release/公开分发。macOS/Linux amd64/arm64 保持候选，只有实际运行通过才列为已验证；更新策略为单依赖变更、复核许可证/维护证据/锁与 manifest，并人工升级既有项目。P02 转为当前任务。
-
-- 2026-10-14 19:12 D8 基础使用快速验收完成：干净导出的已提交源码使用 Go 1.26.4 通过构建及 CLI 帮助/版本检查；默认 HTTP/SQLite 项目通过构建、初始化、迁移和健康检查，并实际完成认证 CRUD；MySQL 8.4.11＋纯 gRPC 项目通过生成构建、独立应用账号迁移、健康状态、未认证拒绝及认证 CRUD。D9 转为下一阶段；未推送或发布。
-
-
-
-
-
-
-
-
-
 
 ## 最近验证
+
+- 2026-10-15 02:14 Store 精度回归验证：`make test GO_PACKAGES='./internal/templates'`、对应 vet、格式检查与 diff 检查通过；当前源码生成 SQLite 商品项目后手写 Biz 非负 price/stock 校验，Store/Biz 定向测试以及生成项目 `go test -mod=readonly -timeout=5m ./...` 和 `go vet -mod=readonly ./...` 均通过。未运行 race、Docker 或外部数据库；任务临时项目已清理。
+
+- 2026-10-15 02:06 v0.1.1 商品资源试用验证：运行公开 macOS arm64 归档 `v0.1.1`，生成 `example.com/shop`，执行 SQLite schema 2 迁移、构建、全部测试及 `go vet`；真实回环请求覆盖未认证 401、必填/重复键/owner 注入/分页错误、手写负值拒绝、创建/读取/列表/零值更新/删除和 Alice/Bob 隔离。随后增量生成 `order`，10 个商品资源与手写文件 SHA-256 不变；`make fmt-check`、readonly 构建、生成项目全量测试和 vet 通过，项目内未产生 `.tmp`。按试用要求仅使用 SQLite/本机回环，未运行 Docker、外部数据库或 race；临时项目与服务日志已清理。
 
 - 2026-10-15 01:54 CI 与补丁发行验收：真实 Actions run `38609806274` 在 Ubuntu 24.04、Go 1.26.4 下完整通过，用时 2 分 03 秒，覆盖格式/契约、锁定协议工具、cmd/internal 单测、缓存定向回归、vet 和构建。四平台包的源码/版本/平台/许可证摘要通过，macOS arm64 本机及 amd64 Rosetta 生成与 make build 成功、遵循 GOENV 缓存且无项目内 .tmp，arm64 归档重建摘要一致。真实 `@v0.1.1` 和 `@latest` 均显示 v0.1.1，帮助、init/dry-run、模块/资源生成、构建及 SQLite 迁移通过；gh API 核对标签、CI 提交和 8 个上传资产大小/SHA-256 一致，Release 已公开为正式版。任务临时目录与隔离安装缓存已清理，22 MiB 正式发行包保留在 dist/v0.1.1。未重复 Docker、外部数据库或全仓 race。
 
@@ -138,7 +134,3 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 - 2026-10-14 19:30 D9-P03 回归：`make test GO_PACKAGES='./internal/generator ./internal/cli'`、`make build`、CLI `--version`、`make fmt-check`、`make contract-check`（94 个本地链接、374 个交付文件）和 `git diff --check` 通过。旧 v1 字符串登记夹具实际执行 `PrepareModule`/`Write`/`LoadProject`；metadata/template v2 两个失败夹具明确提示只支持 v1，并以整棵项目文件快照证明无改动。归档复核显示版本字段与当前源码常量一致；测试归档已清理。
 
 - 2026-10-14 19:27 D9-P02 检查：`make test GO_PACKAGES='./cmd/goseed ./internal/generator'`、`make fmt-check`、`make contract-check`（92 个本地链接、374 个交付文件）、`git diff --check` 通过。用户级写入未执行；`make install` 安装到隔离目录后版本输出正确。macOS arm64 归档两次生成 SHA-256 一致，`make verify-package` 验证二进制与全部许可证摘要通过；追加字节并保留原摘要后明确报 archive SHA-256 mismatch，脏工作区/非法版本均拒绝。临时安装、归档、篡改样本与 Python 缓存已清理。
-
-- 2026-10-14 19:21 D9-P01 文档契约检查：`make contract-check`（92 个本地链接、372 个交付文件）和 `git diff --check` 通过；核对 D9 的本地/外部边界、四类版本独立语义、候选平台证据门槛及维护流程。仅修改施工计划与路线图，未生成或发布二进制。
-
-- 2026-10-14 19:12 D8 P01/P02/P03 验收：从本地已提交 HEAD 导出干净源码后以固定 Go 1.26.4 执行 `make build`，CLI `--help`/`--version` 通过；默认 HTTP/SQLite/JWT 生成项目执行构建、`dev init`、迁移并启动回环服务，健康/就绪、未认证拒绝和认证创建/读取/更新/删除均符合契约；MySQL 8.4.11 专用容器中以独立应用账号执行 gRPC 项目迁移，健康为 SERVING，未认证请求返回 Unauthenticated，认证 CRUD 通过。服务、专用容器、卷、网络和任务临时目录均已清理；Go 共享缓存保留。未运行全矩阵、race 或跨平台恢复测试。
