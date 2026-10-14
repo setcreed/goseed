@@ -140,8 +140,8 @@ func TestResourceTargetPlanAcrossSQLCombinations(t *testing.T) {
 						if err := plan.Report(&report); err != nil {
 							t.Fatal(err)
 						}
-						if !strings.Contains(report.String(), "Target preview only") || !strings.Contains(report.String(), "No files written") {
-							t.Fatal("preview advertises unimplemented resource code")
+						if !strings.Contains(report.String(), "Complete resource generation prepared") || !strings.Contains(report.String(), "goseed.yaml") {
+							t.Fatal("complete resource plan is missing prepared outputs")
 						}
 						migration := "migrations/00002_orders.sql"
 						if authz == "casbin" {
@@ -219,6 +219,132 @@ func TestResourcePlanCopiesAndReports(t *testing.T) {
 	}
 }
 
+func TestResourcePlanWriteAllProtocolsAndPreserveFirstResource(t *testing.T) {
+	for _, transport := range []string{"http", "grpc", "dual", "gateway"} {
+		t.Run(transport, func(t *testing.T) {
+			root := resourcePlanProject(t, templates.Options{Transport: transport}, true)
+			first, err := PrepareResource(root, "orders", ResourceOptions{Spec: "specs/orders.yaml", Migration: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := first.Write(); err != nil {
+				t.Fatal(err)
+			}
+			state, err := LoadProject(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := state.Metadata.Modules[len(state.Metadata.Modules)-1]; got != (ModuleMetadata{Name: "orders", Type: "resource", Spec: "specs/orders.yaml", FieldVersion: 1}) {
+				t.Fatalf("resource metadata: %#v", got)
+			}
+			for _, path := range []string{"internal/apiserver/model/orders.go", "internal/apiserver/biz/orders/biz.go", "internal/apiserver/store/orders/store.go", "internal/apiserver/bootstrap/module_orders.go", "docs/orders.md", "migrations/00002_orders.sql"} {
+				if _, err := os.Stat(filepath.Join(root, path)); err != nil {
+					t.Errorf("missing generated output %s: %v", path, err)
+				}
+			}
+			if transport != "grpc" {
+				if _, err := os.Stat(filepath.Join(root, "api/openapi/orders.yaml")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if transport == "grpc" || transport == "dual" || transport == "gateway" {
+				if _, err := os.Stat(filepath.Join(root, "pkg/api/orders/v1/orders_grpc.pb.go")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if transport == "gateway" {
+				for _, path := range []string{"pkg/api/orders/v1/orders.pb.gw.go", "api/proto/orders/v1/http.yaml"} {
+					if _, err := os.Stat(filepath.Join(root, path)); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			preservedFiles := []string{"internal/apiserver/bootstrap/module_orders.go", "docs/orders.md", "migrations/00002_orders.sql"}
+			if transport != "grpc" {
+				preservedFiles = append(preservedFiles, "api/openapi/orders.yaml")
+			}
+			if transport != "http" {
+				preservedFiles = append(preservedFiles, "api/proto/orders/v1/orders.proto")
+			}
+			originals := map[string][]byte{}
+			for _, path := range preservedFiles {
+				data, err := os.ReadFile(filepath.Join(root, path))
+				if err != nil {
+					t.Fatal(err)
+				}
+				originals[path] = data
+			}
+			writeResourceInput(t, root, "specs/notes.yaml", resourcePlanSpec)
+			second, err := PrepareResource(root, "notes", ResourceOptions{Spec: "specs/notes.yaml"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := second.Write(); err != nil {
+				t.Fatal(err)
+			}
+			for path, original := range originals {
+				preserved, err := os.ReadFile(filepath.Join(root, path))
+				if err != nil || !bytes.Equal(original, preserved) {
+					t.Fatalf("first resource file %s changed: %v", path, err)
+				}
+			}
+			state, err = LoadProject(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(state.Metadata.Modules) != 3 {
+				t.Fatalf("module metadata count=%d", len(state.Metadata.Modules))
+			}
+		})
+	}
+}
+
+func TestResourcePlanWriteAllSQLAndProtocolCombinations(t *testing.T) {
+	for _, database := range []string{"sqlite", "mysql", "postgres"} {
+		for _, transport := range []string{"http", "grpc", "dual", "gateway"} {
+			t.Run(database+"/"+transport, func(t *testing.T) {
+				root := resourcePlanProject(t, templates.Options{Database: database, Transport: transport, Redis: true, Authz: "casbin"}, true)
+				plan, err := PrepareResource(root, "orders", ResourceOptions{Spec: "specs/orders.yaml", Migration: true})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := plan.Write(); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := LoadProject(root); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := os.Stat(filepath.Join(root, "migrations/00003_orders.sql")); err != nil {
+					t.Fatal(err)
+				}
+			})
+		}
+	}
+}
+
+func TestResourcePlanWriteRollsBackAllCreatesAndUpdates(t *testing.T) {
+	root := resourcePlanProject(t, templates.Options{Transport: "http"}, false)
+	before := resourceTree(t, root)
+	plan, err := PrepareResource(root, "orders", ResourceOptions{Spec: "specs/orders.yaml"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writes := 0
+	err = plan.writeWith(func(path string, data []byte, mode os.FileMode) error {
+		writes++
+		if writes == 2 {
+			return fmt.Errorf("injected index write failure")
+		}
+		return writeAtomic(path, data, mode)
+	})
+	if err == nil || !strings.Contains(err.Error(), "injected index write failure") {
+		t.Fatalf("expected injected failure, got %v", err)
+	}
+	if !reflect.DeepEqual(before, resourceTree(t, root)) {
+		t.Fatal("resource write failure did not restore original tree bytes")
+	}
+}
+
 type resourceShortWriter struct{}
 
 func (resourceShortWriter) Write(data []byte) (int, error) { return len(data) - 1, nil }
@@ -282,6 +408,13 @@ func TestResourcePlanConflictsAndChanges(t *testing.T) {
 		if !strings.Contains(plan.Conflicts()[0], "orders.go") || plan.Revalidate() == nil {
 			t.Fatal("conflict was mutable or ignored")
 		}
+		before := resourceTree(t, root)
+		if err := plan.Write(); err == nil {
+			t.Fatal("conflicted resource write succeeded")
+		}
+		if !reflect.DeepEqual(before, resourceTree(t, root)) {
+			t.Fatal("conflicted resource write changed the project")
+		}
 	})
 	for _, path := range []string{"specs/orders.yaml", "goseed.yaml", "internal/apiserver/bootstrap/providers.go", "api/openapi/example.yaml", "api/openapi/swagger.json", "migrations/00001_examples.sql", "migrations/migrations.go"} {
 		t.Run("change/"+path, func(t *testing.T) {
@@ -300,6 +433,13 @@ func TestResourcePlanConflictsAndChanges(t *testing.T) {
 			}
 			if err := plan.Revalidate(); err == nil || !strings.Contains(err.Error(), "changed after") {
 				t.Fatalf("stale input accepted: %v", err)
+			}
+			before := resourceTree(t, root)
+			if err := plan.Write(); err == nil {
+				t.Fatal("stale resource write succeeded")
+			}
+			if !reflect.DeepEqual(before, resourceTree(t, root)) {
+				t.Fatal("stale resource write changed the project")
 			}
 		})
 	}

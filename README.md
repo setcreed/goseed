@@ -17,7 +17,7 @@
 | 工程基础 | 强类型配置、Zap 日志、Context、业务错误、显式迁移、健康检查、TLS 与有限期关闭 |
 | 部署文件 | 独立 Go module、Makefile、非 root Dockerfile、所选能力的开发配置 |
 | 业务模块 | `gen module` 创建无业务操作的结构骨架，登记协议与文档 |
-| 资源内部渲染 | CRUD 核心、SQL 草稿、HTTP Handler/工厂/Swagger 源；内部只读接口 |
+| CRUD 资源 | `gen resource` 按 spec 生成主体隔离 CRUD、四协议适配、登记与 OpenAPI 汇总，可选 SQL 迁移草稿 |
 
 四种协议 × 四种存储 × Redis 开关 × Casbin 开关，共 64 种初始项目组合。生成结果和必要运行依赖按能力选择，不默认引入所有驱动与服务。当前命令契约见 [CLI](docs/cli.md)，验收与进度见 [ROADMAP](ROADMAP.md)。
 
@@ -66,7 +66,14 @@ goseed gen module orders
 
 该命令创建 Biz/Handler 与所选数据库的 Store 骨架，生成一次性模块工厂，安全更新元数据、协议登记和 OpenAPI 汇总。Handler 不虚构业务端点，开发者补齐领域规则、路由与权限。既有手工工厂和业务源码受到保护，写入失败恢复本次新增/更新内容。
 
-资源内部入口 `generator.PrepareResource` 提供只读计划、CoreFiles、按所选协议返回的 HTTPFiles/RPCFiles、SchemaStore 与可选 MigrationDraft；查询返回独立副本，不连接数据库或写入文件。各接口用途与兼容边界见 [资源接入方案](docs/resource-generation.md)。
+为业务项目增加 CRUD 资源：
+
+```sh
+goseed gen resource product --spec specs/product.yaml --dry-run
+goseed gen resource product --spec specs/product.yaml --migration
+```
+
+`--spec` 必须位于项目 `specs/` 目录。gRPC、dual 和 Gateway 项目需要先在业务项目内执行 `make proto-tools`，生成器只使用项目锁定的本地工具。`--migration` 只创建待审核 SQL 草稿，不连接数据库或执行迁移；使用字段、写入保护与失败回滚契约见 [CLI](docs/cli.md) 和 [资源接入方案](docs/resource-generation.md)。
 
 ## 开发与验证
 

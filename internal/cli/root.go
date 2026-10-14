@@ -69,7 +69,7 @@ func NewCommand(version string) *cobra.Command {
 }
 
 func newGenCommand() *cobra.Command {
-	gen := &cobra.Command{Use: "gen", Short: "Generate business modules", Args: cobra.NoArgs}
+	gen := &cobra.Command{Use: "gen", Short: "Generate business modules and CRUD resources", Args: cobra.NoArgs}
 	module := &cobra.Command{
 		Use:          "module <name>",
 		Short:        "Generate a behavior-free business module skeleton",
@@ -104,6 +104,43 @@ func newGenCommand() *cobra.Command {
 			return err
 		},
 	}
+	var spec string
+	var migration, dryRun bool
+	resource := &cobra.Command{
+		Use:          "resource <name>",
+		Short:        "Generate a CRUD resource from a project-local YAML spec",
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("get current directory: %w", err)
+			}
+			plan, err := generator.PrepareResource(root, args[0], generator.ResourceOptions{Spec: spec, Migration: migration})
+			if err != nil {
+				return err
+			}
+			if err := plan.Report(cmd.OutOrStdout(), dryRun); err != nil {
+				return fmt.Errorf("write resource plan: %w", err)
+			}
+			if len(plan.Conflicts()) > 0 {
+				return fmt.Errorf("generation conflicts; resolve them before generating")
+			}
+			if dryRun {
+				return nil
+			}
+			if err := plan.Write(); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Generated resource %s in %s.\n", args[0], root)
+			return err
+		},
+	}
+	resource.Flags().StringVar(&spec, "spec", "", "project-relative YAML spec under specs/")
+	resource.Flags().BoolVar(&dryRun, "dry-run", false, "validate and display the complete resource plan without writing files")
+	resource.Flags().BoolVar(&migration, "migration", false, "include a SQL migration draft without applying it")
+	_ = resource.MarkFlagRequired("spec")
+	gen.AddCommand(resource)
 	module.Flags().Bool("dry-run", false, "validate and display the module plan without writing files")
 	gen.AddCommand(module)
 	return gen

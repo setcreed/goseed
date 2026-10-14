@@ -4,7 +4,7 @@
 
 goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com/setcreed/goseed`，Go 固定 1.26.4，默认分支 main，许可证 MIT。源码已公开至 https://github.com/setcreed/goseed ，origin 使用 HTTPS，main 跟踪 origin/main；公开源码不代表首版功能已完成。
 
-代码基线为 `2bebacd`：初始项目生成与 gen module 可用，支持四协议、四存储及可选 Redis/Casbin，共 64 种初始项目组合。资源阶段已交付字段解析、只读计划、权限目录、迁移/schema、CRUD 核心及 HTTP/gRPC/dual/Gateway 源渲染；R01 至 R08 已验收。公共 gen resource 与安全写入尚未交付。
+代码基线为 `51a4744`：初始项目生成与 gen module 可用，支持四协议、四存储及可选 Redis/Casbin，共 64 种初始项目组合。资源阶段 R01 至 R09 已交付，包含公共 `gen resource`、四协议生成、安全写入与失败回滚；R10 正在执行完整组合与运行回归。
 
 需求、架构及从零建设的工作顺序见 [施工清单](docs/implementation.md)，新电脑恢复、实现入口与验证方法见 [开发指南](docs/development.md)。本文件是状态唯一来源；从现有进度继续，保留已交付代码与 Git 历史。
 
@@ -18,14 +18,13 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 | D3 可选能力 | 已交付 | MySQL/PostgreSQL/无数据库/Redis/Casbin；真实服务验证记录见 Git 历史 |
 | D4 多协议 | 已交付 | 既有示例的 gRPC/dual/Gateway、安全链、协议复现与生命周期 |
 | D5 项目生成 | 已交付 | 根命令、参数、元数据、dry-run、冲突与恢复保护 |
-| D6 模块与资源 | 进行中 | gen module 已交付；资源 R01 至 R08 已验收，R09 进行中，R10 待推进 |
+| D6 模块与资源 | 进行中 | gen module 与资源 R01 至 R09 已验收；R10 组合回归与收口进行中 |
 | D7 首版收口 | 待开始 | 全部需求覆盖、文档/部署边界、交付验证 |
 
 ## 下一步施工顺序
 
-1. **R09（进行中）**：完整 Prepare/Write、元数据与登记更新、过期/冲突拒绝、回滚、旧项目兼容及公共 gen resource CLI。
-2. **R10**：48 种合法资源组合、16 种无数据库拒绝、原有 64 项目组合；三数据库、真 Redis/Casbin、协议/容器及文件保护完整回归。
-3. **D7**：首版范围核验与使用说明收口。源码公开可以先于首版功能完成，README 按当前真实能力表述。
+1. **R10（进行中）**：48 种合法资源组合、16 种无数据库拒绝、原有 64 项目组合；三数据库、真 Redis/Casbin、协议/容器及文件保护完整回归。
+2. **D7**：首版范围核验与使用说明收口。源码公开可以先于首版功能完成，README 按当前真实能力表述。
 
 详细修改范围、依赖与失败门槛统一见 [D6 清单](docs/implementation.md#d6-资源生成施工清单)。
 
@@ -33,14 +32,16 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 
 - R06 已验收：Swagger `/v1/<name>` 路径与 Handler 一致，请求/响应 schema 与 DTO 对齐；curl 示例展开 `$TOKEN`、接受临时 `API_URL` 并在生成项目集成测试中实际执行。SQLite Casbin 使用真实 Manager/策略存储验证默认拒绝、允许、权限不足及授权先于 Redis Check。源码与验收入口：`internal/templates/resource_core.go`、`internal/templates/resource/http_integration_test.go.tmpl`。
 - R07 已验收：HTTP/RPC/dual 资源工厂共享一次 Biz 构造；两个资源的固定版 Proto 复现、独立 Go 客户端导入、真实 TLS RPC 主体隔离/边界/零值更新，以及 dual 跨协议读写通过。资源 API 仍只读预览，文件写入和登记更新留给 R09。
-- SchemaStore 是只读 schema 原型；CoreFiles 提供完整 Store，不得混用输出路径。当前 ResourcePlan 没有 Write/公共 CLI。
+- SchemaStore 是只读 schema 原型；CoreFiles 提供完整 Store，不得混用输出路径。ResourcePlan 已提供完整 Write 与公共 CLI；R10 仍须验证生成项目组合和运行行为。
 - 模块组装版本 2 只表示纯权限/单次组装，不能代替 Context/schema 和多模块协议兼容检查。R09 必须完整核验旧项目。
-- R08 已交付 Gateway RPC 资源映射、ProtoJSON 说明及多模块协议/Swagger 复现。`gen resource` 公共命令、完整写入回滚仍由 R09 实施。
+- R08 已交付 Gateway RPC 资源映射、ProtoJSON 说明及多模块协议/Swagger 复现；R09 已开放 `gen resource` 并完成完整写入回滚。R10 负责全矩阵和外部服务验收。
 - 历史集成验证曾出现排空超时和宿主 Go/GOROOT/linter 不匹配；R10 按当前代码重新核验，不能靠旧记录声明完整矩阵通过。
 - go-redis 取消、pgx 人工延迟 Write 竞争边界仍按 [依赖记录](docs/dependencies.md) 保留；固定版本不意味着上游问题消失。
 - 仓库采用 MIT；第三方依赖及生成代码仍保留适用许可。源码仓库已经公开，首版交付仍按上述施工顺序推进。
 
 ## 最近完成
+
+- 2026-10-14 14:26 D6-R09 公共资源生成完成：新增 `goseed gen resource <name> --spec <path> [--dry-run] [--migration]`，准备阶段编译固定 Proto/Gateway 产物、验证模块登记和 OpenAPI 投影，写入前重验快照，失败恢复新增文件与登记索引。HTTP CLI dry-run/写入及四协议生成、12 种 SQL×协议写入组合与失败注入测试通过；R10 转为当前任务。
 
 - 2026-10-14 14:13 D6-R08 Gateway 资源验收完成：Gateway 资源复用 RPC Handler/Biz，生成路由映射、OpenAPI 配置和协议差异文档；协议脚本发现全部模块，固定工具在临时目录生成，并通过项目内严格 OpenAPI 合并器更新模块源、汇总和登记摘要。R09 转为下一开发项。
 
@@ -57,6 +58,8 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 - 2026-10-12 13:03 R04 提交 `a123019`：迁移版本/应用集合核验、SQL 草稿、资源只读 schema 与启动 Context；生成器不执行数据库操作。
 
 ## 最近验证
+
+- 2026-10-14 14:26 R09：`go test ./internal/generator ./internal/cli ./internal/templates` 通过；`make contract-check`（79 个本地链接、371 个交付文件）、`make fmt-check`、`make lint`（0 issues）及 `git diff --check` 通过。覆盖四协议公共 CLI、四协议资源写入、SQLite/MySQL/PostgreSQL × 四协议共 12 种生成写入组合（Redis + Casbin）、无数据库拒绝、冲突/过期输入及注入失败后的字节级恢复。R10 仍需执行 48 组合真实项目、64 初始项目回归及显式 SQL/Redis/容器服务验证。
 
 - 2026-10-14 14:13 R08：`go test ./internal/templates ./internal/generator`、`go test ./tests/integration -run 'TestResourceGRPCProjects/gateway' -count=1 -v`、`make contract-check`（78 个本地链接、369 个交付文件）、`make fmt-check`、`make lint`（0 issues）与 `git diff --check` 通过。真实 TLS Gateway 项目含内置模块与两个资源，复现后 Proto/Gateway/各模块 Swagger/汇总/摘要逐字节一致；测试 HTTP→RPC 请求 ID、JWT、主体隔离、非法 query、ProtoJSON int64 字符串与跨协议 CRUD。外部真实 SQL/Redis 与容器留 R10；测试临时项目由套件清理。
 

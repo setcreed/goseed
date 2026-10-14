@@ -6,7 +6,7 @@
 
 内部入口确定为 `PrepareResource(root, name string, options ResourceOptions) (ResourcePlan, error)`；`ResourceOptions` 只包含 `Spec string` 与 `Migration bool`，项目能力从校验后的元数据读取，不接受第二套数据库/协议覆盖参数。计划拥有输入快照、新增目标、登记更新、迁移与协议工具需求、冲突信息；查询与预览返回副本，不能由调用方修改已验证输入。
 
-计划分为只读目标规划与完整生成两层：目标规划提供输入快照、`Targets()`、`Tools()`、`Conflicts()`、`Specification()`、`Report()` 和 `Revalidate()`，不提供 Write 或公共 CLI，不把未渲染目标冒充完整交付。R04 增加 `SchemaStore()` 与 `MigrationDraft() (templates.File, bool)`，返回独立内容副本；后者只在选择迁移时存在，Store 仅含只读 schema 检查，不代表 CRUD。R05 至 R08 提供实际源码与协议产物后，R09 补齐完整准备/Write；执行前再次校验同一份计划。最终预览必须包含登记差异，只读目标预览明确标为目标规划。
+完整计划提供输入快照、`Targets()`、`Tools()`、`Conflicts()`、`Specification()`、`Report()`、`Revalidate()` 与 `Write()`；准备阶段渲染全部业务文件和新资源协议产物，检查登记/Swagger 投影后才返回。报告列出创建与更新文件及固定工具版本；`--dry-run` 不写入。R04 保留 `SchemaStore()` 与 `MigrationDraft() (templates.File, bool)` 作为只读 schema 原型和可审阅 SQL 副本；公共生成实际写入 CoreFiles 的完整 Store。`Write()` 执行前重验全部快照，独占创建业务文件，再更新元数据、模块索引和 OpenAPI 汇总；失败时回滚本次创建和已更新索引，并列出未能恢复的对象。
 
 | 输出 | 路径/规则 | 所有权 |
 |---|---|---|
@@ -55,9 +55,11 @@ R05 不生成完整协议工厂；R06/R07 在构造 Biz 前调用完整 Store �
 
 R06 的 HTTP/dual 渲染由 `RenderResourceHTTP` 与 `ResourcePlan.HTTPFiles()` 提供，包括 Handler 与输入边界测试、开发者维护的单次组装工厂、`api/openapi/<name>.yaml` 源和 `docs/<name>.md`。Handler 注册 POST/GET/PATCH/DELETE，并复用既有 JWT、请求 ID、限流/超时、访问日志、错误响应与 Casbin 路由中间件；工厂从共享数据库创建资源 Store，先以启动 Context 调用只读 `CheckSchema`，再创建 Biz 与 Handler。开启 Redis 时 Biz 注入共享 Client 的检查接口，不另建缓存。JSON 先验证 UTF-8、对象形状、顶层重复/未知键与 null，再反序列化到强类型 DTO；owner 不在字段允许列表。ID 和分页范围与 Biz 一致，百分号错误的 query 编码拒绝。成功状态为创建 201、查询/更新 200、删除 204。
 
-R06 Swagger 源只声明资源 paths 与操作级 Bearer 安全，继承基础源中的共享元信息；准备计划将新源与既有所有模块源交给 `openapi.Merge` 做重复路径、operationId 与定义冲突检查。生成器不覆盖旧文档源，也不在 R06 写入合并索引或登记文件。模块说明从同一资源字段声明列出创建必需性、约束、端点、分页规则和可执行 curl 示例。真实 SQLite 路由集成测试使用两个资源及两个大小写不同的主体，验证 JWT、CRUD、主体隔离、零值更新和无效 JSON；R09 再接入登记投影与安全多文件写入，公共 `gen resource` 暂不可用。
+R06 Swagger 源只声明资源 paths 与操作级 Bearer 安全，继承基础源中的共享元信息；准备阶段将新源与既有所有模块源交给 `openapi.Merge` 做重复路径、operationId 与定义冲突检查。生成器不覆盖旧文档源。模块说明从同一资源字段声明列出创建必需性、约束、端点、分页规则和可执行 curl 示例。真实 SQLite HTTP 集成测试使用两个资源及两个主体，验证 JWT、CRUD、主体隔离、零值更新和无效 JSON；R09 将完整准备/写入接入公共 `gen resource`。
 
-R07 的 gRPC/dual 资源渲染由 `RenderResourceGRPC` 与 `ResourcePlan.RPCFiles()` 提供，输出独立 Proto 源、RPC Handler/测试和纯 gRPC 单次组装工厂；dual 由 HTTP 渲染结果提供同一工厂，Store 与 Biz 各构造一次并共享给两个 Handler。Proto 的可写字段使用 `optional` 保存出现性，RPC 拒绝未知字段、必需字段缺失和越界 ID，并沿用 Biz 的主体、分页、取消与错误语义；FullMethod 权限逐项映射到资源操作。显式 `scripts/proto.py` 发现 `api/proto/*/v1/*.proto`，排序后用锁定工具统一复现到相应 `pkg/api/<module>/v1/`；普通构建不调用 protoc。只读计划和 RPC/dual 源渲染已完成；项目文件写入与模块登记留给 R09。
+R07 的 gRPC/dual 资源渲染由 `RenderResourceGRPC` 与 `ResourcePlan.RPCFiles()` 提供，输出独立 Proto 源、RPC Handler/测试和纯 gRPC 单次组装工厂；dual 由 HTTP 渲染结果提供同一工厂，Store 与 Biz 各构造一次并共享给两个 Handler。Proto 的可写字段使用 `optional` 保存出现性，RPC 拒绝未知字段、必需字段缺失和越界 ID，并沿用 Biz 的主体、分页、取消与错误语义；FullMethod 权限逐项映射到资源操作。显式 `scripts/proto.py` 发现 `api/proto/*/v1/*.proto`，排序后用锁定工具统一复现到相应 `pkg/api/<module>/v1/`；普通构建不调用 protoc。R09 准备阶段按同一固定工具只编译新资源 Proto，不重写旧产物。
+
+R08 的 Gateway 资源复用 RPC Handler/Biz，生成固定 HTTP 映射和安全的 Gateway 模块登记，不生成重复 Gin Handler。ProtoJSON 使用 snake_case、`int64` 字符串及 optional 字段存在性。显式 Gateway 协议复现先在 `.tmp/proto` 生成全部模块产物，再使用项目内 `scripts/openapi` 严格合并器更新模块 Swagger 源、聚合索引及登记摘要；失败回滚已替换文件。生成项目中的合并器源码与生成器严格合并实现由模板测试逐字节比对。
 
 ## 纯模块描述与权限目录
 
@@ -91,7 +93,7 @@ R07 的 gRPC/dual 资源渲染由 `RenderResourceGRPC` 与 `ResourcePlan.RPCFile
 | bool／int64 字段 | BOOLEAN／BIGINT | BOOLEAN（元数据为 TINYINT）／有符号 BIGINT | BOOLEAN／BIGINT |
 | created_at／updated_at | DATETIME | DATETIME(6) | TIMESTAMPTZ |
 
-所有声明列均非空。schema 检查不证明任意手工 DDL 等价；人工迁移应遵循上述草稿结构，额外兼容语法需显式扩展并验证。固定启动层把限时 `moduleDependencies.Context` 交给模块工厂，后续资源工厂用它调用 Store.CheckSchema；Context 不进入 Biz，不留作请求 Context。完整协议资源工厂随 R06/R07 接入，兼容校验与写入由 R09 完成。
+所有声明列均非空。schema 检查不证明任意手工 DDL 等价；人工迁移应遵循上述草稿结构，额外兼容语法需显式扩展并验证。固定启动层把限时 `moduleDependencies.Context` 交给模块工厂，资源工厂用它调用 Store.CheckSchema；Context 不进入 Biz，不留作请求 Context。
 
 不带 `--migration` 时可以生成源码；模块文档说明表结构和人工显式迁移入口。用户可自行编写迁移或管理外部 schema，服务仍必须通过同样的只读核验；没有资源表的项目拒绝启动，不能宣称生成即可运行。不提供已有 schema 差异推断或覆盖历史 SQL。
 
@@ -115,7 +117,7 @@ Gateway 模板增加项目内 `scripts/openapi/main.go` 开发工具，复用已
 
 版本号分别表达不同契约：`goseed.yaml` 元数据版本、模板版本与字段规范版本保持 1；`moduleAssemblyVersion` 为 2，表示单次模块组装和纯权限声明入口。版本 2 本身不代表已经具备资源 schema、Context 工厂扩展或多模块协议复现能力。
 
-业务模块与只读资源计划检查版本 2、启动调用入口、既有纯声明函数签名、完整登记投影，并记录 `module_permissions.go`、providers 和既有工厂快照。R04 负责 Context/schema 接入，R07/R08 负责协议脚本，R09 必须按所选能力检查全部必要入口后再开放完整资源命令；不能把基础预览当完整资源兼容判定。
+业务模块与资源生成检查版本 2、启动调用入口、既有纯声明函数签名、完整登记投影，并记录 `module_permissions.go`、providers、模块清单、OpenAPI 源/索引、spec、迁移目录及固定工具快照。旧入口、手工修改的生成索引、冲突目标或准备后变化均在写入前拒绝；生成器不会把普通模块转换成资源，也不会改写既有工厂、Proto、spec 或迁移。
 
 不兼容旧项目在写入前提示具体缺少入口及人工升级范围，不自动覆盖 providers、旧工厂、迁移或脚本；已有生成索引的完整确定性投影继续校验。只添加登记标记不等于兼容，必须检查调用与结构。
 

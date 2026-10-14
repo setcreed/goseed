@@ -104,6 +104,110 @@ func TestGenModuleDryRunAndWrite(t *testing.T) {
 	}
 }
 
+func TestGenResourceDryRunAndWrite(t *testing.T) {
+	dir := projectDir(t)
+	t.Chdir(dir)
+	if err := NewCommand("test").Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "specs"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "specs/product.yaml"), []byte("version: 1\nfields:\n  - name: title\n    type: string\n    required: true\n  - name: enabled\n    type: bool\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(filepath.Join(dir, "goseed.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dryOutput bytes.Buffer
+	dry := NewCommand("test")
+	dry.SetArgs([]string{"gen", "resource", "product", "--spec", "specs/product.yaml", "--migration", "--dry-run"})
+	dry.SetOut(&dryOutput)
+	if err := dry.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"internal/apiserver/biz/product/biz.go", "migrations/00002_product.sql", "goseed.yaml", "Dry run"} {
+		if !strings.Contains(dryOutput.String(), expected) {
+			t.Errorf("resource dry-run missing %q:\n%s", expected, dryOutput.String())
+		}
+	}
+	after, err := os.ReadFile(filepath.Join(dir, "goseed.yaml"))
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("resource dry-run changed project metadata")
+	}
+	var output bytes.Buffer
+	command := NewCommand("test")
+	command.SetArgs([]string{"gen", "resource", "product", "--spec", "specs/product.yaml", "--migration"})
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "Generated resource product") {
+		t.Fatalf("unexpected resource output: %s", output.String())
+	}
+	for _, path := range []string{"internal/apiserver/biz/product/biz.go", "internal/apiserver/handler/http/product/handler.go", "internal/apiserver/bootstrap/module_product.go", "api/openapi/product.yaml", "migrations/00002_product.sql"} {
+		if _, err := os.Stat(filepath.Join(dir, path)); err != nil {
+			t.Errorf("missing CLI resource output %s: %v", path, err)
+		}
+	}
+}
+
+func TestGenResourceProtocolCLI(t *testing.T) {
+	repository, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, transport := range []string{"grpc", "dual", "gateway"} {
+		t.Run(transport, func(t *testing.T) {
+			dir := projectDir(t)
+			t.Chdir(dir)
+			create := NewCommand("test")
+			create.SetArgs([]string{"--transport", transport})
+			if err := create.Execute(); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(dir, "specs"), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "specs/orders.yaml"), []byte("version: 1\nfields:\n  - name: title\n    type: string\n    required: true\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			toolPaths := []string{".tools/protoc/bin/protoc", ".tools/bin/protoc-gen-go", ".tools/bin/protoc-gen-go-grpc"}
+			if transport == "gateway" {
+				toolPaths = append(toolPaths, ".tools/bin/protoc-gen-grpc-gateway", ".tools/bin/protoc-gen-openapiv2")
+			}
+			for _, path := range append(toolPaths, ".tools/protoc/include/google/protobuf/empty.proto", ".tools/protoc/include/google/protobuf/timestamp.proto") {
+				source := filepath.Join(repository, filepath.FromSlash(path))
+				destination := filepath.Join(dir, filepath.FromSlash(path))
+				if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Link(source, destination); err != nil {
+					t.Fatalf("link pinned protocol fixture %s: %v", path, err)
+				}
+			}
+			command := NewCommand("test")
+			command.SetArgs([]string{"gen", "resource", "orders", "--spec", "specs/orders.yaml"})
+			if err := command.Execute(); err != nil {
+				t.Fatal(err)
+			}
+			for _, path := range []string{"internal/apiserver/handler/grpc/orders/handler.go", "pkg/api/orders/v1/orders_grpc.pb.go", "internal/apiserver/bootstrap/module_orders.go"} {
+				if _, err := os.Stat(filepath.Join(dir, path)); err != nil {
+					t.Errorf("missing %s: %v", path, err)
+				}
+			}
+			if transport == "gateway" {
+				for _, path := range []string{"pkg/api/orders/v1/orders.pb.gw.go", "api/openapi/orders.yaml", "api/openapi/swagger.json"} {
+					if _, err := os.Stat(filepath.Join(dir, path)); err != nil {
+						t.Errorf("missing Gateway output %s: %v", path, err)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestGenModuleDryRunReportsOutputConflicts(t *testing.T) {
 	dir := projectDir(t)
 	t.Chdir(dir)

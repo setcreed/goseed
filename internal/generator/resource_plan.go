@@ -34,8 +34,8 @@ type resourceFingerprint struct {
 	Mode   os.FileMode
 }
 
-// ResourcePlan is a read-only target and business-core plan. Protocol rendering
-// and Write remain absent until the complete safe generation path is verified.
+// ResourcePlan is a complete, write-free generation plan. Write is the only
+// operation that changes the project tree.
 type ResourcePlan struct {
 	root           string
 	name           string
@@ -46,6 +46,8 @@ type ResourcePlan struct {
 	inputs         map[string]resourceFingerprint
 	migrations     []string
 	conflicts      []string
+	creates        []templates.File
+	updates        []fileUpdate
 	schemaStore    templates.File
 	migrationDraft *templates.File
 	coreFiles      []templates.File
@@ -53,8 +55,8 @@ type ResourcePlan struct {
 	rpcFiles       []templates.File
 }
 
-// PrepareResource validates resource inputs and plans output paths without
-// creating files, rendering protocol placeholders, or connecting to services.
+// PrepareResource validates inputs, renders all outputs, and checks protocol
+// tools without changing the project tree or connecting to external services.
 func PrepareResource(root, name string, options ResourceOptions) (ResourcePlan, error) {
 	if !projectModuleName.MatchString(name) || len(name) > 63 || name == "example" {
 		return ResourcePlan{}, fmt.Errorf("invalid or reserved resource name %q", name)
@@ -173,6 +175,27 @@ func PrepareResource(root, name string, options ResourceOptions) (ResourcePlan, 
 			return ResourcePlan{}, err
 		}
 	}
+	plan.tools = requiredResourceTools(state.Metadata.Transport)
+	if len(plan.tools) > 0 {
+		if err := plan.snapshot("scripts/proto.py"); err != nil {
+			return ResourcePlan{}, err
+		}
+	}
+	for _, tool := range plan.tools {
+		if err := plan.snapshot(tool.Path); err != nil {
+			return ResourcePlan{}, fmt.Errorf("protocol tool %s is unavailable; prepare the pinned project-local tools explicitly: %w", tool.Name, err)
+		}
+		if err := checkResourceTool(plan.root, tool); err != nil {
+			return ResourcePlan{}, err
+		}
+	}
+	if len(plan.tools) > 0 {
+		for _, name := range []string{"empty", "timestamp"} {
+			if err := plan.snapshot(".tools/protoc/include/google/protobuf/" + name + ".proto"); err != nil {
+				return ResourcePlan{}, fmt.Errorf("protocol standard include is unavailable: %w", err)
+			}
+		}
+	}
 	plan.targets = resourceTargets(name, state.Metadata.Transport)
 	fields := make([]templates.SchemaField, 0, len(spec.Fields))
 	for _, field := range spec.Fields {
@@ -214,6 +237,11 @@ func PrepareResource(root, name string, options ResourceOptions) (ResourcePlan, 
 		if err != nil {
 			return ResourcePlan{}, err
 		}
+		compiled, err := renderResourceProtocol(state.Root, state.Metadata.Module, name, state.Metadata.Transport, plan.rpcFiles)
+		if err != nil {
+			return ResourcePlan{}, err
+		}
+		plan.rpcFiles = append(plan.rpcFiles, compiled...)
 	}
 	if options.Migration {
 		path, err := nextResourceMigration(name, plan.migrations)
@@ -223,26 +251,11 @@ func PrepareResource(root, name string, options ResourceOptions) (ResourcePlan, 
 		plan.targets = append(plan.targets, ResourceTarget{Path: path, Action: "create"})
 		plan.migrationDraft = &templates.File{Path: path, Content: sql}
 	}
-	plan.tools = requiredResourceTools(state.Metadata.Transport)
-	if len(plan.tools) > 0 {
-		if err := plan.snapshot("scripts/proto.py"); err != nil {
-			return ResourcePlan{}, err
-		}
+	if state.Metadata.Transport == "grpc" {
+		plan.rpcFiles = append(plan.rpcFiles, templates.File{Path: "docs/" + name + ".md", Content: resourceGRPCGuide(name, coreFields)})
 	}
-	for _, tool := range plan.tools {
-		if err := plan.snapshot(tool.Path); err != nil {
-			return ResourcePlan{}, fmt.Errorf("protocol tool %s is unavailable; prepare the pinned project-local tools explicitly: %w", tool.Name, err)
-		}
-		if err := checkResourceTool(plan.root, tool); err != nil {
-			return ResourcePlan{}, err
-		}
-	}
-	if len(plan.tools) > 0 {
-		for _, name := range []string{"empty", "timestamp"} {
-			if err := plan.snapshot(".tools/protoc/include/google/protobuf/" + name + ".proto"); err != nil {
-				return ResourcePlan{}, fmt.Errorf("protocol standard include is unavailable: %w", err)
-			}
-		}
+	if err := plan.prepareCommit(state); err != nil {
+		return ResourcePlan{}, err
 	}
 	sort.Slice(plan.targets, func(i, j int) bool { return plan.targets[i].Path < plan.targets[j].Path })
 	for _, target := range plan.targets {
@@ -418,7 +431,8 @@ func (p ResourcePlan) HTTPFiles() []templates.File {
 	return files
 }
 
-// RPCFiles returns the RPC adapter and Proto source as independent copies.
+// RPCFiles returns RPC sources, fixed protocol outputs and selected protocol
+// documentation as independent copies.
 func (p ResourcePlan) RPCFiles() []templates.File {
 	files := make([]templates.File, len(p.rpcFiles))
 	for i, file := range p.rpcFiles {
@@ -431,36 +445,4 @@ func (p ResourcePlan) MigrationDraft() (templates.File, bool) {
 		return templates.File{}, false
 	}
 	return templates.File{Path: p.migrationDraft.Path, Content: bytes.Clone(p.migrationDraft.Content)}, true
-}
-
-// Report labels this intermediate preview explicitly; it promises no CRUD code.
-func (p ResourcePlan) Report(w io.Writer) error {
-	var output bytes.Buffer
-	fmt.Fprintf(&output, "Resource target plan: %s\nSpec: %s\nTargets (%d):\n", p.name, p.specPath, len(p.targets))
-	for _, target := range p.targets {
-		marker := "+"
-		if target.Action == "update" {
-			marker = "~"
-		}
-		fmt.Fprintf(&output, "  %s %s\n", marker, target.Path)
-	}
-	fmt.Fprintf(&output, "Protocol tools (%d):\n", len(p.tools))
-	for _, tool := range p.tools {
-		fmt.Fprintf(&output, "  - %s %s (%s)\n", tool.Name, tool.Version, tool.Path)
-	}
-	for _, conflict := range p.conflicts {
-		fmt.Fprintf(&output, "  ! %s\n", conflict)
-	}
-	output.WriteString("Target preview only: complete generation and writing are not available yet.\nBusiness core is available through CoreFiles.\n")
-	if len(p.httpFiles) > 0 {
-		output.WriteString("HTTP adapter, factory, module guide, and Swagger source are available through HTTPFiles.\n")
-	} else {
-		output.WriteString("Selected protocol adapter rendering is not available yet.\n")
-	}
-	if len(p.rpcFiles) > 0 {
-		output.WriteString("RPC adapter and Proto source are available through RPCFiles.\n")
-	}
-	output.WriteString("No files written.\n")
-	_, err := output.WriteTo(w)
-	return err
 }
