@@ -40,6 +40,8 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 
 ## 最近完成
 
+- 2026-10-14 17:13 D7 补充兼容性检查完成：依赖兼容原型与 Linux amd64、Linux arm64、Windows amd64 交叉编译通过；协议产物复现、格式和 vet 通过。兼容原型内需独立数据库凭据的 MySQL/PostgreSQL 子用例按设计跳过，对应真实数据库验收已由 R10 的 `make template-db` 完成。race 仍按用户决定暂缓。
+
 - 2026-10-14 17:08 D7 首版范围与文档核对：对照需求验收项确认默认模板、数据库/无数据库、Redis、Casbin、四协议及 `gen module`/`gen resource` 均有已通过的集成或真实服务证据；同步开发指南至当前实现，核对 README 命令与 CLI 一致。race 按用户决定暂缓，D7 不标记完成。
 
 - 2026-10-14 17:03 D6-R10 与 D6 收口完成：48 种 SQL×协议×Redis×Casbin 资源项目 readonly 编译、16 种无数据库拒绝、原有 64 项目协议/存储组合检查及四协议资源运行回归通过。真实 MySQL 8.4.11、PostgreSQL 18.6、TLS Redis 与 HTTP/gRPC/dual/Gateway/无数据库/Casbin 容器验收均通过，测试资源已清理。完整 `make check` 通过；额外全仓 race 按用户要求停止，未作为通过项记录。D7 转为下一阶段。
@@ -61,6 +63,8 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 - 2026-10-12 13:03 R04 提交 `a123019`：迁移版本/应用集合核验、SQL 草稿、资源只读 schema 与启动 Context；生成器不执行数据库操作。
 
 ## 最近验证
+
+- 2026-10-14 17:13 D7 补充检查：`make compatibility` 与 `make compatibility-cross` 通过，生成的 Linux amd64/arm64、Windows amd64 兼容性测试二进制随后清理；`make protocol-check`（固定 protoc、插件和生成文件匹配）、`make fmt-check`、`make vet` 通过。兼容性原型中的 MySQL/PostgreSQL 子用例按设计跳过，并非真实数据库验证；真实 MySQL/PostgreSQL 已由 `make template-db` 验收。共享 Go 模块缓存保留。全仓 race 暂缓。
 
 - 2026-10-14 17:08 D7 文档与入口验证：`make contract-check`（79 个本地链接、372 个交付文件）、`git diff --check`、`make build` 通过；构建产物实际响应 `goseed --help`、`--version`、`gen module --help` 与 `gen resource --help`，资源参数显示 `--spec`、`--dry-run` 和 `--migration`，与 README 示例一致。README 的项目/模块/资源示例与生成器/生成项目文档核对通过；模板容器 README 明确迁移与策略前置步骤。race 按用户决定暂缓。
 
