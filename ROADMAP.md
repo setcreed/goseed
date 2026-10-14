@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com/setcreed/goseed`，最低 Go 版本为 1.26.4，日常使用本机兼容工具链，发行归档固定版本，默认分支 main，许可证 MIT。源码仓库已公开至 https://github.com/setcreed/goseed ，origin 使用 HTTPS，main 跟踪 origin/main；首版功能验收状态见阶段快照和最近验证。
+goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com/setcreed/goseed`，最低 Go 版本为 1.26.4，日常使用本机兼容工具链，发行归档固定版本，默认分支 main，许可证 MIT。源码仓库已公开至 https://github.com/setcreed/goseed ；首版功能验收状态见阶段快照和最近验证。
 
 初始项目生成与 gen module 可用，支持四协议、四存储及可选 Redis/Casbin，共 64 种初始项目组合。资源阶段 R01 至 R10 已交付，包含公共 `gen resource`、四协议生成、安全写入与失败回滚，以及完整资源组合和真实服务回归。
 
@@ -29,7 +29,7 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 
 ## 下一步施工顺序
 
-安装与 CLI 使用收口已完成本地验收，范围见 [施工清单](docs/implementation.md#安装与-cli-使用收口施工清单)。当前提交尚未发布；远端安装复核需在相应提交推送后执行，固定版本安装需对应的公开版本标签。推送、打标签和 Release 仍需单独授权。
+安装与 CLI 使用收口及真实远端安装已验收，范围见 [施工清单](docs/implementation.md#安装与-cli-使用收口施工清单)。CLI 功能已推送，`@main` 与 `@latest` 均可安装并完成生成项目的实际运行验证。尚未发布版本标签和 Release；下一步可准备 `v0.1.0`，发布后补充固定版本安装核验。推送新提交、打标签和 Release 仍需对应授权。
 
 D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型业务试用已完成，未发现资源生成、手工扩展、增量登记及基础安全流程的功能阻断。试用暴露的首要开发体验问题是 Makefile 强制切换 Go 工具链：本机 Go 1.27.2 在 `GOTOOLCHAIN=local` 下能构建并通过生成项目验证，固定工具链下载则受网络限制失败。
 
@@ -52,6 +52,8 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 - D9 已完成本地安装、可复现归档、许可证与 SHA-256 核验、v1 增量兼容及人工维护说明。macOS arm64、Rosetta 下 macOS amd64、Linux arm64 的包运行和生成检查通过；Linux amd64 已在 Apple Silicon Docker 的 amd64 模拟容器中运行发行包，并验证默认项目健康及认证创建/列表，原生 amd64 硬件未验证；Windows 原生不在支持范围。D10 完成指标/追踪模板及本地 OTLP protobuf 接收器验收；D11 已完成真实 systemd/Nginx 服务级验收；D12 至 D17 均暂缓且未实施。
 
 ## 最近完成
+
+- 2026-10-15 01:08 真实远端安装验收完成：提交 `1a8c8b3` 已推送，使用真实 Go 模块代理分别安装 `@main` 与 `@latest`，均解析到 `v0.0.0-20261014165130-1a8c8b3b82d2`。安装后可以脱离源码目录生成和运行默认项目；尚未打标签或创建 Release。
 
 - 2026-10-15 00:49 安装与 CLI 使用收口完成：施工清单 I01 至 I04 已实施；README 提供 `go install` 与源码编译入口，新增 `goseed init` 并共享生成逻辑，裸根命令改为帮助，带生成参数的旧入口继续兼容。安装版从 Go BuildInfo 读取模块版本，发行构建显式注入优先，本地开发版保留 dev；模板及资源 spec 版本不变。
 
@@ -90,13 +92,14 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 
 - 2026-10-14 17:59 D7 首版交付核验完成：需求覆盖、README/开发指南、生成项目集成、构建、静态检查、真实 MySQL/PostgreSQL、Redis、容器及全仓 race 验收通过；兼容性原型、Linux amd64/arm64 与 Windows amd64 交叉编译、协议产物复现也通过。后续阶段尚未定义。
 
-- 2026-10-14 17:13 D7 补充兼容性检查完成：依赖兼容原型与 Linux amd64、Linux arm64、Windows amd64 交叉编译通过；协议产物复现、格式和 vet 通过。兼容原型内需独立数据库凭据的 MySQL/PostgreSQL 子用例按设计跳过，对应真实数据库验收已由 R10 的 `make template-db` 完成。race 仍按用户决定暂缓。
 
 
 
 
 
 ## 最近验证
+
+- 2026-10-15 01:08 GitHub 安装链路验证：本机 Go 1.27.2、隔离 GOBIN 和初始为空的任务 GOMODCACHE、复用共享构建缓存，执行 `go install github.com/setcreed/goseed/cmd/goseed@main` 与 `@latest` 均成功，版本指向 `1a8c8b3`。两者均通过帮助、init、dry-run 无写入、重复生成拒绝、模块和资源生成、readonly 构建、开发配置初始化、SQLite 显式迁移、随机回环端口就绪检查、未认证 401 及认证创建/列表。`make contract-check`（72 个本地链接、392 个交付文件）与 `git diff --check` 通过。服务与本次安装/模块缓存/项目/日志目录已清理，未覆盖全局安装；未运行 Docker 或 race。
 
 - 2026-10-15 00:49 双安装与 CLI 验收：当前源码构造本地文件模块代理，以隔离 GOBIN 执行 `go install ...@v0.0.0-installcheck` 与 `@latest`，安装版正确显示模块版本。安装版和源码构建版均在仓库外完成帮助、init、dry-run、重复生成拒绝、模块与资源生成及生成项目 readonly 构建。命令/CLI/生成器定向测试与 vet、格式、文档契约和 diff 检查通过；本机 Go 1.27.2 的 lint 因现有 Go 1.26.4 构建的 linter 无法解析新标准库而失败，改用仓库已有 Go 1.26.4 工具链后全仓 lint 为 0 issues。未验证 GitHub 远端安装，未发布、运行 Docker 或 race；任务临时目录已清理，共享缓存保留。
 
@@ -134,5 +137,3 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。小型�
 - 2026-10-14 18:31 D8 规划文档检查：`make contract-check`（82 个本地链接、372 个交付文件）与 `git diff --check` 通过；核对阶段依赖、当前状态及开发指南入口一致。仅修改规划与文档，未执行 D8 运行验收或重跑长时间测试，未创建验证项目或 Docker 资源。
 
 - 2026-10-14 17:59 D7 最终验证：`PATH=/Applications/Docker.app/Contents/Resources/bin:$PATH make race` 全仓通过，集成包 `ok .../tests/integration 2289.398s`；此前 `make check`（集成包 2195.054 秒、vet、lint 0 issues）、`make build`、`make template-db`（真实 MySQL 8.4.11/PostgreSQL 18.6）、`make template-redis`（TLS Redis）、`make template-container`、`make compatibility`、`make compatibility-cross`、`make protocol-check`、`make fmt-check`、`make vet`、`make contract-check` 与 `git diff --check` 均通过。兼容原型中 MySQL/PostgreSQL 子用例按设计跳过，真实服务验证由 template-db 覆盖。本轮 race 项目和交叉编译输出由套件/任务清理；Docker 测试标签无残留容器，共享缓存保留。`.tmp/d2/render-3779792103` 时间戳早于本轮测试，作为既有目录保留。
-
-- 2026-10-14 17:13 D7 补充检查：`make compatibility` 与 `make compatibility-cross` 通过，生成的 Linux amd64/arm64、Windows amd64 兼容性测试二进制随后清理；`make protocol-check`（固定 protoc、插件和生成文件匹配）、`make fmt-check`、`make vet` 通过。兼容性原型中的 MySQL/PostgreSQL 子用例按设计跳过，并非真实数据库验证；真实 MySQL/PostgreSQL 已由 `make template-db` 验收。共享 Go 模块缓存保留。全仓 race 暂缓。
