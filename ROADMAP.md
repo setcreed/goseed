@@ -4,7 +4,7 @@
 
 goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com/setcreed/goseed`，Go 固定 1.26.4，默认分支 main，许可证 MIT。源码已公开至 https://github.com/setcreed/goseed ，origin 使用 HTTPS，main 跟踪 origin/main；公开源码不代表首版功能已完成。
 
-代码基线为 `184439c`：初始项目生成与 gen module 可用，支持四协议、四存储及可选 Redis/Casbin，共 64 种初始项目组合。资源阶段 R01 至 R09 已交付，包含公共 `gen resource`、四协议生成、安全写入与失败回滚；R10 正在执行完整组合与运行回归。
+初始项目生成与 gen module 可用，支持四协议、四存储及可选 Redis/Casbin，共 64 种初始项目组合。资源阶段 R01 至 R10 已交付，包含公共 `gen resource`、四协议生成、安全写入与失败回滚，以及完整资源组合和真实服务回归。
 
 需求、架构及从零建设的工作顺序见 [施工清单](docs/implementation.md)，新电脑恢复、实现入口与验证方法见 [开发指南](docs/development.md)。本文件是状态唯一来源；从现有进度继续，保留已交付代码与 Git 历史。
 
@@ -18,28 +18,29 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 | D3 可选能力 | 已交付 | MySQL/PostgreSQL/无数据库/Redis/Casbin；真实服务验证记录见 Git 历史 |
 | D4 多协议 | 已交付 | 既有示例的 gRPC/dual/Gateway、安全链、协议复现与生命周期 |
 | D5 项目生成 | 已交付 | 根命令、参数、元数据、dry-run、冲突与恢复保护 |
-| D6 模块与资源 | 进行中 | gen module 与资源 R01 至 R09 已验收；R10 组合回归与收口进行中 |
+| D6 模块与资源 | 已交付 | gen module 与资源 R01 至 R10 已验收；48 种资源组合及真实 SQL/Redis/容器验证通过 |
 | D7 首版收口 | 待开始 | 全部需求覆盖、文档/部署边界、交付验证 |
 
 ## 下一步施工顺序
 
-1. **R10（进行中）**：48 种合法资源组合、16 种无数据库拒绝、原有 64 项目组合；三数据库、真 Redis/Casbin、协议/容器及文件保护完整回归。
-2. **D7**：首版范围核验与使用说明收口。源码公开可以先于首版功能完成，README 按当前真实能力表述。
+1. **D7**：首版范围核验与使用说明收口。源码公开可以先于首版功能完成，README 按当前真实能力表述。
 
 详细修改范围、依赖与失败门槛统一见 [D6 清单](docs/implementation.md#d6-资源生成施工清单)。
 
 ## 已知缺口与验证边界
 
 - R06 已验收：Swagger `/v1/<name>` 路径与 Handler 一致，请求/响应 schema 与 DTO 对齐；curl 示例展开 `$TOKEN`、接受临时 `API_URL` 并在生成项目集成测试中实际执行。SQLite Casbin 使用真实 Manager/策略存储验证默认拒绝、允许、权限不足及授权先于 Redis Check。源码与验收入口：`internal/templates/resource_core.go`、`internal/templates/resource/http_integration_test.go.tmpl`。
-- R07 已验收：HTTP/RPC/dual 资源工厂共享一次 Biz 构造；两个资源的固定版 Proto 复现、独立 Go 客户端导入、真实 TLS RPC 主体隔离/边界/零值更新，以及 dual 跨协议读写通过。资源 API 仍只读预览，文件写入和登记更新留给 R09。
-- SchemaStore 是只读 schema 原型；CoreFiles 提供完整 Store，不得混用输出路径。ResourcePlan 已提供完整 Write 与公共 CLI；R10 仍须验证生成项目组合和运行行为。
-- 模块组装版本 2 只表示纯权限/单次组装，不能代替 Context/schema 和多模块协议兼容检查。R09 必须完整核验旧项目。
-- R08 已交付 Gateway RPC 资源映射、ProtoJSON 说明及多模块协议/Swagger 复现；R09 已开放 `gen resource` 并完成完整写入回滚。R10 负责全矩阵和外部服务验收。
-- 历史集成验证曾出现排空超时和宿主 Go/GOROOT/linter 不匹配；R10 按当前代码重新核验，不能靠旧记录声明完整矩阵通过。
+- R07 已验收：HTTP/RPC/dual 资源工厂共享一次 Biz 构造；两个资源的固定版 Proto 复现、独立 Go 客户端导入、真实 TLS RPC 主体隔离/边界/零值更新，以及 dual 跨协议读写通过。R09 随后开放完整资源写入及登记更新。
+- SchemaStore 是只读 schema 原型；CoreFiles 提供完整 Store，不得混用输出路径。ResourcePlan 提供完整 Write 与公共 CLI；R10 的生成项目组合和运行行为已完成验收。
+- 模块组装版本 2 表示纯权限/单次组装；R09/R10 已覆盖 Context/schema、旧项目兼容及多模块协议复现。
+- R08 已交付 Gateway RPC 资源映射、ProtoJSON 说明及多模块协议/Swagger 复现；R09 已开放 `gen resource` 并完成完整写入回滚；R10 完成全矩阵和外部服务验收。
+- 全仓 `make check` 已通过。用户要求避免继续等待后，额外的全仓 `make race` 在集成测试运行 919.608 秒时中断；该轮 race 未完成，D7 首版收口仍需完成 race 验证。
 - go-redis 取消、pgx 人工延迟 Write 竞争边界仍按 [依赖记录](docs/dependencies.md) 保留；固定版本不意味着上游问题消失。
 - 仓库采用 MIT；第三方依赖及生成代码仍保留适用许可。源码仓库已经公开，首版交付仍按上述施工顺序推进。
 
 ## 最近完成
+
+- 2026-10-14 17:03 D6-R10 与 D6 收口完成：48 种 SQL×协议×Redis×Casbin 资源项目 readonly 编译、16 种无数据库拒绝、原有 64 项目协议/存储组合检查及四协议资源运行回归通过。真实 MySQL 8.4.11、PostgreSQL 18.6、TLS Redis 与 HTTP/gRPC/dual/Gateway/无数据库/Casbin 容器验收均通过，测试资源已清理。完整 `make check` 通过；额外全仓 race 按用户要求停止，未作为通过项记录。D7 转为下一阶段。
 
 - 2026-10-14 14:26 D6-R09 公共资源生成完成：新增 `goseed gen resource <name> --spec <path> [--dry-run] [--migration]`，准备阶段编译固定 Proto/Gateway 产物、验证模块登记和 OpenAPI 投影，写入前重验快照，失败恢复新增文件与登记索引。HTTP CLI dry-run/写入及四协议生成、12 种 SQL×协议写入组合与失败注入测试通过；R10 转为当前任务。
 
@@ -59,7 +60,9 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 
 ## 最近验证
 
-- 2026-10-14 15:42 R10 代码与生成项目矩阵：48 种 SQL×协议×Redis×Casbin resource 项目均经 `PrepareResource`/`Write` 生成并通过 `go test -mod=readonly -run '^$' ./...`；16 种无数据库拒绝由生成器测试覆盖。现有 gRPC/dual 32 种数据库/Redis/Casbin 项目组合通过；纯 gRPC、dual、Gateway 两资源生成、Proto 多模块逐字节复现及 RPC 运行用例通过。修复 gRPC Proto 源名导致的复现差异，并修正纯 gRPC 资源夹具不应读取 OpenAPI 的前提。`make protocol-check`、`make contract-check`（79 个本地链接、372 个交付文件）、`make fmt-check`、`make lint`（0 issues）、`make vet`、定向 generator/CLI/templates 测试、`make build` 与 `git diff --check` 通过。完整 `make check` 曾因上述两个已修正问题失败，修复后用定向矩阵验证；未重跑整套 28 分钟集成包。真实 MySQL/PostgreSQL、TLS Redis 与容器尚未验收：环境没有 Docker、Podman 或 nerdctl 命令。
+- 2026-10-14 17:03 D6-R10 验证：48 种 SQL×协议×Redis×Casbin 资源项目实际经 `PrepareResource`/`Write` 生成并通过 readonly 测试编译；16 种无数据库拒绝及现有 64 项目组合回归通过。真实 MySQL 8.4.11/PostgreSQL 18.6 的 `make template-db`、TLS 密码 Redis 的 `make template-redis`、非 root/只读文件系统等组合的 `make template-container` 全部通过，Docker 测试容器/卷已清理。`make protocol-check`、`make check`（集成包 2195.054 秒、vet、lint 0 issues）、`make build` 通过；工具超时边界增加至 15 秒，定向测试通过。`make race` 按用户要求中断，`tests/integration` 报告 `signal: interrupt`，运行 919.608 秒，不计为通过。中断后仅发现并清理本轮遗留的 `.tmp/d2/render-16425610`；Docker 测试标签无残留容器。
+
+- 2026-10-14 15:42 R10 前置代码与生成项目矩阵：48 种 SQL×协议×Redis×Casbin resource 项目均经 `PrepareResource`/`Write` 生成并通过 `go test -mod=readonly -run '^$' ./...`；16 种无数据库拒绝由生成器测试覆盖。现有 gRPC/dual 32 种数据库/Redis/Casbin 项目组合通过；纯 gRPC、dual、Gateway 两资源生成、Proto 多模块逐字节复现及 RPC 运行用例通过。修复 gRPC Proto 源名导致的复现差异，并修正纯 gRPC 资源夹具不应读取 OpenAPI 的前提。此前的 protocol-check、contract-check（79 个本地链接、372 个交付文件）、fmt-check、lint（0 issues）、vet、定向 generator/CLI/templates 测试、build 与 diff 检查通过；真实数据库、Redis 和容器结果见本次 17:01 记录。
 
 - 2026-10-14 14:26 R09：`go test ./internal/generator ./internal/cli ./internal/templates` 通过；`make contract-check`（79 个本地链接、371 个交付文件）、`make fmt-check`、`make lint`（0 issues）及 `git diff --check` 通过。覆盖四协议公共 CLI、四协议资源写入、SQLite/MySQL/PostgreSQL × 四协议共 12 种生成写入组合（Redis + Casbin）、无数据库拒绝、冲突/过期输入及注入失败后的字节级恢复。R10 接手真实项目组合与外部服务验收。
 
