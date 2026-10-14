@@ -1,0 +1,41 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+
+	"[[.Module]]/scripts/openapi/merger"
+)
+
+type sources []string
+
+func (s *sources) String() string { return strings.Join(*s, ",") }
+func (s *sources) Set(value string) error {
+	if !strings.Contains(value, "=") { return fmt.Errorf("source must be module=path") }
+	*s = append(*s, value)
+	return nil
+}
+
+func main() {
+	var values sources
+	flag.Var(&values, "source", "module=Swagger source; may be repeated")
+	flag.Parse()
+	if len(values) == 0 { fatal("at least one --source is required") }
+	items := make([]merger.Source, 0, len(values))
+	for _, value := range values {
+		name, path, _ := strings.Cut(value, "=")
+		content, err := os.ReadFile(path)
+		if err != nil { fatal("read OpenAPI source %s: %v", name, err) }
+		items = append(items, merger.Source{Name: name, YAML: content})
+	}
+	result, err := merger.Merge(items)
+	if err != nil { fatal("merge OpenAPI sources: %v", err) }
+	if _, err := os.Stdout.Write(result.JSON); err != nil { fatal("write merged OpenAPI: %v", err) }
+}
+
+func fatal(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, format+"\n", args...)
+	os.Exit(1)
+}

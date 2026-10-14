@@ -2,9 +2,25 @@ package templates
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
 )
+
+func TestGatewayOpenAPIMergerMatchesGenerator(t *testing.T) {
+	root, err := os.ReadFile("../openapi/merge.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated, err := sources.ReadFile("variants/gateway/common/scripts/openapi/merger/merge.go.tmpl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Replace(string(root), "package openapi", "package merger", 1)
+	if string(generated) != want {
+		t.Fatal("generated-project OpenAPI merger has drifted from generator validation")
+	}
+}
 
 func TestRenderResourceGRPCAndDualFactory(t *testing.T) {
 	project := Project{Name: "fixture", Module: "example.com/fixture"}
@@ -38,6 +54,41 @@ func TestRenderResourceGRPCAndDualFactory(t *testing.T) {
 		if !bytes.Contains(proto, []byte(want)) {
 			t.Errorf("Proto is missing %q", want)
 		}
+	}
+	gatewayFiles, err := RenderResourceGRPC(project, Options{Database: "sqlite", Transport: "gateway", Authz: "casbin"}, "task", fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gatewayFactory, httpMapping, openAPIConfig, guide []byte
+	for _, file := range gatewayFiles {
+		switch file.Path {
+		case "internal/apiserver/bootstrap/module_task.go":
+			gatewayFactory = file.Content
+		case "api/proto/task/v1/http.yaml":
+			httpMapping = file.Content
+		case "api/proto/task/v1/openapi.yaml":
+			openAPIConfig = file.Content
+		case "docs/task.md":
+			guide = file.Content
+		}
+	}
+	for label, content := range map[string][]byte{"Gateway factory": gatewayFactory, "HTTP mapping": httpMapping, "OpenAPI config": openAPIConfig, "module guide": guide} {
+		if len(content) == 0 {
+			t.Fatalf("missing %s", label)
+		}
+	}
+	for _, want := range []string{"api.RegisterTaskServiceHandler", "\"page\", \"page_size\"", "\"POST\": true", "\"PATCH\": true"} {
+		if !bytes.Contains(gatewayFactory, []byte(want)) {
+			t.Errorf("Gateway factory missing %q:\n%s", want, gatewayFactory)
+		}
+	}
+	for _, want := range []string{"/v1/task", "/v1/task/{id}", "task.v1.TaskService.Create", "task.v1.TaskService.Update"} {
+		if !bytes.Contains(httpMapping, []byte(want)) {
+			t.Errorf("HTTP mapping missing %q:\n%s", want, httpMapping)
+		}
+	}
+	if !bytes.Contains(guide, []byte("snake_case")) || !bytes.Contains(guide, []byte("64 位整数")) {
+		t.Errorf("Gateway guide must describe ProtoJSON wire differences: %s", guide)
 	}
 	for _, want := range []string{"request.Title == nil", "Title:   request.Title", "api.TaskService_Create_FullMethodName", "api.TaskService_Delete_FullMethodName"} {
 		if !bytes.Contains(handler, []byte(want)) {

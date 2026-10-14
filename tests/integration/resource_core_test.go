@@ -1,6 +1,8 @@
 package integration
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -43,7 +45,7 @@ func TestResourceCoreProjects(t *testing.T) {
 }
 
 func TestResourceGRPCProjects(t *testing.T) {
-	for _, transport := range []string{"grpc", "dual"} {
+	for _, transport := range []string{"grpc", "dual", "gateway"} {
 		t.Run(transport, func(t *testing.T) {
 			verifyResourceCoreProject(t, templates.Options{Database: "sqlite", Transport: transport}, coreFields, nil)
 		})
@@ -113,7 +115,7 @@ func verifyResourceCoreProject(t *testing.T, options templates.Options, fields [
 			}
 			files = append(files, httpFiles...)
 		}
-		if options.Transport == "grpc" || options.Transport == "dual" {
+		if options.Transport == "grpc" || options.Transport == "dual" || options.Transport == "gateway" {
 			rpcFiles, err := templates.RenderResourceGRPC(project, options, name, fields)
 			if err != nil {
 				t.Fatal(err)
@@ -130,7 +132,7 @@ func verifyResourceCoreProject(t *testing.T, options templates.Options, fields [
 		}
 		files = append(files, templates.File{Path: fmt.Sprintf("migrations/%05d_%s.sql", base+i+1, name), Content: sql})
 	}
-	if options.Transport == "http" || options.Transport == "grpc" || options.Transport == "dual" {
+	if options.Transport == "http" || options.Transport == "grpc" || options.Transport == "dual" || options.Transport == "gateway" {
 		registry, err := templates.RenderWithModules(project, options, []templates.ModuleEntry{{Name: "example"}, {Name: "orders", Type: "resource"}, {Name: "notes", Type: "resource"}})
 		if err != nil {
 			t.Fatal(err)
@@ -170,7 +172,7 @@ func verifyResourceCoreProject(t *testing.T, options templates.Options, fields [
 			t.Fatal(err)
 		}
 	}
-	if options.Transport == "grpc" || options.Transport == "dual" {
+	if options.Transport == "grpc" || options.Transport == "dual" || options.Transport == "gateway" {
 		if err := os.Symlink(filepath.Join(root, ".tools"), filepath.Join(directory, ".tools")); err != nil {
 			t.Fatal(err)
 		}
@@ -186,7 +188,7 @@ func verifyResourceCoreProject(t *testing.T, options templates.Options, fields [
 		output = runWith(t, directory, env, "go", "test", "-mod=readonly", "-race", "-count=1", "./internal/apiserver/handler/http/orders", "./internal/apiserver/handler/http/notes")
 		runWith(t, directory, env, "go", "test", "-mod=readonly", "-run", "^$", "./internal/apiserver/bootstrap")
 	}
-	if options.Transport == "grpc" || options.Transport == "dual" {
+	if options.Transport == "grpc" || options.Transport == "dual" || options.Transport == "gateway" {
 		output = runWith(t, directory, env, "go", "test", "-mod=readonly", "-race", "-count=1", "./internal/apiserver/handler/grpc/orders", "./internal/apiserver/handler/grpc/notes")
 		runWith(t, directory, env, "go", "test", "-mod=readonly", "-run", "^$", "./internal/apiserver/bootstrap")
 		if options.Database == "sqlite" {
@@ -272,6 +274,9 @@ func main(){if err:=run();err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(1)}}
 	} else {
 		clientHTTP := &http.Client{Timeout: 3 * time.Second}
 		env := append(append([]string{}, secure...), "APP_GRPC_ADDRESS=127.0.0.1:0")
+		if transport == "gateway" {
+			env = append(env, "APP_GATEWAY_CA_FILE="+certificate, "APP_GATEWAY_SERVER_NAME=127.0.0.1")
+		}
 		process = startServiceWith(t, directory, binary, clientHTTP, "http", env)
 		deadline := time.Now().Add(10 * time.Second)
 		for time.Now().Before(deadline) {
@@ -321,22 +326,59 @@ func main(){if err:=run();err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(1)}}
 	if !strings.Contains(string(updated), `"enabled":false`) || !strings.Contains(string(updated), `"amount":"0"`) {
 		t.Fatalf("RPC PATCH lost explicit zero values: %s", updated)
 	}
-	if transport == "dual" {
+	if transport == "dual" || transport == "gateway" {
+		if transport == "gateway" {
+			for _, check := range []struct {
+				token string
+				path  string
+				want  int
+			}{{bob, "/v1/orders/" + item.ID, http.StatusNotFound}, {"", "/v1/orders", http.StatusUnauthorized}, {alice, "/v1/orders?unexpected=x", http.StatusBadRequest}} {
+				request, err := http.NewRequest(http.MethodGet, process.url+check.path, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if check.token != "" {
+					request.Header.Set("Authorization", "Bearer "+check.token)
+				}
+				response, err := http.DefaultClient.Do(request)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_ = response.Body.Close()
+				if response.StatusCode != check.want {
+					t.Fatalf("Gateway GET %s status=%d want=%d", check.path, response.StatusCode, check.want)
+				}
+			}
+		}
 		request, err := http.NewRequest(http.MethodGet, process.url+"/v1/orders/"+item.ID, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		request.Header.Set("Authorization", "Bearer "+alice)
+		if transport == "gateway" {
+			request.Header.Set("X-Request-ID", "resource-gateway-1")
+		}
 		response, err := http.DefaultClient.Do(request)
 		if err != nil {
 			t.Fatal(err)
 		}
 		body, readErr := io.ReadAll(response.Body)
 		_ = response.Body.Close()
-		if readErr != nil || response.StatusCode != http.StatusOK || !strings.Contains(string(body), `"enabled":false`) || !strings.Contains(string(body), `"amount":0`) {
+		if transport == "gateway" && response.Header.Get("X-Request-ID") != "resource-gateway-1" {
+			t.Fatalf("Gateway did not propagate request ID: %v", response.Header)
+		}
+		wireAmount := `"amount":0`
+		if transport == "gateway" {
+			wireAmount = `"amount":"0"`
+		}
+		if readErr != nil || response.StatusCode != http.StatusOK || !strings.Contains(string(body), `"enabled":false`) || !strings.Contains(string(body), wireAmount) {
 			t.Fatalf("HTTP could not read RPC-created resource: status=%d body=%s error=%v", response.StatusCode, body, readErr)
 		}
-		request, err = http.NewRequest(http.MethodPatch, process.url+"/v1/orders/"+item.ID, strings.NewReader(`{"enabled":true,"amount":8}`))
+		patchBody := `{"enabled":true,"amount":8}`
+		if transport == "gateway" {
+			patchBody = `{"enabled":true,"amount":"8"}`
+		}
+		request, err = http.NewRequest(http.MethodPatch, process.url+"/v1/orders/"+item.ID, strings.NewReader(patchBody))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -363,6 +405,11 @@ func verifyResourceProtoReproduction(t *testing.T, directory string) {
 		"pkg/api/example/v1/example.pb.go", "pkg/api/example/v1/example_grpc.pb.go",
 		"pkg/api/orders/v1/orders.pb.go", "pkg/api/orders/v1/orders_grpc.pb.go",
 		"pkg/api/notes/v1/notes.pb.go", "pkg/api/notes/v1/notes_grpc.pb.go",
+		"api/openapi/example.yaml", "api/openapi/orders.yaml", "api/openapi/notes.yaml",
+		"api/openapi/swagger.json", "internal/apiserver/bootstrap/modules_gen.go",
+	}
+	if _, err := os.Stat(filepath.Join(directory, "pkg/api/example/v1/example.pb.gw.go")); err == nil {
+		paths = append(paths, "pkg/api/example/v1/example.pb.gw.go", "pkg/api/orders/v1/orders.pb.gw.go", "pkg/api/notes/v1/notes.pb.gw.go")
 	}
 	original := make(map[string][]byte, len(paths))
 	for _, path := range paths {
@@ -373,6 +420,31 @@ func verifyResourceProtoReproduction(t *testing.T, directory string) {
 		original[path] = data
 	}
 	run(t, directory, "make", "proto-generate")
+	if _, err := os.Stat(filepath.Join(directory, "pkg/api/example/v1/example.pb.gw.go")); err == nil {
+		swagger, err := os.ReadFile(filepath.Join(directory, "api/openapi/swagger.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var document struct {
+			Paths map[string]json.RawMessage `json:"paths"`
+		}
+		if err := json.Unmarshal(swagger, &document); err != nil {
+			t.Fatal(err)
+		}
+		for _, path := range []string{"/v1/examples", "/v1/orders", "/v1/notes"} {
+			if _, ok := document.Paths[path]; !ok {
+				t.Fatalf("aggregated Gateway Swagger lost path %s", path)
+			}
+		}
+		digest := sha256.Sum256(swagger)
+		registry, err := os.ReadFile(filepath.Join(directory, "internal/apiserver/bootstrap/modules_gen.go"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(registry), `const openAPISHA256 = "`+hex.EncodeToString(digest[:])+`"`) {
+			t.Fatal("Gateway OpenAPI digest does not match aggregate")
+		}
+	}
 	for _, path := range paths {
 		data, err := os.ReadFile(filepath.Join(directory, path))
 		if err != nil || string(data) != string(original[path]) {

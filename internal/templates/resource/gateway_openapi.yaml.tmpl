@@ -1,0 +1,27 @@
+openapiOptions:
+  file:
+    - file: [[.Name]].proto
+      option:
+        info:
+          title: "[[.Project.Name]]"
+          version: "1.0"
+        securityDefinitions:
+          security:
+            BearerAuth:
+              type: TYPE_API_KEY
+              in: IN_HEADER
+              name: Authorization
+        security:
+          - securityRequirement:
+              BearerAuth: {}
+        responses:
+          "400": {description: Invalid request}
+          "401": {description: JWT required}
+          "403": {description: Permission denied}
+          "404": {description: Resource not found}
+          "409": {description: Resource conflict}
+          "413": {description: Request body too large}
+          "429": {description: RPC message limit exceeded}
+          "500": {description: Internal server error}
+          "503": {description: Service unavailable}
+          "504": {description: Request timeout}

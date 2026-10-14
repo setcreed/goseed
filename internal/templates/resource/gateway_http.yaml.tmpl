@@ -1,0 +1,16 @@
+type: google.api.Service
+config_version: 3
+http:
+  rules:
+    - selector: [[.Name]].v1.[[.GoName]]Service.Create
+      post: /v1/[[.Name]]
+      body: "*"
+    - selector: [[.Name]].v1.[[.GoName]]Service.Get
+      get: /v1/[[.Name]]/{id}
+    - selector: [[.Name]].v1.[[.GoName]]Service.List
+      get: /v1/[[.Name]]
+    - selector: [[.Name]].v1.[[.GoName]]Service.Update
+      patch: /v1/[[.Name]]/{id}
+      body: "*"
+    - selector: [[.Name]].v1.[[.GoName]]Service.Delete
+      delete: /v1/[[.Name]]/{id}

@@ -209,7 +209,7 @@ func PrepareResource(root, name string, options ResourceOptions) (ResourcePlan, 
 			return ResourcePlan{}, fmt.Errorf("merge resource OpenAPI source: %w", err)
 		}
 	}
-	if state.Metadata.Transport == "grpc" || state.Metadata.Transport == "dual" {
+	if state.Metadata.Transport == "grpc" || state.Metadata.Transport == "dual" || state.Metadata.Transport == "gateway" {
 		plan.rpcFiles, err = templates.RenderResourceGRPC(templates.Project{Name: state.Metadata.Name, Module: state.Metadata.Module}, templates.Options{Database: state.Metadata.Database, Transport: state.Metadata.Transport, Authz: state.Metadata.Authorization, Redis: state.Metadata.Redis}, name, coreFields)
 		if err != nil {
 			return ResourcePlan{}, err

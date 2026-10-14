@@ -160,7 +160,7 @@ func TestResourceTargetPlanAcrossSQLCombinations(t *testing.T) {
 							t.Fatal("RPC handler trimming is incorrect")
 						}
 						rpcFiles := plan.RPCFiles()
-						if (transport == "grpc" || transport == "dual") != (len(rpcFiles) > 0) {
+						if (transport == "grpc" || transport == "dual" || transport == "gateway") != (len(rpcFiles) > 0) {
 							t.Fatalf("RPC files do not match selected transport %q: %d", transport, len(rpcFiles))
 						}
 						if len(rpcFiles) > 0 {

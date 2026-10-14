@@ -1,6 +1,7 @@
-"""Explicitly regenerate owned protocol files with project-local fixed tools."""
+"""Regenerate every declared Gateway module's protocol outputs and Swagger."""
 from pathlib import Path
 import json
+import hashlib
 import os
 import subprocess
 import tempfile
@@ -16,18 +17,96 @@ for name, module, version in [('protoc-gen-go', 'google.golang.org/protobuf', 'v
     metadata = subprocess.check_output(['go', 'version', '-m', str(tools / name)], text=True)
     if not any(line.split()[:3] == ['mod', module, version] for line in metadata.splitlines()):
         raise SystemExit('Protocol plugin version mismatch')
+
 env = os.environ.copy()
 env['PATH'] = str(tools) + os.pathsep + env.get('PATH', '')
-source = root / 'api/proto/example/v1'
-base = root / '.tmp/proto'
-base.mkdir(parents=True, exist_ok=True)
-with tempfile.TemporaryDirectory(dir=base) as temporary:
-    subprocess.run([str(protoc), '-I'+str(source), '-I'+str(root / '.tools/protoc/include'), '--go_out=paths=source_relative:'+temporary, '--go-grpc_out=paths=source_relative:'+temporary, '--go_opt=Mexample.proto=[[.Module]]/pkg/api/example/v1;examplev1', '--go-grpc_opt=Mexample.proto=[[.Module]]/pkg/api/example/v1;examplev1', '--grpc-gateway_out=paths=source_relative,grpc_api_configuration='+str(source / 'http.yaml')+':'+temporary, '--grpc-gateway_opt=Mexample.proto=[[.Module]]/pkg/api/example/v1;examplev1', '--openapiv2_out=json_names_for_fields=false,openapi_configuration='+str(source / 'openapi.yaml')+',grpc_api_configuration='+str(source / 'http.yaml')+':'+temporary, str(source / 'example.proto')], cwd=root, env=env, check=True)
-    destination = root / 'pkg/api/example/v1'
-    for name in ('example.pb.go', 'example_grpc.pb.go', 'example.pb.gw.go'):
-        (destination / name).write_bytes((Path(temporary) / name).read_bytes())
-    swagger = json.loads((Path(temporary) / 'example.swagger.json').read_text(encoding='utf-8'))
-    canonical = json.dumps(swagger, ensure_ascii=False, sort_keys=True, indent=2) + '\n'
-    (root / 'api/openapi/swagger.json').write_text(canonical, encoding='utf-8')
-    (root / 'api/openapi/example.yaml').write_text(canonical, encoding='utf-8')
-print('Generated protocol files updated')
+proto_root = root / 'api/proto'
+modules = sorted(proto_root.glob('*/v1/*.proto'))
+if not modules:
+    raise SystemExit('No module Proto sources found under api/proto/<module>/v1/')
+temporary_root = root / '.tmp/proto'
+temporary_root.mkdir(parents=True, exist_ok=True)
+swagger_sources = []
+generated_swagger = {}
+updates = {}
+with tempfile.TemporaryDirectory(dir=temporary_root) as temporary:
+    generated = Path(temporary)
+    for source in modules:
+        module = source.parent.parent.name
+        stem = source.stem
+        relative = Path(source.name)
+        package = source.parent
+        mapping = f'M{relative.as_posix()}=[[.Module]]/pkg/api/{module}/v1;{module}v1'
+        command = [str(protoc), '-I'+str(package), '-I'+str(proto_root), '-I'+str(root / '.tools/protoc/include'),
+                   '--go_out=paths=source_relative:'+temporary,
+                   '--go-grpc_out=paths=source_relative:'+temporary,
+                   '--go_opt='+mapping, '--go-grpc_opt='+mapping,
+                   '--grpc-gateway_out=paths=source_relative,grpc_api_configuration='+str(package / 'http.yaml')+':'+temporary,
+                   '--grpc-gateway_opt='+mapping,
+                   '--openapiv2_out=json_names_for_fields=false,openapi_configuration='+str(package / 'openapi.yaml')+',grpc_api_configuration='+str(package / 'http.yaml')+':'+temporary,
+                   str(source)]
+        subprocess.run(command, cwd=root, env=env, check=True)
+        destination = root / 'pkg/api' / module / 'v1'
+        for filename in (stem+'.pb.go', stem+'_grpc.pb.go', stem+'.pb.gw.go'):
+            updates[destination / filename] = (generated / filename).read_bytes()
+        document_path = generated / (stem+'.swagger.json')
+        generated_swagger[module] = json.loads(document_path.read_text(encoding='utf-8'))
+        swagger_sources.append((module, document_path))
+    command = ['go', 'run', '-mod=readonly', './scripts/openapi']
+    for module, path in swagger_sources:
+        command.extend(['--source', f'{module}={path}'])
+    merged = subprocess.check_output(command, cwd=root, env=env)
+
+for module, document in generated_swagger.items():
+    updates[root / 'api/openapi' / (module+'.yaml')] = (json.dumps(document, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode('utf-8')
+updates[root / 'api/openapi/swagger.json'] = merged
+registry = root / 'internal/apiserver/bootstrap/modules_gen.go'
+source = registry.read_text(encoding='utf-8')
+digest = hashlib.sha256(merged).hexdigest()
+marker = 'const openAPISHA256 = "'
+if source.count(marker) != 1:
+    raise SystemExit('module registration index has no unique OpenAPI digest marker')
+start = source.index(marker) + len(marker)
+end = source.index('"', start)
+updates[registry] = (source[:start] + digest + source[end:]).encode('utf-8')
+originals = {}
+staged_files = {}
+try:
+    for path, content in updates.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            info = path.lstat()
+            if not path.is_file() or path.is_symlink():
+                raise SystemExit(f'generated output must be a regular file: {path.relative_to(root)}')
+            originals[path] = (path.read_bytes(), info.st_mode & 0o777)
+            mode = info.st_mode & 0o777
+        except FileNotFoundError:
+            originals[path] = None
+            mode = 0o644
+        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as staged:
+            staged.write(content)
+            staged_path = Path(staged.name)
+        os.chmod(staged_path, mode)
+        staged_files[path] = staged_path
+    written = []
+    try:
+        for path, staged_path in staged_files.items():
+            os.replace(staged_path, path)
+            written.append(path)
+    except Exception:
+        for path in reversed(written):
+            previous = originals[path]
+            if previous is None:
+                path.unlink(missing_ok=True)
+            else:
+                content, mode = previous
+                with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as staged:
+                    staged.write(content)
+                    rollback_path = Path(staged.name)
+                os.chmod(rollback_path, mode)
+                os.replace(rollback_path, path)
+        raise
+finally:
+    for staged_path in staged_files.values():
+        staged_path.unlink(missing_ok=True)
+print(f'Regenerated {len(modules)} protocol modules and merged Swagger')

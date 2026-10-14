@@ -10,6 +10,8 @@ SQL 使用 `/v1/examples` 的 POST／GET，以及 `/v1/examples/{id}` 的 GET／
 
 只转发 Authorization 与合法 X-Request-ID，拒绝重复认证头，忽略客户端伪造的 Grpc-Metadata-* 身份。JWT → Casbin → Biz／缓存在 RPC 入口执行；HTTP Context、取消和预算传入 RPC，不接受客户端无限延长预算。访问日志只记方法、固定路由、状态、请求 ID 与耗时，不含 Token、正文、query 或动态路径。
 
+CRUD 资源通过独立 RPC Handler 和 `http.yaml` 映射接入，不生成重复 Gin Handler；模块工厂登记固定路由、允许的 query 和请求方法。`make proto-generate` 发现 `api/proto/<module>/v1/*.proto` 下的全部模块，使用锁定工具在临时目录生成 Go、Gateway 和 Swagger，再由 `scripts/openapi` 严格合并模块文档并更新登记摘要。任一生成或合并失败时不更新输出；完成后复现应逐字节一致。Gateway Swagger 源由 Proto 与映射配置生成，不作为手工编辑文件。
+
 ## 配置与生命周期
 
 HTTP 默认 `127.0.0.1:8080`，gRPC 默认 `127.0.0.1:9090`；`serve --address` 与 `--grpc-address` 分别覆盖。沿用两侧预算、TLS、CORS、健康和开发 pprof 约定。新增 `gateway.ca_file`、`gateway.server_name` 仅用于本进程 Gateway 到本进程 RPC 的证书验证；生产 gRPC 必须 TLS，绝不跳过证书校验。客户端目标由实际监听地址确定，通配监听转为回环，不提供任意上游地址或独立外部服务模式。

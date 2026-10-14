@@ -158,8 +158,8 @@ func RenderResourceHTTP(project Project, options Options, name string, fields []
 // RenderResourceGRPC renders the Proto contract, RPC Handler and tests. For
 // dual projects the matching HTTP renderer owns the single shared module factory.
 func RenderResourceGRPC(project Project, options Options, name string, fields []ResourceField) ([]File, error) {
-	if options.Transport != "grpc" && options.Transport != "dual" {
-		return nil, fmt.Errorf("RPC resource rendering requires grpc or dual transport")
+	if options.Transport != "grpc" && options.Transport != "dual" && options.Transport != "gateway" {
+		return nil, fmt.Errorf("RPC resource rendering requires grpc, dual, or gateway transport")
 	}
 	if _, err := RenderResourceCore(project, options, name, fields); err != nil {
 		return nil, err
@@ -181,7 +181,7 @@ func RenderResourceGRPC(project Project, options Options, name string, fields []
 		}
 		data.Fields = append(data.Fields, resourceCoreField{ResourceField: field, GoName: goName.String()})
 	}
-	files := make([]File, 0, 4)
+	files := make([]File, 0, 8)
 	for _, spec := range []struct {
 		name string
 		path string
@@ -222,12 +222,33 @@ func RenderResourceGRPC(project Project, options Options, name string, fields []
 		return nil, err
 	}
 	files = append(files, File{Path: "api/proto/" + name + "/v1/" + name + ".proto", Content: protoOutput.Bytes()})
-	if options.Transport == "grpc" {
+	if options.Transport == "grpc" || options.Transport == "gateway" {
 		factory, err := renderResourceModuleFactory(project, options, data)
 		if err != nil {
 			return nil, err
 		}
 		files = append(files, factory)
+	}
+	if options.Transport == "gateway" {
+		for _, spec := range []struct{ source, path string }{
+			{"resource/gateway_http.yaml.tmpl", "api/proto/" + name + "/v1/http.yaml"},
+			{"resource/gateway_openapi.yaml.tmpl", "api/proto/" + name + "/v1/openapi.yaml"},
+		} {
+			content, err := sources.ReadFile(spec.source)
+			if err != nil {
+				return nil, err
+			}
+			parsed, err := template.New(spec.path).Delims("[[", "]]").Option("missingkey=error").Parse(string(content))
+			if err != nil {
+				return nil, err
+			}
+			var output bytes.Buffer
+			if err := parsed.Execute(&output, data); err != nil {
+				return nil, err
+			}
+			files = append(files, File{Path: spec.path, Content: output.Bytes()})
+		}
+		files = append(files, resourceGatewayGuide(data))
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	return files, nil
@@ -306,7 +327,7 @@ func renderResourceModuleFactory(project Project, options Options, data struct {
 	Fields       []resourceCoreField
 }) (File, error) {
 	hasHTTP := options.Transport == "http" || options.Transport == "dual"
-	hasRPC := options.Transport == "grpc" || options.Transport == "dual"
+	hasRPC := options.Transport == "grpc" || options.Transport == "dual" || options.Transport == "gateway"
 	var source strings.Builder
 	source.WriteString("// Module assembly is developer-owned; goseed does not overwrite this file.\npackage bootstrap\n\nimport (\n")
 	fmt.Fprintf(&source, "business %q\nstore %q\n", project.Module+"/internal/apiserver/biz/"+data.Name, project.Module+"/internal/apiserver/store/"+data.Name)
@@ -316,6 +337,9 @@ func renderResourceModuleFactory(project Project, options Options, data struct {
 	if hasRPC {
 		fmt.Fprintf(&source, "grpcHandler %q\napi %q\n", project.Module+"/internal/apiserver/handler/grpc/"+data.Name, project.Module+"/pkg/api/"+data.Name+"/v1")
 	}
+	if options.Transport == "gateway" {
+		fmt.Fprintf(&source, "\ngateway %q\n", project.Module+"/internal/pkg/gateway")
+	}
 	source.WriteString(")\n\n")
 	fmt.Fprintf(&source, "type %sModule struct {", data.Name)
 	if hasHTTP {
@@ -323,6 +347,9 @@ func renderResourceModuleFactory(project Project, options Options, data struct {
 	}
 	if hasRPC {
 		source.WriteString(" RPC *grpcHandler.Handler; Permissions map[string]string;")
+	}
+	if options.Transport == "gateway" {
+		source.WriteString(" Gateway gateway.Registration;")
 	}
 	source.WriteString(" }\n")
 	fmt.Fprintf(&source, "func new%sModule(dependencies moduleDependencies) (%sModule, error) {\n", data.GoName, data.Name)
@@ -343,6 +370,9 @@ func renderResourceModuleFactory(project Project, options Options, data struct {
 	if hasRPC {
 		source.WriteString("RPC:grpcHandler.New(businessService), Permissions:")
 		fmt.Fprintf(&source, "%sPermissions().RPC,", data.Name)
+	}
+	if options.Transport == "gateway" {
+		fmt.Fprintf(&source, "Gateway:gateway.Registration{Queries:map[string][]string{\"GET\":{\"page\",\"page_size\"}},BodyMethods:map[string]bool{\"POST\":true,\"PATCH\":true},Register:api.Register%sServiceHandler},", data.GoName)
 	}
 	source.WriteString("}\nreturn module, nil\n}\n")
 	fmt.Fprintf(&source, "func %sPermissions() modulePermissions { return modulePermissions{", data.Name)
@@ -396,6 +426,34 @@ func resourceHTTPGuide(data struct {
 		}
 	}
 	body.WriteString("}'\n```\n\n数据库 schema 必须先通过项目显式迁移建立；服务启动只读核验 schema，不自动迁移。")
+	return File{Path: "docs/" + data.Name + ".md", Content: []byte(body.String())}
+}
+
+func resourceGatewayGuide(data struct {
+	Project
+	Options
+	Name, GoName string
+	Fields       []resourceCoreField
+}) File {
+	var body strings.Builder
+	fmt.Fprintf(&body, "# %s Gateway\n\nGateway 将 HTTP 请求映射到 `%s.v1.%sService`；认证、授权和业务校验仍由 RPC 链执行。路径为 `/v1/%s` 与 `/v1/%s/{id}`，所有业务路由要求 JWT。", data.Name, data.Name, data.GoName, data.Name, data.Name)
+	body.WriteString("\n\nProtoJSON 使用 snake_case 字段名，`int64` 在 JSON 中以十进制字符串表示；创建和更新字段保留 optional 存在性。GET 集合允许 `page`、`page_size`，其余 query 参数拒绝。POST/PATCH 仅接受 JSON，拒绝 null、重复/未知字段和空更新。\n\n| HTTP | RPC | 路径 |\n|---|---|---|\n")
+	for _, row := range []struct{ method, rpc, path string }{{"POST", "Create", "/v1/" + data.Name}, {"GET", "List", "/v1/" + data.Name}, {"GET", "Get", "/v1/" + data.Name + "/{id}"}, {"PATCH", "Update", "/v1/" + data.Name + "/{id}"}, {"DELETE", "Delete", "/v1/" + data.Name + "/{id}"}} {
+		fmt.Fprintf(&body, "| %s | `%sService/%s` | `%s` |\n", row.method, data.GoName, row.rpc, row.path)
+	}
+	body.WriteString("\n| 字段 | 类型 | 创建必需 | 约束 |\n|---|---|---|---|\n")
+	for _, field := range data.Fields {
+		required := "否"
+		if field.Required {
+			required = "是"
+		}
+		constraint := ""
+		if field.Type == "string" {
+			constraint = fmt.Sprintf("最多 %d 个 Unicode 字符", field.MaxLength)
+		}
+		fmt.Fprintf(&body, "| `%s` | `%s` | %s | %s |\n", field.Name, field.Type, required, constraint)
+	}
+	body.WriteString("\nHTTP 成功响应使用 ProtoJSON；64 位整数请按字符串解析。RPC 客户端使用相同的字段存在性和主体隔离规则。")
 	return File{Path: "docs/" + data.Name + ".md", Content: []byte(body.String())}
 }
 
