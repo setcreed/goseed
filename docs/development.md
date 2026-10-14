@@ -75,7 +75,7 @@ Makefile 固定 GOTOOLCHAIN=go1.26.4、GOWORK=off；Go 模块与构建缓存使�
 | 资源生成 | `resource_plan.go`、`resource_write.go`、`resource_tools.go`、`internal/cli/` | `PrepareResource` 校验能力、工具、路径与输入快照；计划支持报告、重验和安全 `Write`，公共入口为 `gen resource` |
 | 资源 SQL | `resource_schema.go`、`resource_migration.go` | 当前方言建表草稿、下一版本计算；不连接或修改数据库 |
 | 资源 CRUD | `resource_core.go`、`resource/core/` | Model、Biz、Store 与测试；按 owner 限定 SQL，保留 PATCH 零值 |
-| 资源协议适配 | `resource/http*.tmpl`、`resource/grpc/`、`resource/gateway/` | HTTP、gRPC、dual、Gateway 适配复用共享 Biz；计划的 `HTTPFiles()`/`RPCFiles()` 返回副本，最终登记和安全写入由 `gen resource` 执行 |
+| 资源协议适配 | `resource/http*.tmpl`、`resource/grpc*.tmpl`、`resource/gateway_*.tmpl` | HTTP、gRPC、dual、Gateway 适配复用共享 Biz；计划的 `HTTPFiles()`/`RPCFiles()` 返回副本，最终登记和安全写入由 `gen resource` 执行 |
 | 真实生成验收 | `tests/integration/` | 独立项目 readonly 编译、race、vet、lint、进程与真实服务验证 |
 | 依赖兼容原型 | `tests/compatibility/` | 独立 Go 模块；原型不等于正式业务模板实现 |
 
