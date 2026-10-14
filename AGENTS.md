@@ -22,6 +22,7 @@ goseed 是面向中小型 Go 后端业务的项目与业务代码生成器。生
 - `docs/template-grpc.md`：纯 gRPC 的 Proto、安全链、健康服务与验收契约。
 - `docs/template-dual.md`：双协议的共享依赖、监听配置、并发排空与验收契约。
 - `docs/template-gateway.md`：HTTP 转 RPC 的映射、安全链、协议/文档复现与顺序排空契约。
+- `docs/deployment.md`：D11 systemd/Nginx 单机部署、权限、备份恢复与升级回退契约。
 
 项目规则只维护在本文件；若增加 `CLAUDE.md`，它仅作为指向本文件的兼容入口。详细约定维护在对应文档，避免复制成多个独立来源。
 

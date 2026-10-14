@@ -23,7 +23,7 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 | D8 基础使用快速验收 | 已交付 | 干净源码构建＋默认 HTTP/SQLite/JWT 流程＋一个真实 MySQL/纯 gRPC 代表项目 |
 | D9 版本与分发 | 已交付 | 版本信息、本地安装/归档/校验、旧项目兼容与人工维护；Linux amd64 运行仍未验证 |
 | D10 可观测性 | 已交付 | P01 契约、P02 指标、P03 追踪与 P04 组合验收完成；默认关闭并按协议和选项裁剪 |
-| D11 单机部署 | 已规划，未实施 | systemd/Nginx 独立模板、备份恢复及升级演练 |
+| D11 单机部署 | 进行中 | P01 契约完成；P02 模板、P03 备份恢复演练、P04 升级故障验收待完成 |
 | D12 独立账号模板 | 已规划，未实施 | 注册/登录/重置/刷新/撤销，SQL 与四协议安全链 |
 | D13 消息基础 | 已规划，未实施 | 单后端发布消费、重试/重放、失败隔离及事务发布 |
 | D14 任务系统 | 已规划，未实施 | Worker、异步/延迟/定时、取消与运行诊断 |
@@ -33,10 +33,10 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 
 ## 下一步施工顺序
 
-首版后全部已知方向已规划；D8 基础使用快速验收、D9 版本/分发与 D10 可观测性已完成，下一步进入 D11 单机部署。首版后产品范围见 [需求清单](docs/requirements.md#首版后的完整需求范围)。
+首版后全部已知方向已规划；D8 基础使用快速验收、D9 版本/分发与 D10 可观测性已完成，当前执行 D11 单机部署。首版后产品范围见 [需求清单](docs/requirements.md#首版后的完整需求范围)。
 
 1. 推荐排期：**D8 → D9 → D10 → D11 → D12 → D13 → D14 → D15 → D16 → D17**；技术前置见施工清单，阶段内部按任务依赖验收。
-2. 当前实施入口为 **D11-P01 部署契约**；先定稿 systemd/Nginx 边界、证书/代理信任、备份恢复和升级/回滚步骤，再实施模板。其他阶段按施工清单中的前置关系执行。
+2. 当前实施入口为 **D11-P02 systemd/Nginx 模板**；P01 已确定 `--deployment=single-host`、四协议/四存储支持、隔离主机路径、TLS/代理信任及恢复回退边界。其他阶段按施工清单中的前置关系执行。
 3. 技术/产品定稿项 Q01 至 Q09 按 [待决登记](docs/implementation.md#待决登记与规划完成条件) 关闭；除范围变化或新证据推翻假设，不再每完成一阶段重做整体路线。
 
 完整范围、任务、失败路径及验收见 [施工清单](docs/implementation.md#阶段依赖与交付物)。流式 RPC、通用分布式锁、高级资源 DSL、多消息后端、工作流 UI、多租户/SSO、原生 Windows 与自动升级等已明确 [暂不实施及重新纳入条件](docs/requirements.md#已盘点但暂不实施的方向)。后续验证按改动风险定向执行，不默认重复 D7 全量长测。推送、正式发版、外部通知和生产部署不属于本次规划授权。
@@ -51,9 +51,11 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 - D7 全仓 `make race` 已通过，`tests/integration` 用时 2289.398 秒；D6 的完整 `make check`、真实服务矩阵、生成产物集成和 D7 的兼容性/交叉构建检查均通过。
 - go-redis 取消、pgx 人工延迟 Write 竞争边界仍按 [依赖记录](docs/dependencies.md) 保留；固定版本不意味着上游问题消失。
 - 仓库采用 MIT；第三方依赖及生成代码仍保留适用许可。源码仓库已经公开；本地 D8 验收完成不表示最新提交已推送或正式版本已发布。D8 仅覆盖指定干净源码构建、默认 HTTP 使用流程和一个真实 MySQL/纯 gRPC 代表项目，不等同于无缓存、独立机器或跨平台恢复验收。
-- D9 已完成本地安装、可复现归档、许可证与 SHA-256 核验、v1 增量兼容及人工维护说明。macOS arm64、Rosetta 下 macOS amd64、Linux arm64 的包运行和生成检查通过；Linux amd64 仅构建与包校验通过，运行未验证；Windows 原生不在支持范围。D10 完成指标/追踪模板及本地 OTLP protobuf 接收器验收；D11 至 D17 尚未实施。
+- D9 已完成本地安装、可复现归档、许可证与 SHA-256 核验、v1 增量兼容及人工维护说明。macOS arm64、Rosetta 下 macOS amd64、Linux arm64 的包运行和生成检查通过；Linux amd64 仅构建与包校验通过，运行未验证；Windows 原生不在支持范围。D10 完成指标/追踪模板及本地 OTLP protobuf 接收器验收；D11 实施中，D12 至 D17 尚未实施。
 
 ## 最近完成
+
+- 2026-10-14 21:04 D11-P01 部署契约完成：确定 `--deployment=single-host` 默认关闭、systemd/Nginx 仅作为 `deploy/` 文件副本；支持 HTTP/gRPC/dual/Gateway 及 SQLite/MySQL/PostgreSQL/无数据库，应用单实例绑定 loopback、双协议分离域名、Nginx TLS 终止/验证 gRPC 上游 TLS、不信任任意 forwarded headers。定稿专用服务账号、`/opt` releases+current、`/etc` 私有配置、`/var/lib` 状态和 `/var/backups` 备份目录；固定 SQLite 在线 `.backup`、MySQL InnoDB `mysqldump --single-transaction`、PostgreSQL custom `pg_dump` 及 schema 不自动回退边界。Docker 29.8.2 Linux/arm64 API 只读核验成功；D11-P02 进入实施。
 
 - 2026-10-14 20:56 D10 可观测性完成：实现 `--metrics`/`--tracing` 独立选择、默认关闭、生成元数据兼容、依赖/源码裁剪；HTTP、gRPC、dual、Gateway 覆盖请求量/状态/延迟/依赖指标及 W3C TraceContext 父子传播，RPC 健康 Watch 也受追踪/指标拦截。Exporter 验证独立 endpoint 与 headers、HTTPS/loopback 限制、无 baggage/请求内容/凭据导出、3s 导出超时及共享 5s 失败清理/关闭预算。四协议指标和追踪项目 readonly 编译通过；本地 OTLP 接收器解码真实 protobuf 并核对 trace parent；HTTP 与 Gateway 双开组合、不可用出口限时关闭及观测包定向 race 通过。指标/追踪/组合集成矩阵用时 95.589s；race 与基准目标用时 9.149s。Apple M1 Pro / macOS arm64 微基准：Metrics `733.3 ns/op, 568 B/op, 5 allocs/op`，Trace `591.8 ns/op, 801 B/op, 8 allocs/op`，仅作环境基线，不代表线上请求端到端开销。根包定向单测、`make contract-check`（94 个链接、380 个交付文件）、`make fmt-check` 与 `git diff --check` 通过；未连接外部生产 Collector。
 

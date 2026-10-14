@@ -112,6 +112,7 @@ shop/
 ├── specs/
 ├── build/docker/
 ├── deployments/compose/
+├── deploy/                    # 显式 --deployment 生成的 systemd/Nginx 副本
 ├── docs/
 ├── Makefile
 ├── go.mod
@@ -119,6 +120,8 @@ shop/
 ```
 
 这是目标能力全集示意，实际按参数生成：HTTP-only 不生成 gRPC、Proto、示例 RPC 客户端与公开 Go 协议包；grpc-only 不生成 Gin 业务 Handler；dual 保留两种 Handler，使用 `internal/pkg/dual/` 协调生命周期；Gateway 不生成同一业务的 Gin Handler；无数据库不生成 Store、Model 或数据库迁移。授权、缓存目录只在选择对应能力时生成，只有存在实际内容时才创建目录。
+
+单机部署资产由项目生成参数选择，位于独立 `deploy/`，不属于业务运行源码。它不修改主机或自动执行迁移；systemd/Nginx 信任、权限和备份恢复边界见 [单机部署契约](deployment.md)。
 
 `goseed.yaml` 由 D5 项目生成器创建，记录模板版本、能力与初始业务模块；D6 扩展其中的模块清单。`internal/apiserver/bootstrap/modules_gen.go` 是清单的确定性生成投影，负责把模块构造接入启动组装，并提供协议登记描述：HTTP 路由回调、gRPC Service 注册回调及 Gateway 的路径、query/body 规则和映射回调。各协议使用自己的描述类型；缺少的协议类型和依赖随模板裁剪。登记回调由当前 Handlers 的方法适配，不通过 AST 改写手工 Bootstrap、路由或 Proto 文件。`specs/` 保存资源字段声明，由生成器读取并校验。部署目录按交付需求创建，当前文件交付范围以 README 与实际模板为准，检查点状态以 ROADMAP 为准。
 
