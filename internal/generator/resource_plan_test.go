@@ -159,6 +159,17 @@ func TestResourceTargetPlanAcrossSQLCombinations(t *testing.T) {
 						if strings.Contains(report.String(), "handler/grpc/orders") != (transport != "http") {
 							t.Fatal("RPC handler trimming is incorrect")
 						}
+						rpcFiles := plan.RPCFiles()
+						if (transport == "grpc" || transport == "dual") != (len(rpcFiles) > 0) {
+							t.Fatalf("RPC files do not match selected transport %q: %d", transport, len(rpcFiles))
+						}
+						if len(rpcFiles) > 0 {
+							first := bytes.Clone(rpcFiles[0].Content)
+							rpcFiles[0].Content[0] = 'X'
+							if !bytes.Equal(plan.RPCFiles()[0].Content, first) {
+								t.Fatal("caller changed RPC source files")
+							}
+						}
 						if strings.Contains(report.String(), "orders.pb.gw.go") != (transport == "gateway") {
 							t.Fatal("Gateway trimming is incorrect")
 						}

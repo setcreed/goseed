@@ -1,0 +1,110 @@
+package [[.Name]]
+
+import (
+	"context"
+	"math"
+	"reflect"
+
+	api "[[.Module]]/pkg/api/[[.Name]]/v1"
+	biz "[[.Module]]/internal/apiserver/biz/[[.Name]]"
+	"[[.Module]]/internal/pkg/errno"
+	"[[.Module]]/internal/pkg/rpc"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+var Permissions = map[string]string{
+	api.[[.GoName]]Service_Create_FullMethodName: "create",
+	api.[[.GoName]]Service_Get_FullMethodName:    "read",
+	api.[[.GoName]]Service_List_FullMethodName:   "read",
+	api.[[.GoName]]Service_Update_FullMethodName: "update",
+	api.[[.GoName]]Service_Delete_FullMethodName: "delete",
+}
+
+type Handler struct {
+	api.Unimplemented[[.GoName]]ServiceServer
+	business *biz.Biz
+}
+
+func New(business *biz.Biz) *Handler { return &Handler{business: business} }
+
+func (h *Handler) Register(registrar grpc.ServiceRegistrar) {
+	api.Register[[.GoName]]ServiceServer(registrar, h)
+}
+
+func valid(request proto.Message) error {
+	value := reflect.ValueOf(request)
+	if request == nil || (value.Kind() == reflect.Pointer && value.IsNil()) {
+		return errno.Invalid("unknown or missing request fields")
+	}
+	message := request.ProtoReflect()
+	if !message.IsValid() || len(message.GetUnknown()) != 0 {
+		return errno.Invalid("unknown or missing request fields")
+	}
+	return nil
+}
+
+func identifier(id uint64) error {
+	if id < 1 || id > math.MaxInt64 {
+		return errno.Invalid("id must be between 1 and 9223372036854775807")
+	}
+	return nil
+}
+
+func item(value *biz.Item) *api.[[.GoName]]Item {
+	return &api.[[.GoName]]Item{
+		Id: value.ID,
+[[range .Fields]]		[[.GoName]]: value.[[.GoName]],
+[[end]]		CreatedAt: timestamppb.New(value.CreatedAt.UTC()),
+		UpdatedAt: timestamppb.New(value.UpdatedAt.UTC()),
+	}
+}
+
+func (h *Handler) Create(ctx context.Context, request *api.Create[[.GoName]]Request) (*api.[[.GoName]]Item, error) {
+	if err := valid(request); err != nil { return nil, rpc.Status(ctx, err) }
+[[range .Fields]][[if .Required]]	if request.[[.GoName]] == nil { return nil, rpc.Status(ctx, errno.Invalid("[[.Name]] is required")) }
+[[end]][[end]]	value, err := h.business.Create(ctx, biz.CreateInput{
+[[range .Fields]]		[[.GoName]]: request.[[.GoName]],
+[[end]]	})
+	if err != nil { return nil, rpc.Status(ctx, err) }
+	return item(value), nil
+}
+
+func (h *Handler) Get(ctx context.Context, request *api.Get[[.GoName]]Request) (*api.[[.GoName]]Item, error) {
+	if err := valid(request); err != nil { return nil, rpc.Status(ctx, err) }
+	if err := identifier(request.Id); err != nil { return nil, rpc.Status(ctx, err) }
+	value, err := h.business.Get(ctx, request.Id)
+	if err != nil { return nil, rpc.Status(ctx, err) }
+	return item(value), nil
+}
+
+func (h *Handler) List(ctx context.Context, request *api.List[[.GoName]]Request) (*api.[[.GoName]]Page, error) {
+	if err := valid(request); err != nil { return nil, rpc.Status(ctx, err) }
+	page, size := int32(1), int32(20)
+	if request.Page != nil { page = *request.Page }
+	if request.PageSize != nil { size = *request.PageSize }
+	value, err := h.business.List(ctx, int(page), int(size))
+	if err != nil { return nil, rpc.Status(ctx, err) }
+	items := make([]*api.[[.GoName]]Item, 0, len(value.Items))
+	for i := range value.Items { items = append(items, item(&value.Items[i])) }
+	return &api.[[.GoName]]Page{Items: items, Total: value.Total, Page: int32(value.Page), PageSize: int32(value.PageSize)}, nil
+}
+
+func (h *Handler) Update(ctx context.Context, request *api.Update[[.GoName]]Request) (*api.[[.GoName]]Item, error) {
+	if err := valid(request); err != nil { return nil, rpc.Status(ctx, err) }
+	if err := identifier(request.Id); err != nil { return nil, rpc.Status(ctx, err) }
+	value, err := h.business.Update(ctx, request.Id, biz.UpdateInput{
+[[range .Fields]]		[[.GoName]]: request.[[.GoName]],
+[[end]]	})
+	if err != nil { return nil, rpc.Status(ctx, err) }
+	return item(value), nil
+}
+
+func (h *Handler) Delete(ctx context.Context, request *api.Delete[[.GoName]]Request) (*emptypb.Empty, error) {
+	if err := valid(request); err != nil { return nil, rpc.Status(ctx, err) }
+	if err := identifier(request.Id); err != nil { return nil, rpc.Status(ctx, err) }
+	if err := h.business.Delete(ctx, request.Id); err != nil { return nil, rpc.Status(ctx, err) }
+	return &emptypb.Empty{}, nil
+}

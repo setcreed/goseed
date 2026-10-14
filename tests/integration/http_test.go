@@ -56,7 +56,8 @@ func startServiceWith(t *testing.T, directory, binary string, client *http.Clien
 	for time.Now().Before(deadline) {
 		select {
 		case <-process.done:
-			t.Fatalf("service exited before readiness: %v", process.err)
+			data, _ := os.ReadFile(process.log)
+			t.Fatalf("service exited before readiness: %v: %s", process.err, data)
 		default:
 		}
 		data, err := os.ReadFile(process.log)

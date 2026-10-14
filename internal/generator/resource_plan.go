@@ -50,6 +50,7 @@ type ResourcePlan struct {
 	migrationDraft *templates.File
 	coreFiles      []templates.File
 	httpFiles      []templates.File
+	rpcFiles       []templates.File
 }
 
 // PrepareResource validates resource inputs and plans output paths without
@@ -206,6 +207,12 @@ func PrepareResource(root, name string, options ResourceOptions) (ResourcePlan, 
 		}
 		if _, err := openapi.Merge(sources); err != nil {
 			return ResourcePlan{}, fmt.Errorf("merge resource OpenAPI source: %w", err)
+		}
+	}
+	if state.Metadata.Transport == "grpc" || state.Metadata.Transport == "dual" {
+		plan.rpcFiles, err = templates.RenderResourceGRPC(templates.Project{Name: state.Metadata.Name, Module: state.Metadata.Module}, templates.Options{Database: state.Metadata.Database, Transport: state.Metadata.Transport, Authz: state.Metadata.Authorization, Redis: state.Metadata.Redis}, name, coreFields)
+		if err != nil {
+			return ResourcePlan{}, err
 		}
 	}
 	if options.Migration {
@@ -410,6 +417,15 @@ func (p ResourcePlan) HTTPFiles() []templates.File {
 	}
 	return files
 }
+
+// RPCFiles returns the RPC adapter and Proto source as independent copies.
+func (p ResourcePlan) RPCFiles() []templates.File {
+	files := make([]templates.File, len(p.rpcFiles))
+	for i, file := range p.rpcFiles {
+		files[i] = templates.File{Path: file.Path, Content: bytes.Clone(file.Content)}
+	}
+	return files
+}
 func (p ResourcePlan) MigrationDraft() (templates.File, bool) {
 	if p.migrationDraft == nil {
 		return templates.File{}, false
@@ -440,6 +456,9 @@ func (p ResourcePlan) Report(w io.Writer) error {
 		output.WriteString("HTTP adapter, factory, module guide, and Swagger source are available through HTTPFiles.\n")
 	} else {
 		output.WriteString("Selected protocol adapter rendering is not available yet.\n")
+	}
+	if len(p.rpcFiles) > 0 {
+		output.WriteString("RPC adapter and Proto source are available through RPCFiles.\n")
 	}
 	output.WriteString("No files written.\n")
 	_, err := output.WriteTo(w)

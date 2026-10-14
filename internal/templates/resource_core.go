@@ -146,11 +146,89 @@ func RenderResourceHTTP(project Project, options Options, name string, fields []
 		return nil, fmt.Errorf("resource HTTP tests: %w", err)
 	}
 	files = append(files, File{Path: "internal/apiserver/handler/http/" + name + "/handler_test.go", Content: testFormatted})
-	factory, err := renderResourceHTTPFactory(project, options, data)
+	factory, err := renderResourceModuleFactory(project, options, data)
 	if err != nil {
 		return nil, err
 	}
 	files = append(files, factory, resourceHTTPGuide(data), resourceOpenAPI(data))
+	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
+	return files, nil
+}
+
+// RenderResourceGRPC renders the Proto contract, RPC Handler and tests. For
+// dual projects the matching HTTP renderer owns the single shared module factory.
+func RenderResourceGRPC(project Project, options Options, name string, fields []ResourceField) ([]File, error) {
+	if options.Transport != "grpc" && options.Transport != "dual" {
+		return nil, fmt.Errorf("RPC resource rendering requires grpc or dual transport")
+	}
+	if _, err := RenderResourceCore(project, options, name, fields); err != nil {
+		return nil, err
+	}
+	data := struct {
+		Project
+		Options
+		Name, GoName string
+		Fields       []resourceCoreField
+	}{Project: project, Options: options, Name: name, GoName: strings.ToUpper(name[:1]) + name[1:]}
+	for _, field := range fields {
+		parts := strings.Split(field.Name, "_")
+		var goName strings.Builder
+		for _, part := range parts {
+			if part == "" {
+				return nil, fmt.Errorf("invalid resource field name")
+			}
+			goName.WriteString(strings.ToUpper(part[:1]) + part[1:])
+		}
+		data.Fields = append(data.Fields, resourceCoreField{ResourceField: field, GoName: goName.String()})
+	}
+	files := make([]File, 0, 4)
+	for _, spec := range []struct {
+		name string
+		path string
+	}{
+		{name: "grpc.go", path: "internal/apiserver/handler/grpc/" + name + "/handler.go"},
+		{name: "grpc_test.go", path: "internal/apiserver/handler/grpc/" + name + "/handler_test.go"},
+	} {
+		content, err := sources.ReadFile("resource/" + spec.name + ".tmpl")
+		if err != nil {
+			return nil, err
+		}
+		parsed, err := template.New(spec.name).Delims("[[", "]]").Option("missingkey=error").Parse(string(content))
+		if err != nil {
+			return nil, err
+		}
+		var output bytes.Buffer
+		if err := parsed.Execute(&output, data); err != nil {
+			return nil, err
+		}
+		formatted, err := formatGo(output.String())
+		if err != nil {
+			return nil, fmt.Errorf("resource RPC %s: %w", spec.name, err)
+		}
+		files = append(files, File{Path: spec.path, Content: formatted})
+	}
+	protoSource, err := sources.ReadFile("resource/grpc.proto.tmpl")
+	if err != nil {
+		return nil, err
+	}
+	protoTemplate, err := template.New("grpc.proto").Delims("[[", "]]").Funcs(template.FuncMap{
+		"add": func(left, right int) int { return left + right },
+	}).Option("missingkey=error").Parse(string(protoSource))
+	if err != nil {
+		return nil, err
+	}
+	var protoOutput bytes.Buffer
+	if err := protoTemplate.Execute(&protoOutput, data); err != nil {
+		return nil, err
+	}
+	files = append(files, File{Path: "api/proto/" + name + "/v1/" + name + ".proto", Content: protoOutput.Bytes()})
+	if options.Transport == "grpc" {
+		factory, err := renderResourceModuleFactory(project, options, data)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, factory)
+	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	return files, nil
 }
@@ -221,34 +299,60 @@ func RenderResourceHTTPIntegrationTest(project Project, options Options, fields 
 	return File{Path: "internal/apiserver/resource_http_test.go", Content: formatted}, nil
 }
 
-func renderResourceHTTPFactory(project Project, options Options, data struct {
+func renderResourceModuleFactory(project Project, options Options, data struct {
 	Project
 	Options
 	Name, GoName string
 	Fields       []resourceCoreField
 }) (File, error) {
+	hasHTTP := options.Transport == "http" || options.Transport == "dual"
+	hasRPC := options.Transport == "grpc" || options.Transport == "dual"
 	var source strings.Builder
 	source.WriteString("// Module assembly is developer-owned; goseed does not overwrite this file.\npackage bootstrap\n\nimport (\n")
-	fmt.Fprintf(&source, "business %q\nstore %q\nhttpHandler %q\n", project.Module+"/internal/apiserver/biz/"+data.Name, project.Module+"/internal/apiserver/store/"+data.Name, project.Module+"/internal/apiserver/handler/http/"+data.Name)
+	fmt.Fprintf(&source, "business %q\nstore %q\n", project.Module+"/internal/apiserver/biz/"+data.Name, project.Module+"/internal/apiserver/store/"+data.Name)
+	if hasHTTP {
+		fmt.Fprintf(&source, "httpHandler %q\n", project.Module+"/internal/apiserver/handler/http/"+data.Name)
+	}
+	if hasRPC {
+		fmt.Fprintf(&source, "grpcHandler %q\napi %q\n", project.Module+"/internal/apiserver/handler/grpc/"+data.Name, project.Module+"/pkg/api/"+data.Name+"/v1")
+	}
 	source.WriteString(")\n\n")
-	fmt.Fprintf(&source, "type %sModule struct { HTTP *httpHandler.Handler; Operations map[string]string }\n", data.Name)
+	fmt.Fprintf(&source, "type %sModule struct {", data.Name)
+	if hasHTTP {
+		source.WriteString(" HTTP *httpHandler.Handler; Operations map[string]string;")
+	}
+	if hasRPC {
+		source.WriteString(" RPC *grpcHandler.Handler; Permissions map[string]string;")
+	}
+	source.WriteString(" }\n")
 	fmt.Fprintf(&source, "func new%sModule(dependencies moduleDependencies) (%sModule, error) {\n", data.GoName, data.Name)
 	fmt.Fprintf(&source, "repository := store.New(dependencies.Database)\nif err := repository.CheckSchema(dependencies.Context); err != nil { return %sModule{}, err }\n", data.Name)
 	if options.Redis {
 		source.WriteString("var dependency business.Dependency = dependencies.Cache\n")
 	}
-	fmt.Fprintf(&source, "return %sModule{HTTP:httpHandler.New(business.New(repository", data.Name)
+	fmt.Fprintf(&source, "businessService := business.New(repository")
 	if options.Redis {
 		source.WriteString(", dependency")
 	}
-	source.WriteString(")), Operations:")
-	if options.Authz == "casbin" {
-		fmt.Fprintf(&source, "%sPermissions().HTTP", data.Name)
-	} else {
-		source.WriteString("map[string]string{\"GET\":\"read\",\"POST\":\"create\",\"PATCH\":\"update\",\"DELETE\":\"delete\"}")
+	source.WriteString(")\n")
+	fmt.Fprintf(&source, "module := %sModule{", data.Name)
+	if hasHTTP {
+		source.WriteString("HTTP:httpHandler.New(businessService), Operations:")
+		fmt.Fprintf(&source, "%sPermissions().HTTP,", data.Name)
 	}
-	source.WriteString("}, nil\n}\n")
-	fmt.Fprintf(&source, "func %sPermissions() modulePermissions { return modulePermissions{HTTP:map[string]string{\"GET\":\"read\",\"POST\":\"create\",\"PATCH\":\"update\",\"DELETE\":\"delete\"}} }\n", data.Name)
+	if hasRPC {
+		source.WriteString("RPC:grpcHandler.New(businessService), Permissions:")
+		fmt.Fprintf(&source, "%sPermissions().RPC,", data.Name)
+	}
+	source.WriteString("}\nreturn module, nil\n}\n")
+	fmt.Fprintf(&source, "func %sPermissions() modulePermissions { return modulePermissions{", data.Name)
+	if hasHTTP {
+		source.WriteString("HTTP:map[string]string{\"GET\":\"read\",\"POST\":\"create\",\"PATCH\":\"update\",\"DELETE\":\"delete\"},")
+	}
+	if hasRPC {
+		fmt.Fprintf(&source, "RPC:map[string]string{api.%sService_Create_FullMethodName:\"create\",api.%sService_Get_FullMethodName:\"read\",api.%sService_List_FullMethodName:\"read\",api.%sService_Update_FullMethodName:\"update\",api.%sService_Delete_FullMethodName:\"delete\"},", data.GoName, data.GoName, data.GoName, data.GoName, data.GoName)
+	}
+	source.WriteString("} }\n")
 	formatted, err := formatGo(source.String())
 	if err != nil {
 		return File{}, err

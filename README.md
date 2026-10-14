@@ -66,7 +66,7 @@ goseed gen module orders
 
 该命令创建 Biz/Handler 与所选数据库的 Store 骨架，生成一次性模块工厂，安全更新元数据、协议登记和 OpenAPI 汇总。Handler 不虚构业务端点，开发者补齐领域规则、路由与权限。既有手工工厂和业务源码受到保护，写入失败恢复本次新增/更新内容。
 
-资源内部入口 `generator.PrepareResource` 目前提供只读计划、CoreFiles、HTTPFiles、SchemaStore 与可选 MigrationDraft；查询返回独立副本，不连接数据库或写入文件。各接口用途与兼容边界见 [资源接入方案](docs/resource-generation.md)。
+资源内部入口 `generator.PrepareResource` 提供只读计划、CoreFiles、按所选协议返回的 HTTPFiles/RPCFiles、SchemaStore 与可选 MigrationDraft；查询返回独立副本，不连接数据库或写入文件。各接口用途与兼容边界见 [资源接入方案](docs/resource-generation.md)。
 
 ## 开发与验证
 

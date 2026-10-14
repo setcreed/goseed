@@ -4,6 +4,8 @@
 
 Proto 源位于 `api/proto/example/v1/`，已生成代码位于 `pkg/api/example/v1/`，供其他 Go 服务导入协议类型；Handler 位于 `internal/apiserver/handler/grpc/example/`，服务及拦截器位于 `internal/pkg/rpc/`。提供示例客户端和固定版本的显式协议生成入口，普通构建不运行 protoc、不安装工具或 tidy。四种存储 × Redis 开关 × Casbin 开关共 16 种组合均需 readonly 编译，代表组合完成实际调用。
 
+资源模块各自使用 `api/proto/<module>/v1/<module>.proto` 与 `pkg/api/<module>/v1/`。`scripts/proto.py` 按模块路径排序并复现所有模块协议，检查 protoc 与插件固定版本；新资源的 HTTP、RPC 与 dual 渲染共用一次 Store/Biz 组装，dual 的两种 Handler 接收同一个 Biz。资源 CRUD 使用独立 `<Name>Service`，权限目录按每个服务的 FullMethod 精确映射；创建必需字段与 PATCH 更新字段采用 Proto3 optional 保留出现性，不暴露 owner。
+
 SQL 提供 CRUD，无数据库提供认证问候。Proto3 optional 保留 PATCH 字段存在性和零值；分页省略取 1/20，显式零由 Biz 拒绝；ID 限 1 至 int64 最大值。拒绝未知 Proto 字段，文本、分页和资源归属由同一 Biz 校验。
 
 ## 配置与安全

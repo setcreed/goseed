@@ -1,0 +1,21 @@
+package [[.Name]]
+
+import (
+	"testing"
+
+	api "[[.Module]]/pkg/api/[[.Name]]/v1"
+)
+
+func TestPermissionsAreExactFullMethods(t *testing.T) {
+	want := map[string]string{
+		api.[[.GoName]]Service_Create_FullMethodName: "create",
+		api.[[.GoName]]Service_Get_FullMethodName:    "read",
+		api.[[.GoName]]Service_List_FullMethodName:   "read",
+		api.[[.GoName]]Service_Update_FullMethodName: "update",
+		api.[[.GoName]]Service_Delete_FullMethodName: "delete",
+	}
+	if len(Permissions) != len(want) { t.Fatalf("permissions: got %d, want %d", len(Permissions), len(want)) }
+	for method, operation := range want {
+		if Permissions[method] != operation { t.Errorf("permission %s: got %q, want %q", method, Permissions[method], operation) }
+	}
+}

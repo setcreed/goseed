@@ -17,12 +17,35 @@ for name, module, version in [('protoc-gen-go', 'google.golang.org/protobuf', 'v
         raise SystemExit('Protocol plugin version mismatch')
 env = os.environ.copy()
 env['PATH'] = str(tools) + os.pathsep + env.get('PATH', '')
-source = root / 'api/proto/example/v1'
+source = root / 'api/proto'
 base = root / '.tmp/proto'
 base.mkdir(parents=True, exist_ok=True)
+proto_files = sorted(source.glob('*/v1/*.proto'))
+if not proto_files:
+    raise SystemExit('No module Proto files found under api/proto/*/v1')
+
 with tempfile.TemporaryDirectory(dir=base) as temporary:
-    subprocess.run([str(protoc), '-I'+str(source), '-I'+str(root / '.tools/protoc/include'), '--go_out=paths=source_relative:'+temporary, '--go-grpc_out=paths=source_relative:'+temporary, '--go_opt=Mexample.proto=[[.Module]]/pkg/api/example/v1;examplev1', '--go-grpc_opt=Mexample.proto=[[.Module]]/pkg/api/example/v1;examplev1', str(source / 'example.proto')], cwd=root, env=env, check=True)
-    destination = root / 'pkg/api/example/v1'
-    for name in ('example.pb.go', 'example_grpc.pb.go'):
-        (destination / name).write_bytes((Path(temporary) / name).read_bytes())
-print('Generated protocol files updated')
+    command = [
+        str(protoc),
+        '-I' + str(source),
+        '-I' + str(root / '.tools/protoc/include'),
+        '--go_out=paths=source_relative:' + temporary,
+        '--go-grpc_out=paths=source_relative:' + temporary,
+    ]
+    for proto in proto_files:
+        relative = proto.relative_to(source).as_posix()
+        module = proto.parent.parent.name
+        go_package = f'[[.Module]]/pkg/api/{module}/v1;{module}v1'
+        command.extend(['--go_opt=M' + relative + '=' + go_package,
+                        '--go-grpc_opt=M' + relative + '=' + go_package])
+    command.extend(str(proto.relative_to(source)) for proto in proto_files)
+    subprocess.run(command, cwd=root, env=env, check=True)
+    for proto in proto_files:
+        relative = proto.relative_to(source)
+        module = relative.parts[0]
+        generated = Path(temporary) / relative.parent
+        destination = root / 'pkg/api' / module / 'v1'
+        destination.mkdir(parents=True, exist_ok=True)
+        for name in (proto.stem + '.pb.go', proto.stem + '_grpc.pb.go'):
+            (destination / name).write_bytes((generated / name).read_bytes())
+print(f'Regenerated protocol files for {len(proto_files)} module(s)')

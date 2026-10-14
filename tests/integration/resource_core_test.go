@@ -1,11 +1,15 @@
 package integration
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/setcreed/goseed/internal/templates"
 )
@@ -34,6 +38,14 @@ func TestResourceCoreProjects(t *testing.T) {
 	} {
 		t.Run(fields[0].Name, func(t *testing.T) {
 			verifyResourceCoreProject(t, templates.Options{Database: "sqlite", Transport: "http"}, fields, nil)
+		})
+	}
+}
+
+func TestResourceGRPCProjects(t *testing.T) {
+	for _, transport := range []string{"grpc", "dual"} {
+		t.Run(transport, func(t *testing.T) {
+			verifyResourceCoreProject(t, templates.Options{Database: "sqlite", Transport: transport}, coreFields, nil)
 		})
 	}
 }
@@ -101,6 +113,13 @@ func verifyResourceCoreProject(t *testing.T, options templates.Options, fields [
 			}
 			files = append(files, httpFiles...)
 		}
+		if options.Transport == "grpc" || options.Transport == "dual" {
+			rpcFiles, err := templates.RenderResourceGRPC(project, options, name, fields)
+			if err != nil {
+				t.Fatal(err)
+			}
+			files = append(files, rpcFiles...)
+		}
 		schema := make([]templates.SchemaField, len(fields))
 		for j, field := range fields {
 			schema[j] = field.SchemaField
@@ -111,7 +130,7 @@ func verifyResourceCoreProject(t *testing.T, options templates.Options, fields [
 		}
 		files = append(files, templates.File{Path: fmt.Sprintf("migrations/%05d_%s.sql", base+i+1, name), Content: sql})
 	}
-	if options.Transport == "http" || options.Transport == "dual" {
+	if options.Transport == "http" || options.Transport == "grpc" || options.Transport == "dual" {
 		registry, err := templates.RenderWithModules(project, options, []templates.ModuleEntry{{Name: "example"}, {Name: "orders", Type: "resource"}, {Name: "notes", Type: "resource"}})
 		if err != nil {
 			t.Fatal(err)
@@ -126,6 +145,7 @@ func verifyResourceCoreProject(t *testing.T, options templates.Options, fields [
 					break
 				}
 			}
+
 		}
 	}
 	if options.Database == "sqlite" && options.Transport == "http" {
@@ -150,6 +170,13 @@ func verifyResourceCoreProject(t *testing.T, options templates.Options, fields [
 			t.Fatal(err)
 		}
 	}
+	if options.Transport == "grpc" || options.Transport == "dual" {
+		if err := os.Symlink(filepath.Join(root, ".tools"), filepath.Join(directory, ".tools")); err != nil {
+			t.Fatal(err)
+		}
+		run(t, directory, "make", "proto-generate")
+		verifyResourceProtoReproduction(t, directory)
+	}
 	if options.Database != "sqlite" {
 		writeResourceApplicationTest(t, directory, options)
 	}
@@ -158,6 +185,13 @@ func verifyResourceCoreProject(t *testing.T, options templates.Options, fields [
 	if options.Transport == "http" || options.Transport == "dual" {
 		output = runWith(t, directory, env, "go", "test", "-mod=readonly", "-race", "-count=1", "./internal/apiserver/handler/http/orders", "./internal/apiserver/handler/http/notes")
 		runWith(t, directory, env, "go", "test", "-mod=readonly", "-run", "^$", "./internal/apiserver/bootstrap")
+	}
+	if options.Transport == "grpc" || options.Transport == "dual" {
+		output = runWith(t, directory, env, "go", "test", "-mod=readonly", "-race", "-count=1", "./internal/apiserver/handler/grpc/orders", "./internal/apiserver/handler/grpc/notes")
+		runWith(t, directory, env, "go", "test", "-mod=readonly", "-run", "^$", "./internal/apiserver/bootstrap")
+		if options.Database == "sqlite" {
+			verifyResourceRPCProcess(t, directory, options.Transport)
+		}
 	}
 	if options.Database == "sqlite" && options.Transport == "http" {
 		runWith(t, directory, env, "go", "test", "-mod=readonly", "-race", "-count=1", "-run", "^TestGeneratedResourceHTTP$", "./internal/apiserver")
@@ -170,6 +204,203 @@ func verifyResourceCoreProject(t *testing.T, options templates.Options, fields [
 	run(t, directory, "go", "build", "-mod=readonly", "./...")
 }
 
+func verifyResourceRPCProcess(t *testing.T, directory, transport string) {
+	t.Helper()
+	clientSource := `package main
+import (
+ "context"; "crypto/tls"; "crypto/x509"; "errors"; "flag"; "fmt"; "net"; "os"; "time"
+ orders "example.com/demo/pkg/api/orders/v1"; notes "example.com/demo/pkg/api/notes/v1"
+ "google.golang.org/grpc"; "google.golang.org/grpc/credentials"; "google.golang.org/grpc/credentials/insecure"; "google.golang.org/grpc/metadata"; "google.golang.org/grpc/health/grpc_health_v1"; "google.golang.org/protobuf/encoding/protojson"; "google.golang.org/protobuf/proto"
+)
+func run() error {
+ address:=flag.String("address","127.0.0.1:9090",""); ca:=flag.String("ca","",""); resource:=flag.String("resource","orders",""); action:=flag.String("action","list",""); id:=flag.Uint64("id",0,""); title:=flag.String("title","",""); enabled:=flag.Bool("enabled",false,""); amount:=flag.Int64("amount",0,""); page:=flag.Int("page",1,""); pageSize:=flag.Int("page-size",20,""); timeout:=flag.Duration("timeout",5*time.Second,""); unknown:=flag.Bool("unknown",false,""); flag.Parse(); provided:=map[string]bool{};flag.Visit(func(f *flag.Flag){provided[f.Name]=true})
+ host,_,err:=net.SplitHostPort(*address);if err!=nil{return err};var transport credentials.TransportCredentials;if *ca!=""{roots:=x509.NewCertPool();data,err:=os.ReadFile(*ca);if err!=nil||!roots.AppendCertsFromPEM(data){return errors.New("invalid CA")};transport=credentials.NewTLS(&tls.Config{RootCAs:roots,ServerName:host,MinVersion:tls.VersionTLS12})}else{transport=insecure.NewCredentials()}
+ connection,err:=grpc.NewClient(*address,grpc.WithTransportCredentials(transport),grpc.WithDisableRetry());if err!=nil{return err};defer func(){_ = connection.Close()}();ctx,cancel:=context.WithTimeout(context.Background(),*timeout);defer cancel();if token:=os.Getenv("APP_CLIENT_TOKEN");token!=""{ctx=metadata.AppendToOutgoingContext(ctx,"authorization","Bearer "+token)}
+ if *action=="health"{value,err:=grpc_health_v1.NewHealthClient(connection).Check(ctx,&grpc_health_v1.HealthCheckRequest{});if err!=nil{return err};fmt.Printf("{\"status\":%q}",value.Status.String());return nil}
+	var response proto.Message
+ switch *resource {
+ case "orders":
+  client:=orders.NewOrdersServiceClient(connection)
+  switch *action {
+  case "create":request:=&orders.CreateOrdersRequest{};if provided["title"]{request.Title=title};if provided["enabled"]{request.Enabled=enabled};if provided["amount"]{request.Amount=amount};if *unknown{request.ProtoReflect().SetUnknown([]byte{0xa0,0x06,0x01})};response,err=client.Create(ctx,request)
+  case "get":response,err=client.Get(ctx,&orders.GetOrdersRequest{Id:*id})
+  case "list":request:=&orders.ListOrdersRequest{};if provided["page"]{v:=int32(*page);request.Page=&v};if provided["page-size"]{v:=int32(*pageSize);request.PageSize=&v};response,err=client.List(ctx,request)
+  case "update":request:=&orders.UpdateOrdersRequest{Id:*id};if provided["title"]{request.Title=title};if provided["enabled"]{request.Enabled=enabled};if provided["amount"]{request.Amount=amount};response,err=client.Update(ctx,request)
+  case "delete":response,err=client.Delete(ctx,&orders.DeleteOrdersRequest{Id:*id})
+  default:return errors.New("unknown action")
+  }
+ case "notes":
+  client:=notes.NewNotesServiceClient(connection)
+  switch *action {
+  case "create":request:=&notes.CreateNotesRequest{};if provided["title"]{request.Title=title};if provided["enabled"]{request.Enabled=enabled};if provided["amount"]{request.Amount=amount};response,err=client.Create(ctx,request)
+  case "get":response,err=client.Get(ctx,&notes.GetNotesRequest{Id:*id})
+  case "list":request:=&notes.ListNotesRequest{};if provided["page"]{v:=int32(*page);request.Page=&v};if provided["page-size"]{v:=int32(*pageSize);request.PageSize=&v};response,err=client.List(ctx,request)
+  case "update":request:=&notes.UpdateNotesRequest{Id:*id};if provided["title"]{request.Title=title};if provided["enabled"]{request.Enabled=enabled};if provided["amount"]{request.Amount=amount};response,err=client.Update(ctx,request)
+  case "delete":response,err=client.Delete(ctx,&notes.DeleteNotesRequest{Id:*id})
+  default:return errors.New("unknown action")
+  }
+ default:return errors.New("unknown resource")
+ }
+ if err!=nil{return err};data,err:=protojson.MarshalOptions{UseProtoNames:true,EmitUnpopulated:true}.Marshal(response);if err!=nil{return err};fmt.Println(string(data));return nil
+}
+
+func main(){if err:=run();err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(1)}}
+`
+	clientPath := filepath.Join(directory, "cmd/resourceclient/main.go")
+	if err := os.MkdirAll(filepath.Dir(clientPath), 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(clientPath, []byte(clientSource), 0644); err != nil {
+		t.Fatal(err)
+	}
+	binary := filepath.Join(directory, "bin/apiserver")
+	client := filepath.Join(directory, "bin/resourceclient")
+	run(t, directory, "go", "build", "-mod=readonly", "-o", binary, "./cmd/apiserver")
+	run(t, directory, "go", "build", "-mod=readonly", "-o", client, "./cmd/resourceclient")
+	run(t, directory, binary, "dev", "init")
+	run(t, directory, binary, "migrate", "up")
+	alice := strings.TrimSpace(string(run(t, directory, binary, "dev", "token", "--subject", "alice")))
+	bob := strings.TrimSpace(string(run(t, directory, binary, "dev", "token", "--subject", "bob")))
+	certificate, key := grpcCertificate(t, directory)
+	secure := []string{"APP_GRPC_TLS_CERT=" + certificate, "APP_GRPC_TLS_KEY=" + key}
+	var process *serviceProcess
+	var grpcAddress string
+	clientOptions := []string{"--ca", certificate}
+	if transport == "grpc" {
+		process = startGRPC(t, directory, binary, client, secure, clientOptions)
+		grpcAddress = process.url
+	} else {
+		clientHTTP := &http.Client{Timeout: 3 * time.Second}
+		env := append(append([]string{}, secure...), "APP_GRPC_ADDRESS=127.0.0.1:0")
+		process = startServiceWith(t, directory, binary, clientHTTP, "http", env)
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			data, err := os.ReadFile(process.log)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, line := range strings.Split(string(data), "\n") {
+				var entry struct {
+					Message string `json:"msg"`
+					Address string `json:"address"`
+				}
+				if json.Unmarshal([]byte(line), &entry) == nil && entry.Message == "gRPC server started" {
+					grpcAddress = entry.Address
+				}
+			}
+			if grpcAddress != "" {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if grpcAddress == "" {
+			t.Fatal("dual resource gRPC listener did not become ready")
+		}
+	}
+	call := func(token string, args ...string) []byte {
+		t.Helper()
+		return rpcCall(t, directory, client, grpcAddress, token, nil, clientOptions, args, "")
+	}
+	rpcCall(t, directory, client, grpcAddress, alice, nil, clientOptions, []string{"--resource", "orders", "--action", "create"}, "InvalidArgument")
+	rpcCall(t, directory, client, grpcAddress, alice, nil, clientOptions, []string{"--resource", "orders", "--action", "create", "--title", "one", "--unknown"}, "InvalidArgument")
+	rpcCall(t, directory, client, grpcAddress, alice, nil, clientOptions, []string{"--resource", "orders", "--action", "get", "--id", "0"}, "InvalidArgument")
+	rpcCall(t, directory, client, grpcAddress, alice, nil, clientOptions, []string{"--resource", "orders", "--action", "list", "--page", "0"}, "InvalidArgument")
+	rpcCall(t, directory, client, grpcAddress, alice, nil, clientOptions, []string{"--resource", "orders", "--action", "list", "--timeout", "1ns"}, "DeadlineExceeded")
+	created := call(alice, "--resource", "orders", "--action", "create", "--title", "one", "--enabled=true", "--amount=4")
+	var item struct {
+		ID      string `json:"id"`
+		Enabled bool   `json:"enabled"`
+		Amount  string `json:"amount"`
+	}
+	if err := json.Unmarshal(created, &item); err != nil || item.ID == "" || !item.Enabled || item.Amount != "4" {
+		t.Fatalf("RPC create: %s (%v)", created, err)
+	}
+	call(alice, "--resource", "notes", "--action", "create", "--title", "two")
+	rpcCall(t, directory, client, grpcAddress, bob, nil, clientOptions, []string{"--resource", "orders", "--action", "get", "--id", item.ID}, "NotFound")
+	updated := call(alice, "--resource", "orders", "--action", "update", "--id", item.ID, "--enabled=false", "--amount=0")
+	if !strings.Contains(string(updated), `"enabled":false`) || !strings.Contains(string(updated), `"amount":"0"`) {
+		t.Fatalf("RPC PATCH lost explicit zero values: %s", updated)
+	}
+	if transport == "dual" {
+		request, err := http.NewRequest(http.MethodGet, process.url+"/v1/orders/"+item.ID, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Authorization", "Bearer "+alice)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, readErr := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if readErr != nil || response.StatusCode != http.StatusOK || !strings.Contains(string(body), `"enabled":false`) || !strings.Contains(string(body), `"amount":0`) {
+			t.Fatalf("HTTP could not read RPC-created resource: status=%d body=%s error=%v", response.StatusCode, body, readErr)
+		}
+		request, err = http.NewRequest(http.MethodPatch, process.url+"/v1/orders/"+item.ID, strings.NewReader(`{"enabled":true,"amount":8}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Authorization", "Bearer "+alice)
+		request.Header.Set("Content-Type", "application/json")
+		response, err = http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, readErr = io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if readErr != nil || response.StatusCode != http.StatusOK {
+			t.Fatalf("HTTP update failed: status=%d body=%s error=%v", response.StatusCode, body, readErr)
+		}
+		readBack := call(alice, "--resource", "orders", "--action", "get", "--id", item.ID)
+		if !strings.Contains(string(readBack), `"enabled":true`) || !strings.Contains(string(readBack), `"amount":"8"`) {
+			t.Fatalf("RPC could not read HTTP update: %s", readBack)
+		}
+	}
+}
+func verifyResourceProtoReproduction(t *testing.T, directory string) {
+	t.Helper()
+	paths := []string{
+		"pkg/api/example/v1/example.pb.go", "pkg/api/example/v1/example_grpc.pb.go",
+		"pkg/api/orders/v1/orders.pb.go", "pkg/api/orders/v1/orders_grpc.pb.go",
+		"pkg/api/notes/v1/notes.pb.go", "pkg/api/notes/v1/notes_grpc.pb.go",
+	}
+	original := make(map[string][]byte, len(paths))
+	for _, path := range paths {
+		data, err := os.ReadFile(filepath.Join(directory, path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		original[path] = data
+	}
+	run(t, directory, "make", "proto-generate")
+	for _, path := range paths {
+		data, err := os.ReadFile(filepath.Join(directory, path))
+		if err != nil || string(data) != string(original[path]) {
+			t.Fatalf("multi-module Proto reproduction differs: %s (%v)", path, err)
+		}
+	}
+	consumer := filepath.Join(directory, ".tmp/resource-client-import")
+	if err := os.MkdirAll(consumer, 0750); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"go.mod", "go.sum"} {
+		data, err := os.ReadFile(filepath.Join(directory, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if name == "go.mod" {
+			data = []byte(strings.Replace(string(data), "module example.com/demo", "module example.com/resource-consumer", 1) + "\nrequire example.com/demo v0.0.0\nreplace example.com/demo => ../..\n")
+		}
+		if err := os.WriteFile(filepath.Join(consumer, name), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	client := "package consumer\nimport (orders \"example.com/demo/pkg/api/orders/v1\"; notes \"example.com/demo/pkg/api/notes/v1\")\nvar OrdersClient = orders.NewOrdersServiceClient\nvar NotesClient = notes.NewNotesServiceClient\n"
+	if err := os.WriteFile(filepath.Join(consumer, "client.go"), []byte(client), 0600); err != nil {
+		t.Fatal(err)
+	}
+	run(t, consumer, "go", "test", "-mod=readonly", "./...")
+}
 func writeResourceApplicationTest(t *testing.T, directory string, options templates.Options) {
 	t.Helper()
 	setup, cleanup := resourceAccountStatements(options.Database, options.Authz)

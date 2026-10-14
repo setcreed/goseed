@@ -154,7 +154,8 @@ func startGRPC(t *testing.T, directory, binary, client string, env, clientOption
 	for time.Now().Before(deadline) {
 		select {
 		case <-process.done:
-			t.Fatalf("gRPC startup exited %v", process.err)
+			data, _ := os.ReadFile(process.log)
+			t.Fatalf("gRPC startup exited %v: %s", process.err, data)
 		default:
 		}
 		data, err := os.ReadFile(process.log)
