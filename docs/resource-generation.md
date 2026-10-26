@@ -65,6 +65,8 @@ R07 的 gRPC/dual 资源渲染由 `RenderResourceGRPC` 与 `ResourcePlan.RPCFile
 
 协议插件保持模块路径和版本锁定，不接受替换模块；编译插件的 Go 版本遵循项目最低 Go 1.26.4 策略，允许更新的兼容本机版本，不要求固定为发行归档使用的 Go 版本。
 
+观测能力的依赖叠加保留所选协议已经锁定的 gRPC 和 Gateway 版本，不以 OTLP 的较低间接依赖版本覆盖；组合项目必须直接通过 readonly 构建。观测清单的 `x/text v0.42.0` 对应 `x/sync v0.23.0`，同时交付所需校验和。
+
 R08 的 Gateway 资源复用 RPC Handler/Biz，生成固定 HTTP 映射和安全的 Gateway 模块登记，不生成重复 Gin Handler。ProtoJSON 使用 snake_case、`int64` 字符串及 optional 字段存在性。显式 Gateway 协议复现先在 `.tmp/proto` 生成全部模块产物，再使用项目内 `scripts/openapi` 严格合并器更新模块 Swagger 源、聚合索引及登记摘要；失败回滚已替换文件。生成项目中的合并器源码与生成器严格合并实现由模板测试逐字节比对。
 
 ## 纯模块描述与权限目录

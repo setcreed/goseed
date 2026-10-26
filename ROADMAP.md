@@ -55,6 +55,8 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 
 ## 最近完成
 
+- 2026-10-26 12:22 观测组合依赖修复：OTLP 叠加保留协议已锁定的 gRPC/Gateway 版本，并补齐 x/text v0.42.0 要求的 x/sync v0.23.0 及校验和；资源生成编译回归增加 gRPC/Gateway 全能力组合。
+
 - 2026-10-26 12:21 HTTP OpenAPI 整数契约修复：请求与响应共用字段 schema 渲染，所有业务 int64 字段完整声明 integer/int64，保留字符串长度和 bool 类型。
 
 - 2026-10-26 12:21 增量能力保留修复：统一元数据到模板选项的转换，模块、资源及组装核验完整保留 deployment 等能力；四协议全选回归同时修复纯 gRPC 数据库指标与 Redis 检查之间缺少语句分隔的模板错误。
@@ -93,9 +95,9 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 
 - 2026-10-14 21:48 D11-P03 备份恢复工具与 P04 回退指引完成：SQLite 生成 WAL 在线 `.backup` 与完整性检查，并拒绝损坏源和覆盖已有目标；MySQL 使用 TLS 校验和独立凭据文件的 `mysqldump --single-transaction`，PostgreSQL 使用 `verify-full` 与 custom dump。真实 SQLite WAL、MySQL 8.4.11、PostgreSQL 18.6 隔离恢复演练均核对回备份前数据且保留原备份；专用数据库卷/网络已清理。P04 增加 Debian 原子符号链接切换/回退步骤和隔离模拟；应用二进制回退不回滚 schema。P02 真实 systemd/Nginx 验收随后通过。
 
-- 2026-10-14 21:04 D11-P01 部署契约完成：确定 `--deployment=single-host` 默认关闭、systemd/Nginx 仅作为 `deploy/` 文件副本；支持 HTTP/gRPC/dual/Gateway 及 SQLite/MySQL/PostgreSQL/无数据库，应用单实例绑定 loopback、双协议分离域名、Nginx TLS 终止/验证 gRPC 上游 TLS、不信任任意 forwarded headers。定稿专用服务账号、`/opt` releases+current、`/etc` 私有配置、`/var/lib` 状态和 `/var/backups` 备份目录；固定 SQLite 在线 `.backup`、MySQL InnoDB `mysqldump --single-transaction`、PostgreSQL custom `pg_dump` 及 schema 不自动回退边界。Docker 29.8.2 Linux/arm64 API 只读核验成功；D11-P02 进入实施。
-
 ## 最近验证
+
+- 2026-10-26 12:22 观测组合验收：通过临时生成项目的 go mod tidy -diff 和模块图定位版本差异，仅修正模板依赖，不在验收时 tidy；gRPC 与 Gateway 的 SQLite/Redis/Casbin/指标/追踪/单机部署全选项目 readonly 构建及全包测试编译分别通过（19.547s、18.507s），模板单测与相关 vet、格式、契约及 diff 检查通过。未连接外部 Redis、数据库或 Collector。
 
 - 2026-10-26 12:21 OpenAPI 回归：合并后的 Swagger 在旧实现缺少响应 int64 格式的用例先失败；修复后模板完整单测、模板 vet、格式、契约及 diff 检查通过，覆盖创建、更新和响应的整数、文本与布尔字段。服务运行逻辑未变。
 
@@ -134,5 +136,3 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 - 2026-10-14 23:17 业务试用状态文档核对：`make contract-check`（97 个本地链接、397 个交付文件）与 `git diff --check` 通过；核对施工清单、需求、CLI、开发指南和 ROADMAP 均将小型业务试用标为已完成，并指向证据驱动维护。未运行代码、数据库、Docker 或 race 测试。
 
 - 2026-10-14 23:14 路线聚焦文档检查：`make contract-check`（96 个本地链接、397 个交付文件）与 `git diff --check` 通过；核对 ROADMAP、施工清单、需求、架构、CLI、开发指南和项目规范指向一致，最近完成/验证记录按时间倒序且不超过 20 条。未运行代码、数据库、Docker 或 race 测试。
-
-- 2026-10-14 23:12 Go 版本策略验证：本机 Go 1.27.2 下 `make build`、`make test GO_PACKAGES='./cmd/goseed ./internal/cli ./internal/generator'`、对应 `make vet`、`make contract-check`（96 个本地链接、397 个交付文件）与 `git diff --check` 均通过；确认仅发行包脚本仍请求固定 Go 1.26.4，未运行打包流程、外部数据库/Redis 或 race。

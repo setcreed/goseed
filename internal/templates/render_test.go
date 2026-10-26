@@ -10,6 +10,29 @@ import (
 	"testing/fstest"
 )
 
+func TestObservabilityKeepsProtocolVersions(t *testing.T) {
+	for _, transport := range []string{"grpc", "dual", "gateway"} {
+		for _, redis := range []bool{false, true} {
+			files, err := Render(Project{Name: "demo", Module: "example.com/demo"}, Options{Database: "sqlite", Transport: transport, Redis: redis, Metrics: true, Tracing: true})
+			if err != nil {
+				t.Fatal(transport, redis, err)
+			}
+			var manifest string
+			for _, file := range files {
+				if file.Path == "go.mod" {
+					manifest = string(file.Content)
+				}
+			}
+			if !strings.Contains(manifest, "google.golang.org/grpc v1.84.0") {
+				t.Fatalf("%s observability downgraded gRPC", transport)
+			}
+			if transport == "gateway" && !strings.Contains(manifest, "github.com/grpc-ecosystem/grpc-gateway/v2 v2.31.0") {
+				t.Fatal("observability downgraded Gateway")
+			}
+		}
+	}
+}
+
 func TestGatewayPrunesHTTPAndMapsOnlySelectedBusiness(t *testing.T) {
 	for _, backend := range []string{"sqlite", "mysql", "postgres", "none"} {
 		for _, redis := range []bool{false, true} {

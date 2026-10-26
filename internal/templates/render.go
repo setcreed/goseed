@@ -275,8 +275,17 @@ func mergeObservabilityManifest(files []File, options Options) ([]File, error) {
 		"\tgoogle.golang.org/grpc v1.83.2 // indirect",
 		"\tgolang.org/x/crypto v0.57.0 // indirect",
 		"\tgolang.org/x/net v0.59.0 // indirect",
+		"\tgolang.org/x/sync v0.23.0 // indirect",
 		"\tgolang.org/x/sys v0.48.0 // indirect",
 		"\tgolang.org/x/text v0.42.0 // indirect",
+	}
+	// Protocol manifests already pin newer runtime versions than OTLP needs.
+	// Keep those direct requirements instead of downgrading them on overlay.
+	if options.Transport != "http" {
+		indirectRequirements = filterRequirement(indirectRequirements, "google.golang.org/grpc")
+	}
+	if options.Transport == "gateway" {
+		indirectRequirements = filterRequirement(indirectRequirements, "github.com/grpc-ecosystem/grpc-gateway/v2")
 	}
 	if options.Metrics {
 		requirements = append(requirements, "\tgo.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.47.0")

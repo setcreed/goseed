@@ -27,7 +27,12 @@ func TestResourceGeneratedProjectSmoke(t *testing.T) {
 					t.Error(err)
 				}
 			})
-			plan, err := generator.Prepare(directory, templates.Project{Name: "demo", Module: "example.com/demo"}, templates.Options{Database: "sqlite", Transport: transport})
+			options := templates.Options{Database: "sqlite", Transport: transport}
+			if transport == "grpc" || transport == "gateway" {
+				options.Redis, options.Metrics, options.Tracing = true, true, true
+				options.Authz, options.Deployment = "casbin", "single-host"
+			}
+			plan, err := generator.Prepare(directory, templates.Project{Name: "demo", Module: "example.com/demo"}, options)
 			if err != nil {
 				t.Fatal(err)
 			}
