@@ -275,60 +275,7 @@ func (p ModulePlan) writeWith(write atomicWriter) error {
 			return err
 		}
 	}
-	createdFiles := make([]string, 0, len(p.creates))
-	createdDirs := make([]string, 0, len(p.creates))
-	rollbackCreates := func() []string {
-		var failures []string
-		for i := len(createdFiles) - 1; i >= 0; i-- {
-			if err := os.Remove(createdFiles[i]); err != nil && !os.IsNotExist(err) {
-				failures = append(failures, createdFiles[i]+": "+err.Error())
-			}
-		}
-		for i := len(createdDirs) - 1; i >= 0; i-- {
-			if err := os.Remove(createdDirs[i]); err != nil && !os.IsNotExist(err) {
-				failures = append(failures, createdDirs[i]+": "+err.Error())
-			}
-		}
-		return failures
-	}
-	for _, file := range p.creates {
-		filename := filepath.Join(p.root, filepath.FromSlash(file.Path))
-		dirs, err := makeParents(p.root, filepath.Dir(filename))
-		createdDirs = append(createdDirs, dirs...)
-		if err != nil {
-			return moduleWriteError(fmt.Errorf("create parent for %s: %w", file.Path, err), rollbackCreates())
-		}
-		output, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
-		if err != nil {
-			return moduleWriteError(fmt.Errorf("create %s: %w", file.Path, err), rollbackCreates())
-		}
-		createdFiles = append(createdFiles, filename)
-		if _, err := output.Write(file.Content); err != nil {
-			_ = output.Close()
-			return moduleWriteError(fmt.Errorf("write %s: %w", file.Path, err), rollbackCreates())
-		}
-		if err := output.Close(); err != nil {
-			return moduleWriteError(fmt.Errorf("close %s: %w", file.Path, err), rollbackCreates())
-		}
-	}
-	written := make([]fileUpdate, 0, len(p.updates))
-	for _, update := range p.updates {
-		filename := filepath.Join(p.root, filepath.FromSlash(update.Path))
-		if err := write(filename, update.Content, update.Mode); err != nil {
-			var rollbackErrors []string
-			for i := len(written) - 1; i >= 0; i-- {
-				previous := written[i]
-				path := filepath.Join(p.root, filepath.FromSlash(previous.Path))
-				if restoreErr := write(path, previous.Original, previous.Mode); restoreErr != nil {
-					rollbackErrors = append(rollbackErrors, previous.Path+": "+restoreErr.Error())
-				}
-			}
-			cleanupErrors := rollbackCreates()
-			return moduleWriteError(fmt.Errorf("update %s: %w", update.Path, err), append(rollbackErrors, cleanupErrors...))
-		}
-		written = append(written, update)
-	}
-	return nil
+	return writeProjectFiles(p.root, p.creates, p.updates, write)
 }
 
 func validateCreatePath(root, relative string) error {
@@ -370,11 +317,4 @@ func validateModulePath(root, relative string) error {
 		}
 	}
 	return nil
-}
-
-func moduleWriteError(cause error, rollbackErrors []string) error {
-	if len(rollbackErrors) > 0 {
-		return fmt.Errorf("%w; rollback failed for %s", cause, strings.Join(rollbackErrors, ", "))
-	}
-	return cause
 }

@@ -55,6 +55,8 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 
 ## 最近完成
 
+- 2026-10-26 12:26 增量写入逻辑收拢：模块与资源保留各自输入、路径和兼容复核，共用内部独占创建/索引原子替换/失败回滚实现；补充每个索引写入阶段失败、创建冲突及回滚失败的证据和清理回归。
+
 - 2026-10-26 12:24 CI 生成编译回归：新增 make template-smoke 并接入普通 CI，覆盖四协议资源字段边界及 gRPC/Gateway 全能力组合；缓存键纳入模板依赖清单与观测校验和。README 和开发指南同步前置工具、编译范围及外部服务边界。
 
 - 2026-10-26 12:22 观测组合依赖修复：OTLP 叠加保留协议已锁定的 gRPC/Gateway 版本，并补齐 x/text v0.42.0 要求的 x/sync v0.23.0 及校验和；资源生成编译回归增加 gRPC/Gateway 全能力组合。
@@ -93,9 +95,9 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 
 - 2026-10-14 23:04 默认业务试用完成：Go 1.27.2 下生成 HTTP/SQLite/JWT 项目，生成 item CRUD 与 SQLite 迁移，再增量添加 checkout/returns 模块；生成项目构建、`go test ./...`、`go vet ./...` 通过。实际请求验证未认证拒绝、认证 CRUD、零值 PATCH、主体隔离及手写 checkout 操作；新增模块后手写 Biz/Handler 字节保持不变。没有发现生成流程的功能阻断。试用发现 Makefile 曾强制下载 Go 1.26.4；本机 Go 1.27.2 验证通过，因此将版本策略复核列为下一项。
 
-- 2026-10-14 22:47 D11 单机部署完成：`make template-deployment` 全部通过，锁定 Debian 13 镜像实际运行 systemd 与 Nginx；专用账号/服务硬化、HTTP/gRPC TLS 代理、SIGTERM 停止与重启健康检查、错误证书拒绝路径通过。修正测试镜像缺少 CA bundle 导致 apt HTTPS 校验失败的问题，改用项目已锁定 Go 镜像的 CA bundle 并显式配置 CAInfo；修正 Debian 镜像启动时预启用 Nginx 导致生成配置未加载，以及 `systemctl is-active` 停止状态的测试断言。结合已通过的四协议 Nginx 语法、SQLite WAL/MySQL/PostgreSQL TLS 恢复和 release 回退演练，D11 全部检查点完成；仅测试容器，未触碰宿主或生产服务。
-
 ## 最近验证
+
+- 2026-10-26 12:26 写入重构验收：cmd、CLI、生成器与模板完整相关单测通过（生成器 29.078s），覆盖现有冲突/过期输入/符号链接和新增逐阶段回滚用例；最终 make template-smoke 四协议生成项目测试编译通过（55.579s），生成器构建、相关 vet、格式、契约及 diff 检查通过。本轮未运行 lint、race、Docker、外部数据库或远端 Actions。
 
 - 2026-10-26 12:24 CI 本地验收：make template-smoke 实际执行通过（53.372s），包含四种生成项目 readonly 构建与全部测试编译；工作流 YAML 解析及步骤检查、格式、文档契约与 diff 检查通过。尚未推送，未运行远端 Actions；不代表外部服务运行验收。
 
@@ -134,5 +136,3 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 - 2026-10-15 00:06 文档导航整合验证：`make contract-check` 通过（99 个本地链接、393 个实际交付文件），Markdown 本地链接核对与 `git diff --check` 通过；旧模板文件名和已知过期部署/路线表述检索无命中。未运行代码、数据库、Docker 或 race 测试。
 
 - 2026-10-14 23:41 Linux amd64 发行包验收：`make verify-package ARCHIVE=.tmp/dist/goseed_v0.0.0-d9.1_linux_amd64.tar.gz` 通过；发行包在 Debian `trixie-slim` 的 `linux/amd64` 模拟容器中运行 `--version`、`--help` 并生成 52 文件默认项目。生成项目以 Go 1.27.2、`GOOS=linux GOARCH=amd64 CGO_ENABLED=0` readonly 构建；容器中显式初始化 SQLite 迁移、启动服务，health/ready、未认证拒绝（401）和认证创建/列表通过。`make contract-check`（97 个本地链接、397 个交付文件）与 `git diff --check` 通过。测试运行于 Apple Silicon Docker amd64 模拟环境，不代表原生硬件；专用容器和本轮临时目录已清理。
-
-- 2026-10-14 23:17 业务试用状态文档核对：`make contract-check`（97 个本地链接、397 个交付文件）与 `git diff --check` 通过；核对施工清单、需求、CLI、开发指南和 ROADMAP 均将小型业务试用标为已完成，并指向证据驱动维护。未运行代码、数据库、Docker 或 race 测试。
