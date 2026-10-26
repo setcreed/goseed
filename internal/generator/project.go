@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/setcreed/goseed/internal/openapi"
+	"github.com/setcreed/goseed/internal/templates"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -36,6 +37,15 @@ type ProjectMetadata struct {
 	Tracing         bool             `yaml:"tracing,omitempty"`
 	Deployment      string           `yaml:"deployment,omitempty"`
 	Modules         []ModuleMetadata `yaml:"-"`
+}
+
+// templateOptions is the complete capability projection for incremental work.
+func (m ProjectMetadata) templateOptions() templates.Options {
+	return templates.Options{
+		Database: m.Database, Redis: m.Redis, Authz: m.Authorization,
+		Transport: m.Transport, Metrics: m.Metrics, Tracing: m.Tracing,
+		Deployment: m.Deployment,
+	}
 }
 
 // ModuleMetadata describes one generated business namespace.

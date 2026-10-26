@@ -210,12 +210,12 @@ func PrepareResource(root, name string, options ResourceOptions) (ResourcePlan, 
 	for i, field := range spec.Fields {
 		coreFields[i] = templates.ResourceField{SchemaField: fields[i], Required: field.Required}
 	}
-	plan.coreFiles, err = templates.RenderResourceCore(templates.Project{Name: state.Metadata.Name, Module: state.Metadata.Module}, templates.Options{Database: state.Metadata.Database, Transport: state.Metadata.Transport, Authz: state.Metadata.Authorization, Redis: state.Metadata.Redis, Metrics: state.Metadata.Metrics, Tracing: state.Metadata.Tracing}, name, coreFields)
+	plan.coreFiles, err = templates.RenderResourceCore(templates.Project{Name: state.Metadata.Name, Module: state.Metadata.Module}, state.Metadata.templateOptions(), name, coreFields)
 	if err != nil {
 		return ResourcePlan{}, err
 	}
 	if state.Metadata.Transport == "http" || state.Metadata.Transport == "dual" {
-		plan.httpFiles, err = templates.RenderResourceHTTP(templates.Project{Name: state.Metadata.Name, Module: state.Metadata.Module}, templates.Options{Database: state.Metadata.Database, Transport: state.Metadata.Transport, Authz: state.Metadata.Authorization, Redis: state.Metadata.Redis, Metrics: state.Metadata.Metrics, Tracing: state.Metadata.Tracing}, name, coreFields)
+		plan.httpFiles, err = templates.RenderResourceHTTP(templates.Project{Name: state.Metadata.Name, Module: state.Metadata.Module}, state.Metadata.templateOptions(), name, coreFields)
 		if err != nil {
 			return ResourcePlan{}, err
 		}
@@ -233,7 +233,7 @@ func PrepareResource(root, name string, options ResourceOptions) (ResourcePlan, 
 		}
 	}
 	if state.Metadata.Transport == "grpc" || state.Metadata.Transport == "dual" || state.Metadata.Transport == "gateway" {
-		plan.rpcFiles, err = templates.RenderResourceGRPC(templates.Project{Name: state.Metadata.Name, Module: state.Metadata.Module}, templates.Options{Database: state.Metadata.Database, Transport: state.Metadata.Transport, Authz: state.Metadata.Authorization, Redis: state.Metadata.Redis, Metrics: state.Metadata.Metrics, Tracing: state.Metadata.Tracing}, name, coreFields)
+		plan.rpcFiles, err = templates.RenderResourceGRPC(templates.Project{Name: state.Metadata.Name, Module: state.Metadata.Module}, state.Metadata.templateOptions(), name, coreFields)
 		if err != nil {
 			return ResourcePlan{}, err
 		}

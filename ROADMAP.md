@@ -55,6 +55,8 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 
 ## 最近完成
 
+- 2026-10-26 12:21 增量能力保留修复：统一元数据到模板选项的转换，模块、资源及组装核验完整保留 deployment 等能力；四协议全选回归同时修复纯 gRPC 数据库指标与 Redis 检查之间缺少语句分隔的模板错误。
+
 - 2026-10-26 11:32 元数据 YAML 序列化修复：改用现有 YAML 编码器写出完整结构并传播编码错误，保留两空格缩进；合法项目、模块和资源名称 null 不再破坏后续增量生成，兼容已有 v1 元数据。
 
 - 2026-10-26 11:30 资源字段协议命名修复：区分业务字段与创建、更新、响应消息的 Proto Go 字段，覆盖保留方法、getter、数字和 optional 合成 oneof；修正数字分段的资源 spec GoName。协议插件保持固定模块/版本，编译器改为接受满足最低 Go 1.26.4 的本机版本。
@@ -93,9 +95,9 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 
 - 2026-10-14 20:56 D10 可观测性完成：实现 `--metrics`/`--tracing` 独立选择、默认关闭、生成元数据兼容、依赖/源码裁剪；HTTP、gRPC、dual、Gateway 覆盖请求量/状态/延迟/依赖指标及 W3C TraceContext 父子传播，RPC 健康 Watch 也受追踪/指标拦截。Exporter 验证独立 endpoint 与 headers、HTTPS/loopback 限制、无 baggage/请求内容/凭据导出、3s 导出超时及共享 5s 失败清理/关闭预算。四协议指标和追踪项目 readonly 编译通过；本地 OTLP 接收器解码真实 protobuf 并核对 trace parent；HTTP 与 Gateway 双开组合、不可用出口限时关闭及观测包定向 race 通过。指标/追踪/组合集成矩阵用时 95.589s；race 与基准目标用时 9.149s。Apple M1 Pro / macOS arm64 微基准：Metrics `733.3 ns/op, 568 B/op, 5 allocs/op`，Trace `591.8 ns/op, 801 B/op, 8 allocs/op`，仅作环境基线，不代表线上请求端到端开销。根包定向单测、`make contract-check`（94 个链接、380 个交付文件）、`make fmt-check` 与 `git diff --check` 通过；未连接外部生产 Collector。
 
-- 2026-10-14 19:53 D10-P01 观测契约与选型完成：固定 `--metrics`/`--tracing` 独立默认关闭、OpenTelemetry Go v1.47.0、OTLP/HTTP protobuf 主动推送、无入站指标端点、低基数标签、parent-based 0.1 采样、仅传播 TraceContext、远端 HTTPS/loopback 明文、3s 导出超时与 5s 关闭预算；记录 HTTP exporter 的 gRPC 依赖权衡。官方固定版本要求 Go 1.26.0，兼容项目工具链；P02 转为当前任务。
-
 ## 最近验证
+
+- 2026-10-26 12:21 能力保留回归：旧实现复现 single-host 在增量模块/资源生成后丢失；四协议、模块/资源及 Redis/Casbin/指标/追踪/部署全选的 8 个用例通过，模块与资源协议组合写入定向回归、相关 vet、格式、契约及 diff 检查通过。
 
 - 2026-10-26 11:32 元数据回归：新增用例先在旧实现复现项目 null 与增量模块/资源 null 读取失败；修复后 cmd、CLI、生成器完整单测及相关 vet 通过，格式、契约与 diff 检查通过。未修改生成服务运行行为，无外部服务验收。
 
@@ -134,5 +136,3 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 - 2026-10-14 23:12 Go 版本策略验证：本机 Go 1.27.2 下 `make build`、`make test GO_PACKAGES='./cmd/goseed ./internal/cli ./internal/generator'`、对应 `make vet`、`make contract-check`（96 个本地链接、397 个交付文件）与 `git diff --check` 均通过；确认仅发行包脚本仍请求固定 Go 1.26.4，未运行打包流程、外部数据库/Redis 或 race。
 
 - 2026-10-14 23:04 默认业务试用验证：本机 Go `1.27.2`、`GOTOOLCHAIN=local`；生成项目 `go test -mod=readonly -timeout=5m ./...`、`go vet -mod=readonly ./...` 通过，SQLite 显式迁移到 schema version 2。回环请求经批准的隔离本机端口运行通过，覆盖 health、未认证拒绝、认证创建/列表/零值更新、跨主体 404 和手写 checkout 成功/非法输入；未使用 Docker 或 race。
-
-- 2026-10-14 22:47 D11-P02 完整运行验收：`make template-deployment` 通过；重新构建锁定 Debian/systemd/Nginx 测试镜像后，隔离 dual 项目服务硬化检查、HTTP TLS 与 gRPC 上游 TLS 健康请求、SIGTERM 停止状态、重启后健康恢复及错误证书失败路径全部通过。`make template-deployment-nginx` 四协议配置/错误证书用例通过；测试专用 Docker 容器自动清理。

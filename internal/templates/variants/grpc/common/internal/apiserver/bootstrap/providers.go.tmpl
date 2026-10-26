@@ -55,7 +55,13 @@ func New(settings config.Config, version string) (*App,error) {
 	modules,err:=newModuleServices(moduleDependencies{Context:startup,Logger:logger,[[if ne .Database "none"]]Database:db.DB,[[end]][[if .Redis]]Cache:caching,[[end]]})
 	if err!=nil{[[if .Redis]]_ = caching.Close();[[end]][[if ne .Database "none"]]_ = db.Close();[[end]]_ = logger.Sync();return nil,err}
 	do.ProvideValue(injector,examplehandler.New(examplebiz.[[if .Redis]]NewCached([[if ne .Database "none"]]examplestore.New(db.DB),[[end]]caching)[[else]]New([[if ne .Database "none"]]examplestore.New(db.DB)[[end]])[[end]]))
-	checkDependency:=func(ctx context.Context)error{[[if ne .Database "none"]]if err:=db.Pool.PingContext(ctx);err!=nil{[[if .Metrics]]metrics.RecordDependency(ctx,"database",false)[[end]];return err};[[if .Metrics]]metrics.RecordDependency(ctx,"database",true)[[end]][[end]][[if .Redis]]if err:=caching.Check(ctx);err!=nil{[[if .Metrics]]metrics.RecordDependency(ctx,"redis",false)[[end]];return err};[[if .Metrics]]metrics.RecordDependency(ctx,"redis",true)[[end]];return nil[[else]]return ctx.Err()[[end]]}
+		checkDependency:=func(ctx context.Context)error{
+			[[if ne .Database "none"]]if err:=db.Pool.PingContext(ctx);err!=nil{[[if .Metrics]]metrics.RecordDependency(ctx,"database",false);[[end]]return err}
+			[[if .Metrics]]metrics.RecordDependency(ctx,"database",true)[[end]][[end]]
+			[[if .Redis]]if err:=caching.Check(ctx);err!=nil{[[if .Metrics]]metrics.RecordDependency(ctx,"redis",false);[[end]]return err}
+			[[if .Metrics]]metrics.RecordDependency(ctx,"redis",true)[[end]][[end]]
+			return ctx.Err()
+		}
 	do.ProvideValue(injector,&rpc.Readiness{CheckDependency:checkDependency})
 	do.Provide(injector,func(i do.Injector)(*rpc.Server,error){
 		configuration,err := do.Invoke[config.Config](i); if err != nil { return nil,err }

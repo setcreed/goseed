@@ -66,7 +66,7 @@ func validateModuleAssembly(state ProjectState) (map[string][]byte, error) {
 		}
 	}
 	project := templates.Project{Name: state.Metadata.Name, Module: state.Metadata.Module}
-	options := templates.Options{Database: state.Metadata.Database, Redis: state.Metadata.Redis, Authz: state.Metadata.Authorization, Transport: state.Metadata.Transport, Metrics: state.Metadata.Metrics, Tracing: state.Metadata.Tracing}
+	options := state.Metadata.templateOptions()
 	files, err := templates.RenderWithModules(project, options, entries)
 	if err != nil {
 		return nil, err
