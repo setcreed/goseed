@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/setcreed/goseed/internal/templates"
+	"go.yaml.in/yaml/v3"
 )
 
 // TemplateVersion is the compatibility version of generated project files.
@@ -259,29 +260,36 @@ func renderMetadata(project templates.Project, options templates.Options) ([]byt
 	if options.Transport == "" {
 		options.Transport = "http"
 	}
-	return renderMetadataModules(project, options, []ModuleMetadata{{Name: "example", Type: "module"}}), nil
+	return renderMetadataModules(project, options, []ModuleMetadata{{Name: "example", Type: "module"}})
 }
 
-func renderMetadataModules(project templates.Project, options templates.Options, modules []ModuleMetadata) []byte {
-	var output strings.Builder
-	fmt.Fprintf(&output, "version: %d\ntemplate_version: %d\nname: %s\nmodule: %s\ndatabase: %s\nauthentication: jwt\nauthorization: %s\nredis: %t\ntransport: %s\n", ProjectMetadataVersion, TemplateVersion, project.Name, project.Module, optionOr(options.Database, "sqlite"), optionOr(options.Authz, "none"), options.Redis, optionOr(options.Transport, "http"))
-	if options.Metrics {
-		output.WriteString("metrics: true\n")
+func renderMetadataModules(project templates.Project, options templates.Options, modules []ModuleMetadata) ([]byte, error) {
+	manifest := struct {
+		ProjectMetadata `yaml:",inline"`
+		Modules         []ModuleMetadata `yaml:"modules"`
+	}{
+		ProjectMetadata: ProjectMetadata{
+			Version: ProjectMetadataVersion, TemplateVersion: TemplateVersion,
+			Name: project.Name, Module: project.Module,
+			Database: optionOr(options.Database, "sqlite"), Authentication: "jwt",
+			Authorization: optionOr(options.Authz, "none"), Redis: options.Redis,
+			Transport: optionOr(options.Transport, "http"), Metrics: options.Metrics, Tracing: options.Tracing,
+		},
+		Modules: modules,
 	}
-	if options.Tracing {
-		output.WriteString("tracing: true\n")
+	if options.Deployment != "none" {
+		manifest.Deployment = options.Deployment
 	}
-	if options.Deployment != "" && options.Deployment != "none" {
-		fmt.Fprintf(&output, "deployment: %s\n", options.Deployment)
+	var output bytes.Buffer
+	encoder := yaml.NewEncoder(&output)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(manifest); err != nil {
+		return nil, fmt.Errorf("encode project metadata: %w", err)
 	}
-	output.WriteString("modules:\n")
-	for _, module := range modules {
-		fmt.Fprintf(&output, "  - name: %s\n    type: %s\n", module.Name, module.Type)
-		if module.Type == "resource" {
-			fmt.Fprintf(&output, "    spec: %s\n    field_version: %d\n", module.Spec, module.FieldVersion)
-		}
+	if err := encoder.Close(); err != nil {
+		return nil, fmt.Errorf("close project metadata encoder: %w", err)
 	}
-	return []byte(output.String())
+	return output.Bytes(), nil
 }
 
 func optionOr(value, fallback string) string {

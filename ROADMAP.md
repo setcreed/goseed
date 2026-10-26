@@ -55,6 +55,8 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 
 ## 最近完成
 
+- 2026-10-26 11:32 元数据 YAML 序列化修复：改用现有 YAML 编码器写出完整结构并传播编码错误，保留两空格缩进；合法项目、模块和资源名称 null 不再破坏后续增量生成，兼容已有 v1 元数据。
+
 - 2026-10-26 11:30 资源字段协议命名修复：区分业务字段与创建、更新、响应消息的 Proto Go 字段，覆盖保留方法、getter、数字和 optional 合成 oneof；修正数字分段的资源 spec GoName。协议插件保持固定模块/版本，编译器改为接受满足最低 Go 1.26.4 的本机版本。
 
 - 2026-10-15 02:27 v0.1.2 补丁版发布：资源 Store 精度测试改在存储层直接验证，发布提交 `5af2d2b`；GitHub Actions run `38614318633` 通过。Go 1.26.4 构建 macOS/Linux amd64/arm64 四个平台包及 SHA-256，远端 8 个资产摘要核对一致；固定版本与 `@latest` 安装均为 v0.1.2，Release 已公开为 Latest，资产保留在 `dist/v0.1.2/`。
@@ -93,9 +95,9 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 
 - 2026-10-14 19:53 D10-P01 观测契约与选型完成：固定 `--metrics`/`--tracing` 独立默认关闭、OpenTelemetry Go v1.47.0、OTLP/HTTP protobuf 主动推送、无入站指标端点、低基数标签、parent-based 0.1 采样、仅传播 TraceContext、远端 HTTPS/loopback 明文、3s 导出超时与 5s 关闭预算；记录 HTTP exporter 的 gRPC 依赖权衡。官方固定版本要求 Go 1.26.0，兼容项目工具链；P02 转为当前任务。
 
-- 2026-10-14 19:37 D9 版本、分发与维护基线完成：生成器显示语义版本/提交/模板/spec；提供显式源码安装、固定 Go 1.26.4 的单平台本地包、依赖许可证、版本 manifest、可复现 SHA-256 与损坏拒绝；v1 旧式 metadata 能增量生成，不兼容版本在写前拒绝；维护流程和人工升级步骤已文档化。macOS arm64/amd64（Rosetta）与 Linux arm64 实际运行/生成通过；Linux amd64 运行保留未验证。D10 转为下一阶段；无 tag、公开 release 或远端推送。
-
 ## 最近验证
+
+- 2026-10-26 11:32 元数据回归：新增用例先在旧实现复现项目 null 与增量模块/资源 null 读取失败；修复后 cmd、CLI、生成器完整单测及相关 vet 通过，格式、契约与 diff 检查通过。未修改生成服务运行行为，无外部服务验收。
 
 - 2026-10-26 11:30 字段命名回归：模板与生成器完整单测通过；四协议 SQLite 真实生成项目 readonly 构建及全部测试编译通过（50.887s），覆盖 15 个命名边界字段；相关 vet、格式、文档契约及 diff 检查通过。使用本机 Go 1.27.2，无 Docker、外部数据库或 race。
 
@@ -134,5 +136,3 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 - 2026-10-14 23:04 默认业务试用验证：本机 Go `1.27.2`、`GOTOOLCHAIN=local`；生成项目 `go test -mod=readonly -timeout=5m ./...`、`go vet -mod=readonly ./...` 通过，SQLite 显式迁移到 schema version 2。回环请求经批准的隔离本机端口运行通过，覆盖 health、未认证拒绝、认证创建/列表/零值更新、跨主体 404 和手写 checkout 成功/非法输入；未使用 Docker 或 race。
 
 - 2026-10-14 22:47 D11-P02 完整运行验收：`make template-deployment` 通过；重新构建锁定 Debian/systemd/Nginx 测试镜像后，隔离 dual 项目服务硬化检查、HTTP TLS 与 gRPC 上游 TLS 健康请求、SIGTERM 停止状态、重启后健康恢复及错误证书失败路径全部通过。`make template-deployment-nginx` 四协议配置/错误证书用例通过；测试专用 Docker 容器自动清理。
-
-- 2026-10-14 19:38 D9-P04 清洁提交最终验收：提交 `a5ab852` 上 `make install VERSION=v0.0.0-d9` 安装到隔离目录并显示正确提交/模板/spec；`make package` 从 clean source 生成 macOS/Linux amd64/arm64 四个包，manifest 均记录相同完整提交及 `source_dirty=false`，`make verify-package` 全部通过，macOS arm64 归档重建摘要一致。该 clean commit 的 macOS arm64 本机、macOS amd64 Rosetta、Linux arm64 固定断网容器包均运行 `--version` 并生成 52 个文件。Linux amd64 仍未运行：本机锁定镜像只有 arm64 内容层，强制 amd64 时 Docker 报缺失 layer；保留未验证。Windows 原生未测试。

@@ -72,7 +72,10 @@ func (p *ResourcePlan) prepareCommit(state ProjectState) error {
 		return err
 	}
 	updates := make([]fileUpdate, 0, 3)
-	metadataContent := renderMetadataModules(project, options, metadata)
+	metadataContent, err := renderMetadataModules(project, options, metadata)
+	if err != nil {
+		return err
+	}
 	if state.Metadata.Transport != "grpc" {
 		var source []byte
 		for _, file := range files {

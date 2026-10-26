@@ -98,7 +98,10 @@ func PrepareModule(root, name string) (ModulePlan, error) {
 	if err != nil {
 		return ModulePlan{}, err
 	}
-	metadataContent := renderMetadataModules(project, options, metadata)
+	metadataContent, err := renderMetadataModules(project, options, metadata)
+	if err != nil {
+		return ModulePlan{}, err
+	}
 	registryPath := "internal/apiserver/bootstrap/modules_gen.go"
 	metadataPath := "goseed.yaml"
 	updates := []fileUpdate{}
