@@ -120,6 +120,8 @@ goseed gen resource product --spec specs/product.yaml --migration
 
 维护者资料、开发记录和后续规划单独列出，不影响使用者的上手路径：
 
+源码维护可使用 `make template-smoke` 检查四协议资源项目的构建与测试编译；前置工具和完整验证入口见开发指南。
+
 - [开发指南](docs/development.md) · [架构说明](docs/architecture.md) · [资源生成设计](docs/resource-generation.md)
 - [依赖与许可证记录](docs/dependencies.md) · [施工计划](docs/implementation.md) · [项目进度与验证记录](ROADMAP.md)
 - [协作规范](AGENTS.md)

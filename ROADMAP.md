@@ -55,6 +55,8 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 
 ## 最近完成
 
+- 2026-10-26 12:24 CI 生成编译回归：新增 make template-smoke 并接入普通 CI，覆盖四协议资源字段边界及 gRPC/Gateway 全能力组合；缓存键纳入模板依赖清单与观测校验和。README 和开发指南同步前置工具、编译范围及外部服务边界。
+
 - 2026-10-26 12:22 观测组合依赖修复：OTLP 叠加保留协议已锁定的 gRPC/Gateway 版本，并补齐 x/text v0.42.0 要求的 x/sync v0.23.0 及校验和；资源生成编译回归增加 gRPC/Gateway 全能力组合。
 
 - 2026-10-26 12:21 HTTP OpenAPI 整数契约修复：请求与响应共用字段 schema 渲染，所有业务 int64 字段完整声明 integer/int64，保留字符串长度和 bool 类型。
@@ -93,9 +95,9 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 
 - 2026-10-14 22:47 D11 单机部署完成：`make template-deployment` 全部通过，锁定 Debian 13 镜像实际运行 systemd 与 Nginx；专用账号/服务硬化、HTTP/gRPC TLS 代理、SIGTERM 停止与重启健康检查、错误证书拒绝路径通过。修正测试镜像缺少 CA bundle 导致 apt HTTPS 校验失败的问题，改用项目已锁定 Go 镜像的 CA bundle 并显式配置 CAInfo；修正 Debian 镜像启动时预启用 Nginx 导致生成配置未加载，以及 `systemctl is-active` 停止状态的测试断言。结合已通过的四协议 Nginx 语法、SQLite WAL/MySQL/PostgreSQL TLS 恢复和 release 回退演练，D11 全部检查点完成；仅测试容器，未触碰宿主或生产服务。
 
-- 2026-10-14 21:48 D11-P03 备份恢复工具与 P04 回退指引完成：SQLite 生成 WAL 在线 `.backup` 与完整性检查，并拒绝损坏源和覆盖已有目标；MySQL 使用 TLS 校验和独立凭据文件的 `mysqldump --single-transaction`，PostgreSQL 使用 `verify-full` 与 custom dump。真实 SQLite WAL、MySQL 8.4.11、PostgreSQL 18.6 隔离恢复演练均核对回备份前数据且保留原备份；专用数据库卷/网络已清理。P04 增加 Debian 原子符号链接切换/回退步骤和隔离模拟；应用二进制回退不回滚 schema。P02 真实 systemd/Nginx 验收随后通过。
-
 ## 最近验证
+
+- 2026-10-26 12:24 CI 本地验收：make template-smoke 实际执行通过（53.372s），包含四种生成项目 readonly 构建与全部测试编译；工作流 YAML 解析及步骤检查、格式、文档契约与 diff 检查通过。尚未推送，未运行远端 Actions；不代表外部服务运行验收。
 
 - 2026-10-26 12:22 观测组合验收：通过临时生成项目的 go mod tidy -diff 和模块图定位版本差异，仅修正模板依赖，不在验收时 tidy；gRPC 与 Gateway 的 SQLite/Redis/Casbin/指标/追踪/单机部署全选项目 readonly 构建及全包测试编译分别通过（19.547s、18.507s），模板单测与相关 vet、格式、契约及 diff 检查通过。未连接外部 Redis、数据库或 Collector。
 
@@ -134,5 +136,3 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 - 2026-10-14 23:41 Linux amd64 发行包验收：`make verify-package ARCHIVE=.tmp/dist/goseed_v0.0.0-d9.1_linux_amd64.tar.gz` 通过；发行包在 Debian `trixie-slim` 的 `linux/amd64` 模拟容器中运行 `--version`、`--help` 并生成 52 文件默认项目。生成项目以 Go 1.27.2、`GOOS=linux GOARCH=amd64 CGO_ENABLED=0` readonly 构建；容器中显式初始化 SQLite 迁移、启动服务，health/ready、未认证拒绝（401）和认证创建/列表通过。`make contract-check`（97 个本地链接、397 个交付文件）与 `git diff --check` 通过。测试运行于 Apple Silicon Docker amd64 模拟环境，不代表原生硬件；专用容器和本轮临时目录已清理。
 
 - 2026-10-14 23:17 业务试用状态文档核对：`make contract-check`（97 个本地链接、397 个交付文件）与 `git diff --check` 通过；核对施工清单、需求、CLI、开发指南和 ROADMAP 均将小型业务试用标为已完成，并指向证据驱动维护。未运行代码、数据库、Docker 或 race 测试。
-
-- 2026-10-14 23:14 路线聚焦文档检查：`make contract-check`（96 个本地链接、397 个交付文件）与 `git diff --check` 通过；核对 ROADMAP、施工清单、需求、架构、CLI、开发指南和项目规范指向一致，最近完成/验证记录按时间倒序且不超过 20 条。未运行代码、数据库、Docker 或 race 测试。

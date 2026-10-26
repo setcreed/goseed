@@ -13,7 +13,7 @@ export GOWORK := off
 export GOTOOLCHAIN := local
 
 .DEFAULT_GOAL := check
-.PHONY: build install package verify-package test race vet lint fmt fmt-check check contract-check tools compatibility compatibility-cross compatibility-db protocol-tools protocol-check template-container template-db template-redis template-deployment template-deployment-db template-deployment-nginx
+.PHONY: build install package verify-package test race vet lint fmt fmt-check check contract-check tools compatibility compatibility-cross compatibility-db protocol-tools protocol-check template-smoke template-container template-db template-redis template-deployment template-deployment-db template-deployment-nginx
 
 build:
 	$(GO) build -mod=readonly -trimpath -ldflags '-X main.version=$(VERSION) -X main.commit=$(COMMIT)' -o bin/goseed ./cmd/goseed
@@ -75,6 +75,9 @@ protocol-tools:
 
 protocol-check:
 	python3 scripts/protocol-check.py
+
+template-smoke:
+	$(GO) test -mod=readonly -count=1 -timeout=10m ./tests/integration -run '^TestResourceGeneratedProjectSmoke$$'
 
 template-container:
 	GOSEED_TEST_DOCKER=1 $(GO) test -mod=readonly -count=1 -timeout=15m -v ./tests/integration -run '^Test(DefaultProject|NoDatabaseProject|CasbinFileContainer|GRPCContainer|DualContainer|GatewayContainer)$$'

@@ -25,6 +25,9 @@ make check
 make test GO_PACKAGES='./cmd/goseed ./internal/cli ./internal/generator'
 make vet GO_PACKAGES='./cmd/goseed ./internal/cli ./internal/generator'
 make protocol-check
+
+# 四协议资源项目的 readonly 构建和测试编译，需先安装协议工具
+make template-smoke
 ```
 
 真实服务验收使用隔离数据库、Redis 和容器，只在显式执行对应目标时启动：
@@ -42,7 +45,7 @@ make protocol-check
 
 [CI 工作流](../.github/workflows/ci.yml) 在推送 main、面向 main 的 PR 和手动触发时运行。使用 Ubuntu 24.04，Go 版本从 `go.mod` 读取；官方 Actions 以完整提交 SHA 固定，工作流仅申请仓库内容读取权限。
 
-CI 检查格式与文档契约，安装锁定协议工具，执行生成器/CLI/模板单元测试、缓存位置定向集成回归、vet 和构建。缓存覆盖仓库实际使用的 `.tmp/go-cache` 与 `.tmp/mod-cache`；新 runner 首次构建需要下载模板运行依赖。普通 CI 不运行 Docker、外部数据库、race 或完整生成组合运行矩阵，不能代替这些能力的专项验收。
+CI 检查格式与文档契约，安装锁定协议工具，执行生成器/CLI/模板单元测试、缓存位置定向集成回归、`make template-smoke`、vet 和构建。资源编译回归覆盖 HTTP、gRPC、dual、Gateway 的字段命名边界，其中 gRPC/Gateway 同时开启 Redis、Casbin、指标、追踪和单机部署；只编译，不连接外部依赖。缓存覆盖仓库实际使用的 `.tmp/go-cache` 与 `.tmp/mod-cache`，缓存键包含模板依赖清单；新 runner 首次构建需要下载模板运行依赖。普通 CI 不运行 Docker、外部数据库、race 或完整生成组合运行矩阵，不能代替这些能力的专项验收。
 
 发布仍按施工计划的版本发布流程人工执行，CI 不自动创建标签或 Release。
 

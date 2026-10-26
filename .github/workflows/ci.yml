@@ -43,7 +43,7 @@ jobs:
           path: |
             .tmp/go-cache
             .tmp/mod-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.sum', 'dependencies.lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.sum', 'dependencies.lock.json', 'internal/templates/**/go.mod.tmpl', 'internal/templates/**/go.sum.tmpl', 'internal/templates/variants/observability/otel.sum') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go.outputs.go-version }}-
 
@@ -61,6 +61,9 @@ jobs:
 
       - name: Test generated project cache behavior
         run: go test -mod=readonly -timeout=5m -count=1 ./tests/integration -run '^TestGeneratedMakefileRespectsGoCaches$'
+
+      - name: Compile generated resource projects
+        run: make template-smoke
 
       - name: Vet and build
         run: |
