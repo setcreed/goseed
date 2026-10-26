@@ -29,6 +29,8 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 
 ## 下一步施工顺序
 
+v0.1.3 补丁发布进行中：发行源码包含字段协议命名、YAML 元数据、增量能力保留、OpenAPI int64 与观测依赖修复，以及写入回滚收拢和四协议编译 CI。源码提交 `c1ec456` 的 [CI](https://github.com/setcreed/goseed/actions/runs/40269646433) 已通过；沿用 V01 至 V04，验证四平台包和真实安装后公开 Release。
+
 基础 GitHub Actions CI 已落地，[首轮检查](https://github.com/setcreed/goseed/actions/runs/38609806274) 全部通过；[v0.1.2](https://github.com/setcreed/goseed/releases/tag/v0.1.2) 已正式发布为 Latest，修复资源 `int64` 精度测试与常见 Biz 范围校验冲突。[发布提交的 CI](https://github.com/setcreed/goseed/actions/runs/38614318633)、四平台资产、固定版本和 Latest 安装均已验收。v0.1.1 的缓存修复与旧项目处理范围见 [CI 与补丁发布清单](docs/implementation.md#基础-ci-与-v011-补丁发布) 和[旧项目处理说明](docs/templates.md#构建缓存与旧项目处理)。已有项目仍需手动更新 Makefile，不自动清理用户缓存或改写已发布标签。
 
 安装与 CLI 使用收口及真实远端安装已验收，范围见 [施工清单](docs/implementation.md#安装与-cli-使用收口施工清单)。四平台发行包及 SHA-256 可下载；当前没有已排定的新功能，后续按实际使用反馈维护。发布流程见 [首次版本发布清单](docs/implementation.md#首次版本发布清单)。
@@ -96,6 +98,8 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 - 2026-10-14 23:04 默认业务试用完成：Go 1.27.2 下生成 HTTP/SQLite/JWT 项目，生成 item CRUD 与 SQLite 迁移，再增量添加 checkout/returns 模块；生成项目构建、`go test ./...`、`go vet ./...` 通过。实际请求验证未认证拒绝、认证 CRUD、零值 PATCH、主体隔离及手写 checkout 操作；新增模块后手写 Biz/Handler 字节保持不变。没有发现生成流程的功能阻断。试用发现 Makefile 曾强制下载 Go 1.26.4；本机 Go 1.27.2 验证通过，因此将版本策略复核列为下一项。
 
 ## 最近验证
+
+- 2026-10-26 12:41 v0.1.3 发布准备：工作区干净，本地 HEAD 与远端 main 同为 c1ec456；gh 核对该提交 CI 40269646433 全部通过，含四协议生成编译、单测、vet 和构建。远端无 v0.1.3 标签或 Release；复用同源码验证，不重复全仓长测。
 
 - 2026-10-26 12:26 写入重构验收：cmd、CLI、生成器与模板完整相关单测通过（生成器 29.078s），覆盖现有冲突/过期输入/符号链接和新增逐阶段回滚用例；最终 make template-smoke 四协议生成项目测试编译通过（55.579s），生成器构建、相关 vet、格式、契约及 diff 检查通过。本轮未运行 lint、race、Docker、外部数据库或远端 Actions。
 
