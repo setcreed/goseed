@@ -56,17 +56,17 @@ func identifier(id uint64) error {
 func item(value *biz.Item) *api.[[.GoName]]Item {
 	return &api.[[.GoName]]Item{
 		Id: value.ID,
-[[range .Fields]]		[[.GoName]]: value.[[.GoName]],
-[[end]]		CreatedAt: timestamppb.New(value.CreatedAt.UTC()),
-		UpdatedAt: timestamppb.New(value.UpdatedAt.UTC()),
+[[range .Fields]]		[[.ProtoItemName]]: value.[[.GoName]],
+[[end]]		[[.ProtoCreatedAt]]: timestamppb.New(value.CreatedAt.UTC()),
+		[[.ProtoUpdatedAt]]: timestamppb.New(value.UpdatedAt.UTC()),
 	}
 }
 
 func (h *Handler) Create(ctx context.Context, request *api.Create[[.GoName]]Request) (*api.[[.GoName]]Item, error) {
 	if err := valid(request); err != nil { return nil, rpc.Status(ctx, err) }
-[[range .Fields]][[if .Required]]	if request.[[.GoName]] == nil { return nil, rpc.Status(ctx, errno.Invalid("[[.Name]] is required")) }
+[[range .Fields]][[if .Required]]	if request.[[.ProtoCreateName]] == nil { return nil, rpc.Status(ctx, errno.Invalid("[[.Name]] is required")) }
 [[end]][[end]]	value, err := h.business.Create(ctx, biz.CreateInput{
-[[range .Fields]]		[[.GoName]]: request.[[.GoName]],
+[[range .Fields]]		[[.GoName]]: request.[[.ProtoCreateName]],
 [[end]]	})
 	if err != nil { return nil, rpc.Status(ctx, err) }
 	return item(value), nil
@@ -96,7 +96,7 @@ func (h *Handler) Update(ctx context.Context, request *api.Update[[.GoName]]Requ
 	if err := valid(request); err != nil { return nil, rpc.Status(ctx, err) }
 	if err := identifier(request.Id); err != nil { return nil, rpc.Status(ctx, err) }
 	value, err := h.business.Update(ctx, request.Id, biz.UpdateInput{
-[[range .Fields]]		[[.GoName]]: request.[[.GoName]],
+[[range .Fields]]		[[.GoName]]: request.[[.ProtoUpdateName]],
 [[end]]	})
 	if err != nil { return nil, rpc.Status(ctx, err) }
 	return item(value), nil

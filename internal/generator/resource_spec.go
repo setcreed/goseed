@@ -207,7 +207,7 @@ func resourceGoName(name string) string {
 	parts := strings.Split(name, "_")
 	var result strings.Builder
 	for _, part := range parts {
-		result.WriteByte(part[0] - ('a' - 'A'))
+		result.WriteString(strings.ToUpper(part[:1]))
 		result.WriteString(part[1:])
 	}
 	return result.String()

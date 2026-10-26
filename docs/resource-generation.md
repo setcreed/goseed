@@ -59,6 +59,10 @@ R06 Swagger 源只声明资源 paths 与操作级 Bearer 安全，继承基础�
 
 R07 的 gRPC/dual 资源渲染由 `RenderResourceGRPC` 与 `ResourcePlan.RPCFiles()` 提供，输出独立 Proto 源、RPC Handler/测试和纯 gRPC 单次组装工厂；dual 由 HTTP 渲染结果提供同一工厂，Store 与 Biz 各构造一次并共享给两个 Handler。Proto 的可写字段使用 `optional` 保存出现性，RPC 拒绝未知字段、必需字段缺失和越界 ID，并沿用 Biz 的主体、分页、取消与错误语义；FullMethod 权限逐项映射到资源操作。显式 `scripts/proto.py` 发现 `api/proto/*/v1/*.proto`，排序后用锁定工具统一复现到相应 `pkg/api/<module>/v1/`；普通构建不调用 protoc。R09 准备阶段按同一固定工具只编译新资源 Proto，不重写旧产物。
 
+业务 Go 字段名与协议生成字段名分别计算。RPC Handler 必须匹配锁定 Protobuf 插件对数字、保留方法名、getter 和 optional 合成 oneof 的避让规则，并分别处理创建、更新和响应消息；不通过禁止合法业务字段绕过命名冲突。回归以实际协议产物和生成项目编译为准。
+
+协议插件保持模块路径和版本锁定，不接受替换模块；编译插件的 Go 版本遵循项目最低 Go 1.26.4 策略，允许更新的兼容本机版本，不要求固定为发行归档使用的 Go 版本。
+
 R08 的 Gateway 资源复用 RPC Handler/Biz，生成固定 HTTP 映射和安全的 Gateway 模块登记，不生成重复 Gin Handler。ProtoJSON 使用 snake_case、`int64` 字符串及 optional 字段存在性。显式 Gateway 协议复现先在 `.tmp/proto` 生成全部模块产物，再使用项目内 `scripts/openapi` 严格合并器更新模块 Swagger 源、聚合索引及登记摘要；失败回滚已替换文件。生成项目中的合并器源码与生成器严格合并实现由模板测试逐字节比对。
 
 ## 纯模块描述与权限目录

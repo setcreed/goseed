@@ -24,6 +24,16 @@ func TestParseResourceSpecAppliesDefaultsAndPreservesFieldOrder(t *testing.T) {
 	}
 }
 
+func TestParseResourceSpecFieldSegmentStartingWithDigit(t *testing.T) {
+	spec, err := ParseResourceSpec([]byte("version: 1\nfields:\n  - name: foo_1\n    type: string\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Fields[0].GoName != "Foo1" {
+		t.Fatalf("business Go name: got %q, want Foo1", spec.Fields[0].GoName)
+	}
+}
+
 func TestParseResourceSpecRejectsInvalidDocuments(t *testing.T) {
 	valid := "version: 1\nfields:\n  - name: title\n    type: string\n"
 	cases := map[string]string{

@@ -55,6 +55,8 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 
 ## 最近完成
 
+- 2026-10-26 11:30 资源字段协议命名修复：区分业务字段与创建、更新、响应消息的 Proto Go 字段，覆盖保留方法、getter、数字和 optional 合成 oneof；修正数字分段的资源 spec GoName。协议插件保持固定模块/版本，编译器改为接受满足最低 Go 1.26.4 的本机版本。
+
 - 2026-10-15 02:27 v0.1.2 补丁版发布：资源 Store 精度测试改在存储层直接验证，发布提交 `5af2d2b`；GitHub Actions run `38614318633` 通过。Go 1.26.4 构建 macOS/Linux amd64/arm64 四个平台包及 SHA-256，远端 8 个资产摘要核对一致；固定版本与 `@latest` 安装均为 v0.1.2，Release 已公开为 Latest，资产保留在 `dist/v0.1.2/`。
 
 - 2026-10-15 02:14 资源 Store 精度测试与 Biz 规则解耦：生成的 `int64` 精度边界用例直接调用 Store，避免新增常见的非负业务规则后必须改动通用测试。修正仅影响当前模板源码，v0.1.1 发行内容未改变。
@@ -72,6 +74,7 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 - 2026-10-15 00:49 安装与 CLI 使用收口完成：施工清单 I01 至 I04 已实施；README 提供 `go install` 与源码编译入口，新增 `goseed init` 并共享生成逻辑，裸根命令改为帮助，带生成参数的旧入口继续兼容。安装版从 Go BuildInfo 读取模块版本，发行构建显式注入优先，本地开发版保留 dev；模板及资源 spec 版本不变。
 
 - 2026-10-15 00:34 公开仓库文档整理：将快速开始和默认项目运行流程集中到 README，合并可选模板行为说明，删除重复的需求文档；保留 ROADMAP、施工计划和开发记录。精简贡献者开发指南，并修正生成项目 Makefile 强制下载 Go 1.26.4 的问题，使其使用满足最低版本要求的本机 Go。
+
 - 2026-10-14 23:59 文档导航整合：将 HTTP、数据库/可选能力、gRPC、dual 与 Gateway 五份模板契约合并为 [模板指南](docs/templates.md)，更新 README、开发阅读顺序及引用；清除已完成部署能力被列为后续方向的旧表述。文档检查器现在会跳过工作区已删除的文件，使文档合并可正常验证。
 
 - 2026-10-14 23:40 D9-P04 Linux amd64 运行补充验收：已校验的 Linux amd64 归档在 Apple Silicon Docker 的 Debian amd64 模拟容器中运行，并以该归档生成默认项目；D9 平台运行检查补齐。此结果不代表原生 amd64 硬件验收。
@@ -81,6 +84,7 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 - 2026-10-14 23:04 默认业务试用完成：Go 1.27.2 下生成 HTTP/SQLite/JWT 项目，生成 item CRUD 与 SQLite 迁移，再增量添加 checkout/returns 模块；生成项目构建、`go test ./...`、`go vet ./...` 通过。实际请求验证未认证拒绝、认证 CRUD、零值 PATCH、主体隔离及手写 checkout 操作；新增模块后手写 Biz/Handler 字节保持不变。没有发现生成流程的功能阻断。试用发现 Makefile 曾强制下载 Go 1.26.4；本机 Go 1.27.2 验证通过，因此将版本策略复核列为下一项。
 
 - 2026-10-14 22:47 D11 单机部署完成：`make template-deployment` 全部通过，锁定 Debian 13 镜像实际运行 systemd 与 Nginx；专用账号/服务硬化、HTTP/gRPC TLS 代理、SIGTERM 停止与重启健康检查、错误证书拒绝路径通过。修正测试镜像缺少 CA bundle 导致 apt HTTPS 校验失败的问题，改用项目已锁定 Go 镜像的 CA bundle 并显式配置 CAInfo；修正 Debian 镜像启动时预启用 Nginx 导致生成配置未加载，以及 `systemctl is-active` 停止状态的测试断言。结合已通过的四协议 Nginx 语法、SQLite WAL/MySQL/PostgreSQL TLS 恢复和 release 回退演练，D11 全部检查点完成；仅测试容器，未触碰宿主或生产服务。
+
 - 2026-10-14 21:48 D11-P03 备份恢复工具与 P04 回退指引完成：SQLite 生成 WAL 在线 `.backup` 与完整性检查，并拒绝损坏源和覆盖已有目标；MySQL 使用 TLS 校验和独立凭据文件的 `mysqldump --single-transaction`，PostgreSQL 使用 `verify-full` 与 custom dump。真实 SQLite WAL、MySQL 8.4.11、PostgreSQL 18.6 隔离恢复演练均核对回备份前数据且保留原备份；专用数据库卷/网络已清理。P04 增加 Debian 原子符号链接切换/回退步骤和隔离模拟；应用二进制回退不回滚 schema。P02 真实 systemd/Nginx 验收随后通过。
 
 - 2026-10-14 21:04 D11-P01 部署契约完成：确定 `--deployment=single-host` 默认关闭、systemd/Nginx 仅作为 `deploy/` 文件副本；支持 HTTP/gRPC/dual/Gateway 及 SQLite/MySQL/PostgreSQL/无数据库，应用单实例绑定 loopback、双协议分离域名、Nginx TLS 终止/验证 gRPC 上游 TLS、不信任任意 forwarded headers。定稿专用服务账号、`/opt` releases+current、`/etc` 私有配置、`/var/lib` 状态和 `/var/backups` 备份目录；固定 SQLite 在线 `.backup`、MySQL InnoDB `mysqldump --single-transaction`、PostgreSQL custom `pg_dump` 及 schema 不自动回退边界。Docker 29.8.2 Linux/arm64 API 只读核验成功；D11-P02 进入实施。
@@ -91,9 +95,9 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 
 - 2026-10-14 19:37 D9 版本、分发与维护基线完成：生成器显示语义版本/提交/模板/spec；提供显式源码安装、固定 Go 1.26.4 的单平台本地包、依赖许可证、版本 manifest、可复现 SHA-256 与损坏拒绝；v1 旧式 metadata 能增量生成，不兼容版本在写前拒绝；维护流程和人工升级步骤已文档化。macOS arm64/amd64（Rosetta）与 Linux arm64 实际运行/生成通过；Linux amd64 运行保留未验证。D10 转为下一阶段；无 tag、公开 release 或远端推送。
 
-- 2026-10-14 19:30 D9-P03 兼容与维护完成：将 metadata、template、resource spec 版本提升为独立常量；增量 CLI 继续兼容 v1 旧式字符串模块登记与新版映射，并对未知 metadata/template 版本报告受支持值且在计划阶段零文件变更。补充依赖单项升级审查/回归流程和既有项目人工升级步骤。P04 转为当前任务。
-
 ## 最近验证
+
+- 2026-10-26 11:30 字段命名回归：模板与生成器完整单测通过；四协议 SQLite 真实生成项目 readonly 构建及全部测试编译通过（50.887s），覆盖 15 个命名边界字段；相关 vet、格式、文档契约及 diff 检查通过。使用本机 Go 1.27.2，无 Docker、外部数据库或 race。
 
 - 2026-10-15 02:27 v0.1.2 发布验收：CI 运行 `38614318633` 全部通过；四个发行包均验证 manifest 的源码提交、版本、Go 1.26.4、平台和二进制/许可证摘要，macOS arm64 本机版本/帮助通过。GitHub Release 的 8 个资产名与 SHA-256 匹配本地；隔离 GOBIN 的 `go install @v0.1.2` 与 `@latest` 均显示 v0.1.2。用已安装版本生成商品项目、加入手写非负 price/stock Biz 校验，Store/Biz 测试和 vet 通过；草稿公开后复核 Latest 状态。未运行 race、Docker 或外部数据库；发行临时目录随后清理。
 
@@ -116,6 +120,7 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 - 2026-10-15 00:49 双安装与 CLI 验收：当前源码构造本地文件模块代理，以隔离 GOBIN 执行 `go install ...@v0.0.0-installcheck` 与 `@latest`，安装版正确显示模块版本。安装版和源码构建版均在仓库外完成帮助、init、dry-run、重复生成拒绝、模块与资源生成及生成项目 readonly 构建。命令/CLI/生成器定向测试与 vet、格式、文档契约和 diff 检查通过；本机 Go 1.27.2 的 lint 因现有 Go 1.26.4 构建的 linter 无法解析新标准库而失败，改用仓库已有 Go 1.26.4 工具链后全仓 lint 为 0 issues。未验证 GitHub 远端安装，未发布、运行 Docker 或 race；任务临时目录已清理，共享缓存保留。
 
 - 2026-10-15 00:34 公开文档和生成模板回归：默认生成项目已按 README 流程完成构建、开发配置初始化、SQLite 迁移、健康检查及认证创建/列表请求；`make fmt-check`、`make test GO_PACKAGES='./internal/templates'`、`make contract-check`（71 个本地链接、392 个交付文件）与 `git diff --check` 通过。仅模板包测试使用缓存；未运行 Docker、外部数据库或 race。
+
 - 2026-10-15 00:06 文档导航整合验证：`make contract-check` 通过（99 个本地链接、393 个实际交付文件），Markdown 本地链接核对与 `git diff --check` 通过；旧模板文件名和已知过期部署/路线表述检索无命中。未运行代码、数据库、Docker 或 race 测试。
 
 - 2026-10-14 23:41 Linux amd64 发行包验收：`make verify-package ARCHIVE=.tmp/dist/goseed_v0.0.0-d9.1_linux_amd64.tar.gz` 通过；发行包在 Debian `trixie-slim` 的 `linux/amd64` 模拟容器中运行 `--version`、`--help` 并生成 52 文件默认项目。生成项目以 Go 1.27.2、`GOOS=linux GOARCH=amd64 CGO_ENABLED=0` readonly 构建；容器中显式初始化 SQLite 迁移、启动服务，health/ready、未认证拒绝（401）和认证创建/列表通过。`make contract-check`（97 个本地链接、397 个交付文件）与 `git diff --check` 通过。测试运行于 Apple Silicon Docker amd64 模拟环境，不代表原生硬件；专用容器和本轮临时目录已清理。
@@ -131,5 +136,3 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 - 2026-10-14 22:47 D11-P02 完整运行验收：`make template-deployment` 通过；重新构建锁定 Debian/systemd/Nginx 测试镜像后，隔离 dual 项目服务硬化检查、HTTP TLS 与 gRPC 上游 TLS 健康请求、SIGTERM 停止状态、重启后健康恢复及错误证书失败路径全部通过。`make template-deployment-nginx` 四协议配置/错误证书用例通过；测试专用 Docker 容器自动清理。
 
 - 2026-10-14 19:38 D9-P04 清洁提交最终验收：提交 `a5ab852` 上 `make install VERSION=v0.0.0-d9` 安装到隔离目录并显示正确提交/模板/spec；`make package` 从 clean source 生成 macOS/Linux amd64/arm64 四个包，manifest 均记录相同完整提交及 `source_dirty=false`，`make verify-package` 全部通过，macOS arm64 归档重建摘要一致。该 clean commit 的 macOS arm64 本机、macOS amd64 Rosetta、Linux arm64 固定断网容器包均运行 `--version` 并生成 52 个文件。Linux amd64 仍未运行：本机锁定镜像只有 arm64 内容层，强制 amd64 时 Docker 报缺失 layer；保留未验证。Windows 原生未测试。
-
-- 2026-10-14 19:30 D9-P03 回归：`make test GO_PACKAGES='./internal/generator ./internal/cli'`、`make build`、CLI `--version`、`make fmt-check`、`make contract-check`（94 个本地链接、374 个交付文件）和 `git diff --check` 通过。旧 v1 字符串登记夹具实际执行 `PrepareModule`/`Write`/`LoadProject`；metadata/template v2 两个失败夹具明确提示只支持 v1，并以整棵项目文件快照证明无改动。归档复核显示版本字段与当前源码常量一致；测试归档已清理。

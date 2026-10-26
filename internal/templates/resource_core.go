@@ -15,7 +15,15 @@ type ResourceField struct {
 
 type resourceCoreField struct {
 	ResourceField
-	GoName string
+	GoName, ProtoCreateName, ProtoUpdateName, ProtoItemName string
+}
+
+type resourceData struct {
+	Project
+	Options
+	Name, GoName                   string
+	Fields                         []resourceCoreField
+	ProtoCreatedAt, ProtoUpdatedAt string
 }
 
 // RenderResourceCore is protocol-independent and only returns source files.
@@ -98,12 +106,7 @@ func RenderResourceHTTP(project Project, options Options, name string, fields []
 	if _, err := RenderResourceCore(project, options, name, fields); err != nil {
 		return nil, err
 	}
-	data := struct {
-		Project
-		Options
-		Name, GoName string
-		Fields       []resourceCoreField
-	}{Project: project, Options: options, Name: name, GoName: strings.ToUpper(name[:1]) + name[1:]}
+	data := resourceData{Project: project, Options: options, Name: name, GoName: strings.ToUpper(name[:1]) + name[1:]}
 	for _, field := range fields {
 		parts := strings.Split(field.Name, "_")
 		var goName strings.Builder
@@ -164,13 +167,18 @@ func RenderResourceGRPC(project Project, options Options, name string, fields []
 	if _, err := RenderResourceCore(project, options, name, fields); err != nil {
 		return nil, err
 	}
-	data := struct {
-		Project
-		Options
-		Name, GoName string
-		Fields       []resourceCoreField
-	}{Project: project, Options: options, Name: name, GoName: strings.ToUpper(name[:1]) + name[1:]}
+	data := resourceData{Project: project, Options: options, Name: name, GoName: strings.ToUpper(name[:1]) + name[1:]}
+	createNames := make([]string, 0, len(fields))
 	for _, field := range fields {
+		createNames = append(createNames, field.Name)
+	}
+	updateNames := append([]string{"id"}, createNames...)
+	itemNames := append(append([]string{"id"}, createNames...), "created_at", "updated_at")
+	createGo := protoFieldNames(createNames, 0, len(createNames))
+	updateGo := protoFieldNames(updateNames, 1, len(updateNames))
+	itemGo := protoFieldNames(itemNames, 0, 0)
+	data.ProtoCreatedAt, data.ProtoUpdatedAt = itemGo[len(itemGo)-2], itemGo[len(itemGo)-1]
+	for i, field := range fields {
 		parts := strings.Split(field.Name, "_")
 		var goName strings.Builder
 		for _, part := range parts {
@@ -179,7 +187,7 @@ func RenderResourceGRPC(project Project, options Options, name string, fields []
 			}
 			goName.WriteString(strings.ToUpper(part[:1]) + part[1:])
 		}
-		data.Fields = append(data.Fields, resourceCoreField{ResourceField: field, GoName: goName.String()})
+		data.Fields = append(data.Fields, resourceCoreField{ResourceField: field, GoName: goName.String(), ProtoCreateName: createGo[i], ProtoUpdateName: updateGo[i+1], ProtoItemName: itemGo[i+1]})
 	}
 	files := make([]File, 0, 8)
 	for _, spec := range []struct {
@@ -320,12 +328,7 @@ func RenderResourceHTTPIntegrationTest(project Project, options Options, fields 
 	return File{Path: "internal/apiserver/resource_http_test.go", Content: formatted}, nil
 }
 
-func renderResourceModuleFactory(project Project, options Options, data struct {
-	Project
-	Options
-	Name, GoName string
-	Fields       []resourceCoreField
-}) (File, error) {
+func renderResourceModuleFactory(project Project, options Options, data resourceData) (File, error) {
 	hasHTTP := options.Transport == "http" || options.Transport == "dual"
 	hasRPC := options.Transport == "grpc" || options.Transport == "dual" || options.Transport == "gateway"
 	var source strings.Builder
@@ -390,12 +393,7 @@ func renderResourceModuleFactory(project Project, options Options, data struct {
 	return File{Path: "internal/apiserver/bootstrap/module_" + data.Name + ".go", Content: formatted}, nil
 }
 
-func resourceHTTPGuide(data struct {
-	Project
-	Options
-	Name, GoName string
-	Fields       []resourceCoreField
-}) File {
+func resourceHTTPGuide(data resourceData) File {
 	var body strings.Builder
 	fmt.Fprintf(&body, "# %s\n\nCRUD 接口为 `/v1/%s` 与 `/v1/%s/{id}`。所有接口要求 JWT；启用 Casbin 时按 `create`、`read`、`update`、`delete` 操作授权。资源归属从认证主体取得，响应不包含 owner。\n\n", data.Name, data.Name, data.Name)
 	body.WriteString("| 方法 | 路径 | 行为 | 成功状态 |\n|---|---|---|---|\n| POST | `/v1/" + data.Name + "` | 创建 | 201 |\n| GET | `/v1/" + data.Name + "` | 分页列表 | 200 |\n| GET | `/v1/" + data.Name + "/{id}` | 读取主体自己的记录 | 200 |\n| PATCH | `/v1/" + data.Name + "/{id}` | 部分更新 | 200 |\n| DELETE | `/v1/" + data.Name + "/{id}` | 删除主体自己的记录 | 204 |\n\n创建和 PATCH 接受以下业务字段；字段缺省表示未提供，JSON `null`、重复键、未知键与 owner 均拒绝。分页参数为 `page`（默认 1）与 `page_size`（默认 20），范围分别为 1 至 100000 和 1 至 100。\n\n| 字段 | 类型 | 创建必需 | 约束 |\n|---|---|---|---|---\n")
@@ -429,12 +427,7 @@ func resourceHTTPGuide(data struct {
 	return File{Path: "docs/" + data.Name + ".md", Content: []byte(body.String())}
 }
 
-func resourceGatewayGuide(data struct {
-	Project
-	Options
-	Name, GoName string
-	Fields       []resourceCoreField
-}) File {
+func resourceGatewayGuide(data resourceData) File {
 	var body strings.Builder
 	fmt.Fprintf(&body, "# %s Gateway\n\nGateway 将 HTTP 请求映射到 `%s.v1.%sService`；认证、授权和业务校验仍由 RPC 链执行。路径为 `/v1/%s` 与 `/v1/%s/{id}`，所有业务路由要求 JWT。", data.Name, data.Name, data.GoName, data.Name, data.Name)
 	body.WriteString("\n\nProtoJSON 使用 snake_case 字段名，`int64` 在 JSON 中以十进制字符串表示；创建和更新字段保留 optional 存在性。GET 集合允许 `page`、`page_size`，其余 query 参数拒绝。POST/PATCH 仅接受 JSON，拒绝 null、重复/未知字段和空更新。\n\n| HTTP | RPC | 路径 |\n|---|---|---|\n")
@@ -457,12 +450,7 @@ func resourceGatewayGuide(data struct {
 	return File{Path: "docs/" + data.Name + ".md", Content: []byte(body.String())}
 }
 
-func resourceOpenAPI(data struct {
-	Project
-	Options
-	Name, GoName string
-	Fields       []resourceCoreField
-}) File {
+func resourceOpenAPI(data resourceData) File {
 	var body strings.Builder
 	fmt.Fprintf(&body, "swagger: \"2.0\"\npaths:\n  /v1/%s:\n", data.Name)
 	fmt.Fprintf(&body, "    post:\n      operationId: %sCreate\n      security:\n        - Bearer: []\n      parameters:\n        - {name: body, in: body, required: true, schema: {$ref: '#/definitions/Create%sRequest'}}\n      responses:\n        '201': {description: Created, schema: {$ref: '#/definitions/%sItem'}}\n        '400': {description: Invalid input}\n        '401': {description: Unauthorized}\n", data.Name, data.GoName, data.GoName)

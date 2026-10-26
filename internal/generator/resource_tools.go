@@ -4,6 +4,7 @@ import (
 	"context"
 	"debug/buildinfo"
 	"fmt"
+	"go/version"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -58,8 +59,12 @@ func checkResourceTool(root string, tool ToolRequirement) error {
 	if err != nil {
 		return fmt.Errorf("cannot inspect protocol tool %s build identity: %w", tool.Name, err)
 	}
-	if infoBuild.Main.Path != tool.Module || infoBuild.Main.Version != tool.Version || infoBuild.Main.Replace != nil || infoBuild.GoVersion != "go1.26.4" {
-		return fmt.Errorf("protocol tool %s build identity mismatch; expected %s %s built with go1.26.4", tool.Name, tool.Module, tool.Version)
+	if infoBuild.Main.Path != tool.Module || infoBuild.Main.Version != tool.Version || infoBuild.Main.Replace != nil || !compatibleProtocolGo(infoBuild.GoVersion) {
+		return fmt.Errorf("protocol tool %s build identity mismatch; expected %s %s built with Go >= 1.26.4", tool.Name, tool.Module, tool.Version)
 	}
 	return nil
+}
+
+func compatibleProtocolGo(value string) bool {
+	return version.IsValid(value) && version.Compare(value, "go1.26.4") >= 0
 }
