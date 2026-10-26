@@ -29,9 +29,9 @@ goseed 是独立的 Go 项目与业务代码生成器，主模块为 `github.com
 
 ## 下一步施工顺序
 
-v0.1.3 补丁发布进行中：发行源码包含字段协议命名、YAML 元数据、增量能力保留、OpenAPI int64 与观测依赖修复，以及写入回滚收拢和四协议编译 CI。源码提交 `c1ec456` 的 [CI](https://github.com/setcreed/goseed/actions/runs/40269646433) 已通过；沿用 V01 至 V04，验证四平台包和真实安装后公开 Release。
+[v0.1.3](https://github.com/setcreed/goseed/releases/tag/v0.1.3) 已正式发布为 Latest：修复字段协议命名、YAML 元数据、增量能力保留、OpenAPI int64 与观测依赖，收拢写入回滚并增加四协议编译 CI。[发行提交 CI](https://github.com/setcreed/goseed/actions/runs/40270624127)、四平台归档及真实固定版本/Latest 安装与生成验收全部通过。发行源码为 `56b9a2b`，正式文件保留在 `dist/v0.1.3/`。
 
-基础 GitHub Actions CI 已落地，[首轮检查](https://github.com/setcreed/goseed/actions/runs/38609806274) 全部通过；[v0.1.2](https://github.com/setcreed/goseed/releases/tag/v0.1.2) 已正式发布为 Latest，修复资源 `int64` 精度测试与常见 Biz 范围校验冲突。[发布提交的 CI](https://github.com/setcreed/goseed/actions/runs/38614318633)、四平台资产、固定版本和 Latest 安装均已验收。v0.1.1 的缓存修复与旧项目处理范围见 [CI 与补丁发布清单](docs/implementation.md#基础-ci-与-v011-补丁发布) 和[旧项目处理说明](docs/templates.md#构建缓存与旧项目处理)。已有项目仍需手动更新 Makefile，不自动清理用户缓存或改写已发布标签。
+基础 GitHub Actions CI 已落地，[首轮检查](https://github.com/setcreed/goseed/actions/runs/38609806274) 全部通过；[v0.1.2](https://github.com/setcreed/goseed/releases/tag/v0.1.2) 曾正式发布，修复资源 `int64` 精度测试与常见 Biz 范围校验冲突。[发布提交的 CI](https://github.com/setcreed/goseed/actions/runs/38614318633)、四平台资产、固定版本和 Latest 安装均已验收。v0.1.1 的缓存修复与旧项目处理范围见 [CI 与补丁发布清单](docs/implementation.md#基础-ci-与-v011-补丁发布) 和[旧项目处理说明](docs/templates.md#构建缓存与旧项目处理)。已有项目仍需手动更新 Makefile，不自动清理用户缓存或改写已发布标签。
 
 安装与 CLI 使用收口及真实远端安装已验收，范围见 [施工清单](docs/implementation.md#安装与-cli-使用收口施工清单)。四平台发行包及 SHA-256 可下载；当前没有已排定的新功能，后续按实际使用反馈维护。发布流程见 [首次版本发布清单](docs/implementation.md#首次版本发布清单)。
 
@@ -56,6 +56,8 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 - D9 已完成本地安装、可复现归档、许可证与 SHA-256 核验、v1 增量兼容及人工维护说明。macOS arm64、Rosetta 下 macOS amd64、Linux arm64 的包运行和生成检查通过；Linux amd64 已在 Apple Silicon Docker 的 amd64 模拟容器中运行发行包，并验证默认项目健康及认证创建/列表，原生 amd64 硬件未验证；Windows 原生不在支持范围。D10 完成指标/追踪模板及本地 OTLP protobuf 接收器验收；D11 已完成真实 systemd/Nginx 服务级验收；D12 至 D17 均暂缓且未实施。
 
 ## 最近完成
+
+- 2026-10-26 12:48 v0.1.3 正式发布：发行提交 56b9a2b 的 CI 通过，正常推送注释标签，上传四平台归档与四份 SHA-256，并公开为 Latest。固定版本和 Latest 安装均完成帮助、dry-run、冲突保护、模块/资源生成、readonly 构建、开发配置与 SQLite 迁移；本次临时项目及打包缓存已清理，22 MiB 正式发行包保留。
 
 - 2026-10-26 12:26 增量写入逻辑收拢：模块与资源保留各自输入、路径和兼容复核，共用内部独占创建/索引原子替换/失败回滚实现；补充每个索引写入阶段失败、创建冲突及回滚失败的证据和清理回归。
 
@@ -95,9 +97,9 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 
 - 2026-10-14 23:17 业务试用路线收口：将已完成的小型业务试用从“下一步”改为已完成，并明确当前没有待启动的功能开发项；后续按实际反馈维护生成质量。原 D12 至 D17 继续暂缓，候选方向须有具体业务问题、最小范围、验收方式和对应实施指令。
 
-- 2026-10-14 23:04 默认业务试用完成：Go 1.27.2 下生成 HTTP/SQLite/JWT 项目，生成 item CRUD 与 SQLite 迁移，再增量添加 checkout/returns 模块；生成项目构建、`go test ./...`、`go vet ./...` 通过。实际请求验证未认证拒绝、认证 CRUD、零值 PATCH、主体隔离及手写 checkout 操作；新增模块后手写 Biz/Handler 字节保持不变。没有发现生成流程的功能阻断。试用发现 Makefile 曾强制下载 Go 1.26.4；本机 Go 1.27.2 验证通过，因此将版本策略复核列为下一项。
-
 ## 最近验证
+
+- 2026-10-26 12:48 v0.1.3 发布验收：CI 40270624127 全部通过；四包的 manifest/源码/Go 1.26.4/平台/二进制与许可证摘要通过，gh 核对远端注释标签目标及 8 个资产大小与 SHA-256 一致。macOS arm64 包完成实际项目构建和商品 Biz/Store 测试；官方 Go 代理下真实 @v0.1.3 与 @latest 均安装为 v0.1.3，两者生成与 SQLite 迁移通过。默认 goproxy.cn 初次因校验记录未同步返回 404，未关闭校验；Release API 确认非草稿、非预发布且为 Latest。未重复 Docker、外部数据库、全仓 race 或其他平台原生运行。
 
 - 2026-10-26 12:41 v0.1.3 发布准备：工作区干净，本地 HEAD 与远端 main 同为 c1ec456；gh 核对该提交 CI 40269646433 全部通过，含四协议生成编译、单测、vet 和构建。远端无 v0.1.3 标签或 Release；复用同源码验证，不重复全仓长测。
 
@@ -136,7 +138,3 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 - 2026-10-15 00:49 双安装与 CLI 验收：当前源码构造本地文件模块代理，以隔离 GOBIN 执行 `go install ...@v0.0.0-installcheck` 与 `@latest`，安装版正确显示模块版本。安装版和源码构建版均在仓库外完成帮助、init、dry-run、重复生成拒绝、模块与资源生成及生成项目 readonly 构建。命令/CLI/生成器定向测试与 vet、格式、文档契约和 diff 检查通过；本机 Go 1.27.2 的 lint 因现有 Go 1.26.4 构建的 linter 无法解析新标准库而失败，改用仓库已有 Go 1.26.4 工具链后全仓 lint 为 0 issues。未验证 GitHub 远端安装，未发布、运行 Docker 或 race；任务临时目录已清理，共享缓存保留。
 
 - 2026-10-15 00:34 公开文档和生成模板回归：默认生成项目已按 README 流程完成构建、开发配置初始化、SQLite 迁移、健康检查及认证创建/列表请求；`make fmt-check`、`make test GO_PACKAGES='./internal/templates'`、`make contract-check`（71 个本地链接、392 个交付文件）与 `git diff --check` 通过。仅模板包测试使用缓存；未运行 Docker、外部数据库或 race。
-
-- 2026-10-15 00:06 文档导航整合验证：`make contract-check` 通过（99 个本地链接、393 个实际交付文件），Markdown 本地链接核对与 `git diff --check` 通过；旧模板文件名和已知过期部署/路线表述检索无命中。未运行代码、数据库、Docker 或 race 测试。
-
-- 2026-10-14 23:41 Linux amd64 发行包验收：`make verify-package ARCHIVE=.tmp/dist/goseed_v0.0.0-d9.1_linux_amd64.tar.gz` 通过；发行包在 Debian `trixie-slim` 的 `linux/amd64` 模拟容器中运行 `--version`、`--help` 并生成 52 文件默认项目。生成项目以 Go 1.27.2、`GOOS=linux GOARCH=amd64 CGO_ENABLED=0` readonly 构建；容器中显式初始化 SQLite 迁移、启动服务，health/ready、未认证拒绝（401）和认证创建/列表通过。`make contract-check`（97 个本地链接、397 个交付文件）与 `git diff --check` 通过。测试运行于 Apple Silicon Docker amd64 模拟环境，不代表原生硬件；专用容器和本轮临时目录已清理。
