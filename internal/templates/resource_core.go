@@ -483,15 +483,7 @@ func resourceOpenAPI(data resourceData) File {
 		}
 		body.WriteString("    properties:\n")
 		for _, field := range data.Fields {
-			fmt.Fprintf(&body, "      %s:\n", field.Name)
-			switch field.Type {
-			case "string":
-				fmt.Fprintf(&body, "        type: string\n        maxLength: %d\n", field.MaxLength)
-			case "bool":
-				body.WriteString("        type: boolean\n")
-			default:
-				body.WriteString("        type: integer\n        format: int64\n")
-			}
+			fmt.Fprintf(&body, "      %s: %s\n", field.Name, resourceOpenAPIField(field))
 		}
 	}
 	fmt.Fprintf(&body, "  %sItem:\n    type: object\n    required: [id", data.GoName)
@@ -500,24 +492,20 @@ func resourceOpenAPI(data resourceData) File {
 	}
 	body.WriteString(", created_at, updated_at]\n    properties:\n      id: {type: integer, format: int64, minimum: 1, maximum: 9223372036854775807}\n")
 	for _, field := range data.Fields {
-		fmt.Fprintf(&body, "      %s: {type: %s", field.Name, openAPIType(field.Type))
-		if field.Type == "string" {
-			fmt.Fprintf(&body, ", maxLength: %d", field.MaxLength)
-		}
-		body.WriteString("}\n")
+		fmt.Fprintf(&body, "      %s: %s\n", field.Name, resourceOpenAPIField(field))
 	}
 	body.WriteString("      created_at: {type: string, format: date-time}\n      updated_at: {type: string, format: date-time}\n")
 	fmt.Fprintf(&body, "  %sPage:\n    type: object\n    required: [items, total, page, page_size]\n    properties:\n      items:\n        type: array\n        items: {$ref: '#/definitions/%sItem'}\n      total: {type: integer, format: int64, minimum: 0}\n      page: {type: integer, minimum: 1, maximum: 100000}\n      page_size: {type: integer, minimum: 1, maximum: 100}\n", data.GoName, data.GoName)
 	return File{Path: "api/openapi/" + data.Name + ".yaml", Content: []byte(body.String())}
 }
 
-func openAPIType(fieldType string) string {
-	switch fieldType {
+func resourceOpenAPIField(field resourceCoreField) string {
+	switch field.Type {
 	case "string":
-		return "string"
+		return fmt.Sprintf("{type: string, maxLength: %d}", field.MaxLength)
 	case "bool":
-		return "boolean"
+		return "{type: boolean}"
 	default:
-		return "integer"
+		return "{type: integer, format: int64}"
 	}
 }

@@ -55,6 +55,8 @@ R05 不生成完整协议工厂；R06/R07 在构造 Biz 前调用完整 Store �
 
 R06 的 HTTP/dual 渲染由 `RenderResourceHTTP` 与 `ResourcePlan.HTTPFiles()` 提供，包括 Handler 与输入边界测试、开发者维护的单次组装工厂、`api/openapi/<name>.yaml` 源和 `docs/<name>.md`。Handler 注册 POST/GET/PATCH/DELETE，并复用既有 JWT、请求 ID、限流/超时、访问日志、错误响应与 Casbin 路由中间件；工厂从共享数据库创建资源 Store，先以启动 Context 调用只读 `CheckSchema`，再创建 Biz 与 Handler。开启 Redis 时 Biz 注入共享 Client 的检查接口，不另建缓存。JSON 先验证 UTF-8、对象形状、顶层重复/未知键与 null，再反序列化到强类型 DTO；owner 不在字段允许列表。ID 和分页范围与 Biz 一致，百分号错误的 query 编码拒绝。成功状态为创建 201、查询/更新 200、删除 204。
 
+HTTP OpenAPI 对创建、更新和响应中的同一业务字段使用相同类型约束；所有 `int64` 字段均声明 `type: integer` 与 `format: int64`，字符串保留字符长度限制。
+
 R06 Swagger 源只声明资源 paths 与操作级 Bearer 安全，继承基础源中的共享元信息；准备阶段将新源与既有所有模块源交给 `openapi.Merge` 做重复路径、operationId 与定义冲突检查。生成器不覆盖旧文档源。模块说明从同一资源字段声明列出创建必需性、约束、端点、分页规则和可执行 curl 示例。真实 SQLite HTTP 集成测试使用两个资源及两个主体，验证 JWT、CRUD、主体隔离、零值更新和无效 JSON；R09 将完整准备/写入接入公共 `gen resource`。
 
 R07 的 gRPC/dual 资源渲染由 `RenderResourceGRPC` 与 `ResourcePlan.RPCFiles()` 提供，输出独立 Proto 源、RPC Handler/测试和纯 gRPC 单次组装工厂；dual 由 HTTP 渲染结果提供同一工厂，Store 与 Biz 各构造一次并共享给两个 Handler。Proto 的可写字段使用 `optional` 保存出现性，RPC 拒绝未知字段、必需字段缺失和越界 ID，并沿用 Biz 的主体、分页、取消与错误语义；FullMethod 权限逐项映射到资源操作。显式 `scripts/proto.py` 发现 `api/proto/*/v1/*.proto`，排序后用锁定工具统一复现到相应 `pkg/api/<module>/v1/`；普通构建不调用 protoc。R09 准备阶段按同一固定工具只编译新资源 Proto，不重写旧产物。

@@ -55,6 +55,8 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 
 ## 最近完成
 
+- 2026-10-26 12:21 HTTP OpenAPI 整数契约修复：请求与响应共用字段 schema 渲染，所有业务 int64 字段完整声明 integer/int64，保留字符串长度和 bool 类型。
+
 - 2026-10-26 12:21 增量能力保留修复：统一元数据到模板选项的转换，模块、资源及组装核验完整保留 deployment 等能力；四协议全选回归同时修复纯 gRPC 数据库指标与 Redis 检查之间缺少语句分隔的模板错误。
 
 - 2026-10-26 11:32 元数据 YAML 序列化修复：改用现有 YAML 编码器写出完整结构并传播编码错误，保留两空格缩进；合法项目、模块和资源名称 null 不再破坏后续增量生成，兼容已有 v1 元数据。
@@ -93,9 +95,9 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 
 - 2026-10-14 21:04 D11-P01 部署契约完成：确定 `--deployment=single-host` 默认关闭、systemd/Nginx 仅作为 `deploy/` 文件副本；支持 HTTP/gRPC/dual/Gateway 及 SQLite/MySQL/PostgreSQL/无数据库，应用单实例绑定 loopback、双协议分离域名、Nginx TLS 终止/验证 gRPC 上游 TLS、不信任任意 forwarded headers。定稿专用服务账号、`/opt` releases+current、`/etc` 私有配置、`/var/lib` 状态和 `/var/backups` 备份目录；固定 SQLite 在线 `.backup`、MySQL InnoDB `mysqldump --single-transaction`、PostgreSQL custom `pg_dump` 及 schema 不自动回退边界。Docker 29.8.2 Linux/arm64 API 只读核验成功；D11-P02 进入实施。
 
-- 2026-10-14 20:56 D10 可观测性完成：实现 `--metrics`/`--tracing` 独立选择、默认关闭、生成元数据兼容、依赖/源码裁剪；HTTP、gRPC、dual、Gateway 覆盖请求量/状态/延迟/依赖指标及 W3C TraceContext 父子传播，RPC 健康 Watch 也受追踪/指标拦截。Exporter 验证独立 endpoint 与 headers、HTTPS/loopback 限制、无 baggage/请求内容/凭据导出、3s 导出超时及共享 5s 失败清理/关闭预算。四协议指标和追踪项目 readonly 编译通过；本地 OTLP 接收器解码真实 protobuf 并核对 trace parent；HTTP 与 Gateway 双开组合、不可用出口限时关闭及观测包定向 race 通过。指标/追踪/组合集成矩阵用时 95.589s；race 与基准目标用时 9.149s。Apple M1 Pro / macOS arm64 微基准：Metrics `733.3 ns/op, 568 B/op, 5 allocs/op`，Trace `591.8 ns/op, 801 B/op, 8 allocs/op`，仅作环境基线，不代表线上请求端到端开销。根包定向单测、`make contract-check`（94 个链接、380 个交付文件）、`make fmt-check` 与 `git diff --check` 通过；未连接外部生产 Collector。
-
 ## 最近验证
+
+- 2026-10-26 12:21 OpenAPI 回归：合并后的 Swagger 在旧实现缺少响应 int64 格式的用例先失败；修复后模板完整单测、模板 vet、格式、契约及 diff 检查通过，覆盖创建、更新和响应的整数、文本与布尔字段。服务运行逻辑未变。
 
 - 2026-10-26 12:21 能力保留回归：旧实现复现 single-host 在增量模块/资源生成后丢失；四协议、模块/资源及 Redis/Casbin/指标/追踪/部署全选的 8 个用例通过，模块与资源协议组合写入定向回归、相关 vet、格式、契约及 diff 检查通过。
 
@@ -134,5 +136,3 @@ D0 至 D11 的已有交付保持不变，原 D12 至 D17 全部暂缓。v0.1.2 �
 - 2026-10-14 23:14 路线聚焦文档检查：`make contract-check`（96 个本地链接、397 个交付文件）与 `git diff --check` 通过；核对 ROADMAP、施工清单、需求、架构、CLI、开发指南和项目规范指向一致，最近完成/验证记录按时间倒序且不超过 20 条。未运行代码、数据库、Docker 或 race 测试。
 
 - 2026-10-14 23:12 Go 版本策略验证：本机 Go 1.27.2 下 `make build`、`make test GO_PACKAGES='./cmd/goseed ./internal/cli ./internal/generator'`、对应 `make vet`、`make contract-check`（96 个本地链接、397 个交付文件）与 `git diff --check` 均通过；确认仅发行包脚本仍请求固定 Go 1.26.4，未运行打包流程、外部数据库/Redis 或 race。
-
-- 2026-10-14 23:04 默认业务试用验证：本机 Go `1.27.2`、`GOTOOLCHAIN=local`；生成项目 `go test -mod=readonly -timeout=5m ./...`、`go vet -mod=readonly ./...` 通过，SQLite 显式迁移到 schema version 2。回环请求经批准的隔离本机端口运行通过，覆盖 health、未认证拒绝、认证创建/列表/零值更新、跨主体 404 和手写 checkout 成功/非法输入；未使用 Docker 或 race。
